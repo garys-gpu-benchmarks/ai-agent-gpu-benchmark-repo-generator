@@ -55,7 +55,7 @@ Official create contracts (TEMPLATE_00_87):
 - Create fails if `run_benchmark.sh` calls `scripts/collect_workload.py` and that file is missing after overlays. A named `collect_*.py` gets a harness adapter. An overlay runner that does not call `collect_workload.py` (vLLM, SGLang) is accepted as-is. The first overlay path is not an entry point.
 - `generate_benchmark_config.py` merges sweep into a locked overlay YAML; it does not replace `results/overlay_lock.json` files.
 - Official docs are `scripts/fill_generated_docs.py` (PRD.md, SPEC.md, README.md, GENERATION_REPORT.md). Leftover `{{` or `[[GENERATE` is a fail.
-- Framework install flags come from `config/framework_registry.yaml`. OS/vendor/driver policy comes from `config/platform_policy.yaml` (at most one ROCm reboot: the amdgpu driver is reloaded first, and setup reboots only if the reload cannot be verified).
+- Framework install flags come from `config/framework_registry.yaml`. OS/vendor/driver policy comes from `config/platform_policy.yaml` (at most one ROCm reboot: the amdgpu driver is reloaded first, and setup reboots only if the reload cannot be verified, after everything else is installed).
 - Metric contract: blank stays `not measured` (not 0.0). `metrics_summary.txt` prints the first parenthetical key (D1). Mashed `p50_p95_p99` displays as p50 (D2). Collectors emit real p50/p95/p99 (D3). SGLang ITL is blank, never copied from TPOT (D4). D5 (streaming TTFT) is out of scope.
 
 
@@ -792,7 +792,7 @@ If a workload requires any of the four tasks below, the agent must:
 
 | Function | When to call |
 |---|---|
-| `rocm_install_runtime` | GPU Compute / ROCm workload on a bare-metal Ubuntu server with no existing ROCm. Check: `[ ! -f /opt/rocm/bin/rocm-smi ]`. After the driver/firmware install it reloads amdgpu (`scripts/lib/amdgpu_reload.sh`) and returns with no reboot when every GPU comes back; otherwise it triggers one reboot. Only use from a provisioning harness that can reconnect (generated `setup.sh` systemd auto-resume). |
+| `rocm_install_runtime` | GPU Compute / ROCm workload on a bare-metal Ubuntu server with no existing ROCm. Check: `[ ! -f /opt/rocm/bin/rocm-smi ]`. After the driver/firmware install it reloads amdgpu (`scripts/lib/amdgpu_reload.sh`) and returns with no reboot when every GPU comes back; otherwise it triggers one reboot, or with `ROCM_DEFER_REBOOT=1` (generated `setup.sh`) leaves stage3 and `ROCM_REBOOT_PENDING=1` so setup reboots once after installing everything else. Only use from a provisioning harness that can reconnect (generated `setup.sh` systemd auto-resume). |
 | `rocm_add_repository` | ROCm apt repository not yet present. Check: `[ ! -f /etc/apt/sources.list.d/rocm.list ]`. |
 | `rocm_install_rvs` | `benchmark_specification.json` Workload Name or Workload Command Line Executable references `rvs` or `rocm-validation-suite`. |
 | `rocm_compile_rocblas_bench` | `benchmark_specification.json` Framework contains `rocBLAS` or `rocblas-bench`. |

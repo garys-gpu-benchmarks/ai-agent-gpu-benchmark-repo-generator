@@ -1,5 +1,26 @@
 # Changelog
 
+## 2026-10-10 — ROCm setup installs everything before its one reboot
+
+**Failure:** on a fresh Ubuntu 26.04 MI300X VM (workload 301, 2026-10-10 22:00 UTC) the driver reload failed (`modprobe -r amdgpu` segfaulted, rc=139), so `rocm_install_runtime` rebooted right after step 09. The RVS clone/build, the venv, and the rest of setup then ran after the reboot: the operator logged back in to an install still running (`SETUP complete` at 22:16:50, about 11 minutes later).
+
+- **`scripts/lib/rocm_install_26_04.sh` (step 10) and `rocm_install_24_04.sh` (step 12):** with `ROCM_DEFER_REBOOT=1`, a failed reload no longer reboots. The function keeps `stage3`, appends `ROCM_REBOOT_BOOT_ID` (the Linux boot ID) to `.rocm_runtime_stage.env`, sets `ROCM_REBOOT_PENDING=1` and returns 0. At `stage3` in the same boot (setup stopped on an error and was run again) the reboot stays pending; in a new boot the stage completes as before. Without `ROCM_DEFER_REBOOT` the behavior is unchanged. 26.04 file keeps CRLF line endings.
+- **`scripts/templates/setup_rocm_reboot_skeleton.sh`:** exports `ROCM_DEFER_REBOOT=1` (override with `ROCM_DEFER_REBOOT=0`). When the reboot is pending it installs everything (repository, RVS, venv, framework wheels, AITER/SGLang builds, RAG extras, and the rocBLAS clients build, which names `GFX_TARGET`), then logs `PHASE All software installed. Rebooting once ...`, sends a `wall` message, and reboots. GPU checks before the reboot go through new `gpu_check` / `gpu_check_failed` (warning instead of `die`); PyTorch is checked for a ROCm build only. `scripts/build.sh` runs after the reboot, because plain `hipcc` builds (BabelStream, hipMemcpy, RCCL, rocHPL) take the GPU architecture from the visible GPU. The systemd resume run then builds, runs all GPU checks, and reports `SETUP complete`. `--help` and the first-run notice describe this.
+- **`implementation_components/rag-faiss-end2end-amd/files/scripts/install_rag_amd.sh`:** with `BENCHMARK_GPU_CHECKS_AFTER_REBOOT=1` (exported by setup before the reboot) it checks `torch.version.hip` instead of `torch.cuda.is_available()`.
+- **Docs:** `docs/rocm-reboot-install-contract.md` (new "Reboot Postponed Until Everything Is Installed" section and verification marker), `docs/generation-workflow.md`, `AGENTS.md`.
+- **Tests:** new `tests/test_deferred_reboot.py`: installer branch on 24.04 and 26.04 (postponed, same-boot rerun, `ROCM_DEFER_REBOOT=0` rerun, first run after reboot, no-defer reboot, reload success) and the template's order (defer before `rocm_install_runtime`, reboot after all installs and before `scripts/build.sh`, GPU checks not fatal before the reboot). `shellcheck --severity=warning` 0.11.0 passes on both libraries and the template.
+- **Not yet run on a real VM.** Already generated workloads (including the published `bundle-amd-ubuntu-2604`) keep the old order until regenerated.
+
+## 2026-10-10 — publish_benchmarks_to_github.sh moved into the generator; run folder filled from Projects 341-345
+
+- **`scripts/publish_benchmarks_to_github.sh` (new here):** the publish script, previously kept only in `Github_Garys_GPU_Repos\Publishing\`, now has its master copy in this repository. Copy it into `Publishing\` before a run; it prints a NOTE if the running copy differs from the one in the generator being published.
+- **Paths:** `Z:\ServersProcessorsMemoryEtc` is now `Z:\ServersProcsMemory` throughout.
+- **Sources:** new settings `PROJECTS_ROOT`, `GENERATOR_SOURCE` (Project341 generator) and `WORKLOAD_SOURCES` (the `DIRECTORIES` folders of Project342 101-132, Project343 201-232, Project344 301-332, Project345 401-432). Step 0 creates the run folder if needed and copies in each workload and the generator it does not have yet; it stops if a source folder is missing or has no workloads for its batch, and notes a batch with fewer than 32. The run folder is now `Publish_<YYYYMMDD>_<NN>/src_342_343_344_345` instead of `.../SourceRepositories`, so the script creates `src_342_343_344_345_PubTree` and `src_342_343_344_345_Bundles`.
+- **Step 0 order:** gh checks and the log start before the run folder is filled, so the copy is logged. A run folder argument that names a `_PubTree`, `_Bundles` or workload folder is refused before anything is created.
+- **`scripts/init_generated_repo.py`:** `scripts/publish_benchmarks_to_github.sh` added to `COPY_EXCLUSIONS`, so workloads never carry it.
+- **`README.md`:** "Commands" describes the new sources, run folder and procedure.
+- **Checked:** `bash -n` and `shellcheck --severity=warning` (0.11.0) pass. A dry run against a mock tree (four batches, one with 31 workloads, stub `gh`) filled the run folder with 127 workloads and the generator, printed the per-batch counts and the 31-workload note, and on a second run copied nothing; a `_PubTree` argument stopped without creating a folder.
+
 ## 2026-10-10 — Generator repository renamed to ai-agent-gpu-benchmark-repo-generator; publishing folder layout
 
 - **GitHub:** `garys-gpu-benchmarks/999-ai-agent-gpu-benchmark-repo-generator` is now `garys-gpu-benchmarks/ai-agent-gpu-benchmark-repo-generator` (history, tags, Actions runs kept; GitHub redirects the old name). In a publish run folder the generator is copied as `ai-agent-gpu-benchmark-repo-generator` (no `999-` prefix).

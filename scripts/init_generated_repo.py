@@ -95,6 +95,8 @@ COPY_EXCLUSIONS = [
     "config/ci_contract.yaml",
     "scripts/ci_contract.py",
     "scripts/emit_shared_workflows.py",
+    # Publishes the whole suite from the operator's machine; generation-only.
+    "scripts/publish_benchmarks_to_github.sh",
 ]
 NO_BUILD_STEP_SH = """#!/usr/bin/env bash
 # This workload has no compile step. setup.sh calls this file; it does nothing.

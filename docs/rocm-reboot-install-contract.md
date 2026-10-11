@@ -55,6 +55,20 @@ The reload runs `update-initramfs -u`, `modprobe -r amdgpu`, `modprobe amdgpu`, 
 
 It returns failure, and the installer reboots exactly as before, when: `ROCM_RELOAD_INSTEAD_OF_REBOOT=0`; no AMD GPU is on the PCI bus; amdgpu is in use (`refcnt` > 0); (24.04) no DKMS build exists for the running kernel; unload or load fails or exceeds `AMDGPU_UNLOAD_TIMEOUT` (180 s) / `AMDGPU_LOAD_TIMEOUT` (600 s); fewer GPUs than PCI devices appear within `AMDGPU_INIT_WAIT` (300 s); or (24.04) the running module is not the DKMS build. A modprobe stuck in the kernel is left running and the reboot clears it.
 
+## Reboot Postponed Until Everything Is Installed
+
+When the reload fails, generated `setup.sh` does not reboot in the middle of setup. It exports `ROCM_DEFER_REBOOT=1` before calling `rocm_install_runtime`; on a failed reload the installer then keeps stage `stage3`, appends `ROCM_REBOOT_BOOT_ID=<boot id>` (from `/proc/sys/kernel/random/boot_id`) to `.rocm_runtime_stage.env`, sets `ROCM_REBOOT_PENDING=1`, and returns 0 instead of rebooting.
+
+| Run | What happens |
+|---|---|
+| First run (reboot pending) | Status `PHASE amdgpu could not be reloaded in place; installing everything now and rebooting once at the end`. Repository, RVS build, venv and requirements, framework wheels (vLLM, SGLang, AITER, JAX, FAISS), model prefetch, and the rocBLAS clients build (it names `GFX_TARGET`) all run. Checks that need a working GPU are not fatal (`gpu_check` / `gpu_check_failed` warn); PyTorch is checked for a ROCm build only. `scripts/build.sh` does not run: plain `hipcc` builds pick the GPU architecture from the GPU they can see, and there is none yet. Then `PHASE All software installed. Rebooting once ...`, a `wall` message, and one reboot. |
+| After the reboot (systemd resume) | `rocm_install_runtime` sees `stage3` in a new boot, logs `STEP 10` (26.04) / `STEP 12` (24.04) `sudo reboot`, and clears the stage. The rest of setup runs as usual; installs are already present, so it mainly runs `scripts/build.sh` and the GPU checks (`torch.zeros(1, device="cuda")`, `jax.devices()`, vLLM/SGLang/AITER imports, RAG `torch.cuda.is_available()`), then `SETUP complete` and service cleanup. |
+| Rerun in the same boot (first run stopped on an error) | The boot ID still matches, so the reboot stays pending (`ROCM_REBOOT_PENDING=1`); setup continues installing and reboots at its end. |
+
+`BENCHMARK_GPU_CHECKS_AFTER_REBOOT=1` is exported to helpers during the first run (for example `install_rag_amd.sh` then checks `torch.version.hip` instead of `torch.cuda.is_available()`).
+
+`ROCM_DEFER_REBOOT=0` restores the earlier behavior: reboot right after the driver install, exit, and continue the whole setup after the reboot.
+
 Step 02 runs `apt-get upgrade -y`, not `apt upgrade -y`. `apt-get upgrade` never installs new packages, so a new kernel is kept back and the running kernel stays the one the driver was built or reloaded for. Kernel updates are installed separately when wanted.
 
 Because a reload does not start a new login, generated `setup.sh` calls `grant_gpu_access_this_session` after `rocm_add_repository`: a non-root user who was just added to `render`/`video` gets an ACL on `/dev/kfd` and `/dev/dri/*` for the current boot (setup installs `acl`). If `setfacl` fails, setup warns to log out and back in or run `newgrp render`.
@@ -226,6 +240,7 @@ Expected setup markers:
 
 - auto-resume service enabled before `rocm_install_runtime`,
 - `STEP 10` (26.04) or `STEP 12` (24.04) shows either `sudo modprobe -r amdgpu && sudo modprobe amdgpu` (no reboot) or `sudo reboot` (fallback),
+- after a fallback, every install step is logged before the reboot; only `scripts/build.sh`, GPU checks and `SETUP complete` are logged after it,
 - after a fallback reboot, setup starts again automatically,
 - ROCm runtime steps complete,
 - RVS install steps complete when required,

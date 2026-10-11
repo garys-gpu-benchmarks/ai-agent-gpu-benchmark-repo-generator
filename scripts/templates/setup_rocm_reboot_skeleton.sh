@@ -213,6 +213,10 @@ fi
 ASSUME_YES=0
 RESUME_AUTO=1
 RESUME_FROM_SERVICE=0
+# 1 while the amdgpu reboot is postponed to the end of this run: the GPU is not
+# usable yet, so checks that need it and the workload build wait for the run
+# after the reboot.
+GPU_CHECKS_AFTER_REBOOT=0
 
 RESUME_SERVICE_NAME="${REPO_NAME}-setup-resume.service"
 RESUME_SERVICE_FILE="/etc/systemd/system/${RESUME_SERVICE_NAME}"
@@ -241,8 +245,11 @@ Options:
   --help               Show this help text.
 
 After the ROCm driver/firmware install, setup reloads the amdgpu driver instead
-of rebooting and reboots once only if the reload cannot be verified. Set
-ROCM_RELOAD_INSTEAD_OF_REBOOT=0 to always reboot.
+of rebooting. If the reload cannot be verified, setup installs everything else
+first and then reboots once; after that reboot the systemd resume service
+builds the workload and checks the GPU (a few minutes at most). Set
+ROCM_RELOAD_INSTEAD_OF_REBOOT=0 to always reboot, and ROCM_DEFER_REBOOT=0 to
+reboot right after the driver install as older templates did.
 
 This generated repository is local-only. Remote execution flags are rejected.
 USAGE
@@ -325,6 +332,24 @@ install_status_log_setup() {
 log_resume_event() {
   mkdir -p results
   echo "[$(date -u +%Y-%m-%dT%H:%M:%SZ)] $*" >> "${RESUME_LOG}"
+}
+
+# A check that needs a working GPU failed. Before the postponed reboot the GPU
+# cannot work yet, so this is only a warning; the run after the reboot repeats
+# the check and stops on failure.
+gpu_check_failed() {
+  if [[ "${GPU_CHECKS_AFTER_REBOOT}" == 1 ]]; then
+    log_warn "$* (expected before the amdgpu reboot; checked again after it)"
+    return 0
+  fi
+  die "$*"
+}
+
+# Usage: gpu_check "<message if it fails>" command [args...]
+gpu_check() {
+  local message="$1"
+  shift
+  "$@" || gpu_check_failed "${message}"
 }
 
 # rocm_add_repository adds the user to the render and video groups. Groups apply
@@ -437,9 +462,11 @@ fi
 install_status_log_phase "setup.sh start"
 
 if [[ "${ASSUME_YES}" != 1 && "${SKIP_ROCM}" != 1 ]]; then
-  echo "This setup reloads the amdgpu driver in place of a reboot. It reboots once"
-  echo "only if the reload cannot be verified (ROCM_RELOAD_INSTEAD_OF_REBOOT=0 always reboots)."
-  echo "Auto-resume after that reboot is enabled by default via systemd."
+  echo "This setup reloads the amdgpu driver in place of a reboot. If the reload cannot"
+  echo "be verified (ROCM_RELOAD_INSTEAD_OF_REBOOT=0 always reboots), setup installs"
+  echo "everything else first and reboots once at the end."
+  echo "Auto-resume after that reboot is enabled by default via systemd; it builds the"
+  echo "workload and checks the GPU, then reports SETUP complete."
   echo "Status is in results/install_status.txt and mirrored to /etc/motd."
   echo "Executed install commands are listed in results/install_commands.txt."
   echo "Completion is announced with wall message: setup.sh now complete"
@@ -497,11 +524,22 @@ if [[ "${SKIP_ROCM}" != 1 ]]; then
     if [[ -x /opt/rocm/bin/rocm-smi && "${amdgpu_firmware_present}" != 1 ]]; then
       log_resume_event "ROCm userspace present but no amdgpu firmware; running runtime install"
     fi
+    # ROCM_DEFER_REBOOT=1: if the driver reload fails, the installer does not
+    # reboot; it keeps stage3 and sets ROCM_REBOOT_PENDING=1, and this run
+    # installs everything else and reboots once at the end. ROCM_DEFER_REBOOT=0
+    # restores the reboot right after the driver install.
+    export ROCM_DEFER_REBOOT="${ROCM_DEFER_REBOOT:-1}"
     rocm_install_runtime
     # The protected installer persists stage3 before its single reboot and
-    # clears the stage file after that reboot. Do not advance to
-    # repository, RVS, or build phases while a runtime stage remains.
-    if [[ -f "${RUNTIME_STAGE_FILE}" ]]; then
+    # clears the stage file after that reboot.
+    if [[ -f "${RUNTIME_STAGE_FILE}" && "${ROCM_REBOOT_PENDING:-0}" == 1 ]]; then
+      GPU_CHECKS_AFTER_REBOOT=1
+      export BENCHMARK_GPU_CHECKS_AFTER_REBOOT=1
+      install_status_log_phase "amdgpu could not be reloaded in place; installing everything now and rebooting once at the end"
+      log_resume_event "Runtime reboot postponed until the rest of setup is installed"
+    elif [[ -f "${RUNTIME_STAGE_FILE}" ]]; then
+      # An immediate reboot was requested (ROCM_DEFER_REBOOT=0). Do not advance
+      # to repository, RVS, or build phases while a runtime stage remains.
       install_status_log_phase "Runtime reboot requested; setup will resume automatically"
       log_resume_event "Runtime stage remains; exiting until systemd resume"
       exit 0
@@ -609,8 +647,8 @@ PY
     # amd-quark>=0.8.99 is missing.
     "${PYTHON_BIN}" -m pip install uvloop fastapi "aiohttp>=3.13.3" ||
       die "vLLM API-server extras (uvloop/fastapi/aiohttp) failed."
-    "${PYTHON_BIN}" -c 'import vllm, uvloop; print(f"vLLM {vllm.__version__}")' ||
-      die "Official vLLM ROCm wheel verification failed."
+    gpu_check "Official vLLM ROCm wheel verification failed." \
+      "${PYTHON_BIN}" -c 'import vllm, uvloop; print(f"vLLM {vllm.__version__}")'
     # Importing torch first empties amdsmi handles on this stack. A .pth
     # import runs before vLLM argparse so baseline/extended can infer ROCm.
     # Do not install sitecustomize.py: Ubuntu's /usr/lib/python3.14 copy wins.
@@ -660,6 +698,14 @@ install_rocm_pytorch() {
   fi
   "${PYTHON_BIN}" -m pip install --index-url "${PYTORCH_ROCM_INDEX_URL}" \
     --extra-index-url https://pypi.org/simple "${find_links_args[@]}" "${torch_packages[@]}"
+  if [[ "${GPU_CHECKS_AFTER_REBOOT}" == 1 ]]; then
+    # No usable GPU until the postponed reboot: check the ROCm build only. The
+    # run after the reboot does the full GPU check below.
+    "${PYTHON_BIN}" -c 'import torch, sys; print(f"PyTorch {torch.__version__}; HIP {torch.version.hip}"); sys.exit(0 if torch.version.hip else 1)' ||
+      die "PyTorch ROCm verification failed: the installed torch is not a ROCm build"
+    install_status_log_step pytorch "installed ROCm wheel pair (GPU check after the reboot)"
+    return 0
+  fi
   "${PYTHON_BIN}" - <<'PY'
 import torch
 if torch.version.hip is None or not torch.cuda.is_available():
@@ -736,8 +782,8 @@ if [[ "${BENCHMARK_INSTALL_JAX}" == 1 ]]; then
     "${JAX_ROCM_PLUGIN_SPEC}" "${JAX_ROCM_PJRT_SPEC}" ||
     die "JAX ROCm plugin wheel install failed."
   "${PYTHON_BIN}" -m pip install jax==0.10.0 jaxlib==0.10.0
-  "${PYTHON_BIN}" -c 'import jax, sys; devs=[d for d in jax.devices() if "cpu" not in str(d).lower()]; print(devs); sys.exit(0 if devs else 1)' ||
-    die "JAX ROCm verification failed."
+  gpu_check "JAX ROCm verification failed." \
+    "${PYTHON_BIN}" -c 'import jax, sys; devs=[d for d in jax.devices() if "cpu" not in str(d).lower()]; print(devs); sys.exit(0 if devs else 1)'
   install_status_log_step jax "installed and verified JAX ROCm plugin"
 fi
 
@@ -772,7 +818,8 @@ if [[ "${BENCHMARK_INSTALL_AITER}" == 1 ]]; then
     fi
   fi
   export SGLANG_USE_AITER=1
-  "${PYTHON_BIN}" -c 'import aiter, torch; assert torch.version.hip' || die "AITER installation failed or ROCm Torch was replaced."
+  gpu_check "AITER installation failed or ROCm Torch was replaced." \
+    "${PYTHON_BIN}" -c 'import aiter, torch; assert torch.version.hip'
   install_status_log_step aiter "installed and verified AMD AITER kernels"
 fi
 
@@ -855,13 +902,13 @@ if [[ "${BENCHMARK_INSTALL_SGLANG}" == 1 ]]; then
         cuda-pathfinder >/dev/null 2>&1 || true
       install_rocm_pytorch
     fi
-    "${PYTHON_BIN}" -c 'import sglang' || die "SGLang installation failed."
-    "${PYTHON_BIN}" -c 'import sgl_kernel' || die "sgl_kernel ROCm compile failed."
+    gpu_check "SGLang installation failed." "${PYTHON_BIN}" -c 'import sglang'
+    gpu_check "sgl_kernel ROCm compile failed." "${PYTHON_BIN}" -c 'import sgl_kernel'
     if ! "${PYTHON_BIN}" -c 'import sglang, aiter' >/tmp/sglang_import.err 2>&1; then
       if grep -q "nanobind" /tmp/sglang_import.err 2>/dev/null; then
         die "SGLang/AITER nanobind CUTLASS collision. Uninstall CUDA cutlass wheels and reinstall AMD-only aiter/sgl_kernel in this repo venv."
       fi
-      die "import sglang, aiter failed. See /tmp/sglang_import.err"
+      gpu_check_failed "import sglang, aiter failed. See /tmp/sglang_import.err"
     fi
     install_status_log_step sglang "installed and verified SGLang from the python subdirectory"
   else
@@ -896,10 +943,10 @@ PY
     "${PYTHON_BIN}" "${REPO_ROOT}/scripts/patch_aiter_gfx1250_optional.py" ||
       die "AITER gfx1250 optional-import patch failed."
   fi
-  "${PYTHON_BIN}" -m sglang.launch_server --help >/dev/null ||
-    die "sglang.launch_server is not importable."
-  "${PYTHON_BIN}" -c 'from sglang.srt.entrypoints.http_server import launch_server' ||
-    die "sglang.srt.entrypoints.http_server.launch_server is not importable (install jsonschema)."
+  gpu_check "sglang.launch_server is not importable." \
+    "${PYTHON_BIN}" -m sglang.launch_server --help >/dev/null
+  gpu_check "sglang.srt.entrypoints.http_server.launch_server is not importable (install jsonschema)." \
+    "${PYTHON_BIN}" -c 'from sglang.srt.entrypoints.http_server import launch_server'
 fi
 
 # Torch 2.11/2.12 on this host report device_count=0 after HIP init.
@@ -943,6 +990,27 @@ if [[ -f scripts/install_rag_amd.sh ]]; then
 fi
 if [[ -f scripts/install_rag_nvidia.sh ]]; then
   bash scripts/install_rag_nvidia.sh
+fi
+
+if [[ "${GPU_CHECKS_AFTER_REBOOT}" == 1 ]]; then
+  # Everything is installed. The rocBLAS clients name their GPU target
+  # (GFX_TARGET), so that long compile runs now; the run after the reboot finds
+  # it built. scripts/build.sh itself waits for the reboot: plain hipcc builds
+  # pick the GPU architecture from the GPU they can see, and there is none yet.
+  if [[ -f scripts/build.sh ]] && grep -q 'rocm_compile_rocblas_bench' scripts/build.sh; then
+    (
+      export ROCM_SOURCE_ROOT="${REPO_ROOT}/third_party"
+      export ROCBLAS_SOURCE_DIR="${ROCM_SOURCE_ROOT}/rocBLAS"
+      export PATH="/opt/rocm/bin:${PATH}"
+      export LD_LIBRARY_PATH="/opt/rocm/lib:/opt/rocm/lib64:${LD_LIBRARY_PATH:-}"
+      rocm_compile_rocblas_bench
+    ) || die "rocBLAS clients build failed."
+  fi
+  install_status_log_phase "All software installed. Rebooting once to load the amdgpu driver; after the reboot setup builds the workload, checks the GPU, and reports SETUP complete"
+  log_resume_event "Rebooting once now that everything is installed (postponed amdgpu reboot)"
+  command -v wall >/dev/null 2>&1 && echo "setup.sh: everything installed; rebooting once to load the amdgpu driver" | wall || true
+  run_privileged reboot
+  exit 0
 fi
 
 if [[ -f scripts/build.sh ]]; then

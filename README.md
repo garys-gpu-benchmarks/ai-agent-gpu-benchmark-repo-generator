@@ -192,28 +192,41 @@ config/ci_contract.yaml ──► templates/workload/.github/workflows/   ──
 
 ### Commands
 
-Publishing is done by `publish_benchmarks_to_github.sh` (kept outside this repository). One folder per publish run:
+Publishing is done by [`scripts/publish_benchmarks_to_github.sh`](scripts/publish_benchmarks_to_github.sh). This repository holds the master copy; it is never copied into generated workloads (`init_generated_repo.py` excludes it). The source folders are set at the top of the script under "Settings you may change":
 
 ```text
-Z:\ServersProcessorsMemoryEtc\Github_Garys_GPU_Repos\
+Z:\ServersProcsMemory\Projects\
+├── Project341_TEMPLATE_00_104_20261008\TEMPLATE_00_104\
+│   └── ai-agent-gpu-benchmark-repo-generator\        # GENERATOR_SOURCE
+├── Project342_101_to_132_TEMPLATE_00_104_20261010\DIRECTORIES\   # 101-132
+├── Project343_201_to_232_TEMPLATE_00_104_20261010\DIRECTORIES\   # 201-232
+├── Project344_301_to_332_TEMPLATE_00_104_20261010\DIRECTORIES\   # 301-332
+└── Project345_401_to_432_TEMPLATE_00_104_20261010\DIRECTORIES\   # 401-432
+```
+
+One folder per publish run:
+
+```text
+Z:\ServersProcsMemory\Github_Garys_GPU_Repos\
 └── Publishing\
-    ├── publish_benchmarks_to_github.sh
-    └── Publish_20261009_01\
-        ├── SourceRepositories\                 # you fill: the 128 workloads + ai-agent-gpu-benchmark-repo-generator
-        ├── SourceRepositories_PubTree\         # created by the script (logs in _logs\)
-        ├── SourceRepositories_Bundles\         # created by the script
-        ├── shared-workflows\                   # built by the script from this generator
-        └── gpu-bench-suite\                    # built by the script from this generator
+    ├── publish_benchmarks_to_github.sh             # copy of scripts/publish_benchmarks_to_github.sh
+    └── Publish_20261010_02\
+        ├── src_342_343_344_345\                    # filled by the script: the 128 workloads + ai-agent-gpu-benchmark-repo-generator
+        ├── src_342_343_344_345_PubTree\            # created by the script (logs in _logs\)
+        ├── src_342_343_344_345_Bundles\            # created by the script
+        ├── shared-workflows\                       # built by the script from this generator
+        └── gpu-bench-suite\                        # built by the script from this generator
 ```
 
 **1. Publish** (Git Bash; use `/` in paths):
 
 ```bash
-cd /z/ServersProcessorsMemoryEtc/Github_Garys_GPU_Repos/Publishing
-mkdir -p Publish_20261009_01/SourceRepositories
-# copy the 128 workloads and ai-agent-gpu-benchmark-repo-generator into it
-./publish_benchmarks_to_github.sh Publish_20261009_01/SourceRepositories
+cd /z/ServersProcsMemory/Github_Garys_GPU_Repos/Publishing
+cp /z/ServersProcsMemory/Projects/Project341_TEMPLATE_00_104_20261008/TEMPLATE_00_104/ai-agent-gpu-benchmark-repo-generator/scripts/publish_benchmarks_to_github.sh .
+./publish_benchmarks_to_github.sh Publish_20261010_02/src_342_343_344_345
 ```
+
+Step 0 creates the run folder if needed and copies in every workload (from the four `DIRECTORIES` folders) and the generator that it does not have yet; folders already there are kept. It prints how many workloads each batch has and notes a batch with fewer than 32.
 
 The script builds `shared-workflows` and `gpu-bench-suite` with `scripts/emit_shared_workflows.py` from the generator copy in the run folder, publishes `shared-workflows` first (after its Self-test passes it tags the next `v1.x.0` and moves `v1`), then the workloads, the four bundles and this generator. If it stops, fix the problem and run the same command again; finished work is skipped.
 
@@ -224,7 +237,7 @@ python3 scripts/ci_contract.py --show                                           
 python3 scripts/emit_shared_workflows.py --output-root <publish folder> --check      # what would change
 ```
 
-`<publish folder>` is the folder that holds `shared-workflows/`, for example `Publishing/Publish_20261009_01`.
+`<publish folder>` is the folder that holds `shared-workflows/`, for example `Publishing/Publish_20261010_02`.
 
 **3. Change CI later**: edit `templates/shared-workflows/` (or `config/ci_contract.yaml`) here, then publish as in step 1. A compatible change needs no workload changes; the script releases it as the next `v1.x.0` and moves `v1`.
 

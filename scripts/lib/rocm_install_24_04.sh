@@ -146,6 +146,24 @@ _rocm_runtime_stage_clear() {
     fi
 }
 
+# Boot ID of the running Linux boot (changes on every boot). A postponed reboot
+# records it in the stage file, so a rerun in the same boot knows the reboot
+# has not happened yet. ROCM_BOOT_ID_FILE overrides the source for tests.
+_rocm_current_boot_id() {
+    cat "${ROCM_BOOT_ID_FILE:-/proc/sys/kernel/random/boot_id}" 2>/dev/null || true
+}
+
+_rocm_runtime_stage_boot_id() {
+    local stage_file
+    stage_file="$(_rocm_runtime_stage_file)"
+    [[ -f "${stage_file}" ]] || return 0
+    (
+        # shellcheck disable=SC1090
+        source "${stage_file}"
+        echo "${ROCM_REBOOT_BOOT_ID:-}"
+    )
+}
+
 _rocm_install_linux_modules_extra() {
     local running newest
     running="$(uname -r)"
@@ -180,6 +198,12 @@ _rocm_install_linux_modules_extra() {
 #          setup.sh) and must exit while the stage file remains. When the
 #          reload succeeds, the function returns with the stage file cleared.
 #
+# Deferred reboot: with ROCM_DEFER_REBOOT=1 (set by setup.sh) a failed reload
+#          does not reboot here. Stage3 stays saved, ROCM_REBOOT_PENDING=1 is
+#          set, and the function returns 0. The caller installs everything
+#          else, then reboots once; after that reboot this function logs the
+#          reboot step and clears the stage, as for an immediate reboot.
+#
 # When to call: setup.sh, when benchmark_specification.json
 #   Execution Domain is "GPU Compute / ROCm" AND the machine has no ROCm
 #   installation (check: [ ! -f /opt/rocm/bin/rocm-smi ]).
@@ -187,6 +211,9 @@ _rocm_install_linux_modules_extra() {
 rocm_install_runtime() {
     _rocm_log "=== rocm_install_runtime: ROCm ${ROCM_VERSION} on ${UBUNTU_CODENAME} ==="
     local stage
+    # Read by setup.sh after this function returns.
+    # shellcheck disable=SC2034
+    ROCM_REBOOT_PENDING=0
     stage="$(_rocm_runtime_stage_get)"
     _rocm_log "Runtime install stage: ${stage}"
 
@@ -286,12 +313,35 @@ rocm_install_runtime() {
             _rocm_log "Runtime installation stage is complete; amdgpu-dkms loaded without a reboot."
             return 0
         fi
+        if [[ "${ROCM_DEFER_REBOOT:-0}" == 1 ]]; then
+            # setup.sh installs everything else first and reboots once at the end.
+            # shellcheck disable=SC2034
+            ROCM_REBOOT_PENDING=1
+            echo "ROCM_REBOOT_BOOT_ID=$(_rocm_current_boot_id)" >> "$(_rocm_runtime_stage_file)"
+            _rocm_log "Driver reload not possible or not verified; reboot to load amdgpu-dkms postponed until the rest of setup is installed (ROCM_DEFER_REBOOT=1)."
+            return 0
+        fi
         _rocm_log "Reboot once to load amdgpu-dkms (driver reload not possible or not verified)."
         run_noninteractive_root reboot  # Single reboot after driver install (fallback)
         # ── execution stops here; caller must reconnect ──
     fi
 
     if [[ "${stage}" == "stage3" ]]; then
+        local pending_boot
+        pending_boot="$(_rocm_runtime_stage_boot_id)"
+        if [[ -n "${pending_boot}" && "${pending_boot}" == "$(_rocm_current_boot_id)" ]]; then
+            # The reboot was postponed and has not happened yet (setup stopped
+            # before its end and was run again in the same boot).
+            if [[ "${ROCM_DEFER_REBOOT:-0}" == 1 ]]; then
+                # shellcheck disable=SC2034
+                ROCM_REBOOT_PENDING=1
+                _rocm_log "Postponed amdgpu reboot has not happened yet; it stays postponed until the rest of setup is installed."
+                return 0
+            fi
+            _rocm_log "Postponed amdgpu reboot has not happened yet; rebooting now."
+            run_noninteractive_root reboot  # Single reboot after driver install (postponed earlier)
+            return 0
+        fi
         _rocm_status_phase "Phase 1:  ## Install ROCm Runtime Tools (On Bare Metal Ubuntu Server - NOT ROCm server)"
         _rocm_status_step 12 "sudo reboot  # Reboot to load the newly installed amdgpu kernel driver"
         _rocm_runtime_stage_clear

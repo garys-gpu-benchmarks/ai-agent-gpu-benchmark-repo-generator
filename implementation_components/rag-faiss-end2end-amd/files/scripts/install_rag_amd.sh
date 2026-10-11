@@ -8,7 +8,14 @@ cd "${REPO_ROOT}"
 PYTHON_BIN="${REPO_ROOT}/.venv/bin/python"
 [[ -x "${PYTHON_BIN}" ]] || PYTHON_BIN="${BENCHMARK_PYTHON:-python3}"
 
-if ! "${PYTHON_BIN}" -c "import torch; assert torch.cuda.is_available()" >/dev/null 2>&1; then
+if [[ "${BENCHMARK_GPU_CHECKS_AFTER_REBOOT:-0}" == 1 ]]; then
+  # setup.sh postponed the amdgpu reboot: no GPU yet. Check that ROCm PyTorch is
+  # installed; setup checks the GPU after the reboot.
+  if ! "${PYTHON_BIN}" -c "import torch; assert torch.version.hip" >/dev/null 2>&1; then
+    echo "[FAIL] ROCm PyTorch must already be installed before AMD RAG extras." >&2
+    exit 1
+  fi
+elif ! "${PYTHON_BIN}" -c "import torch; assert torch.cuda.is_available()" >/dev/null 2>&1; then
   echo "[FAIL] ROCm PyTorch must already be installed and see a GPU before AMD RAG extras." >&2
   exit 1
 fi
