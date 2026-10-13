@@ -79,6 +79,10 @@ jobs:
         run: |
           python3 scripts/resolve_implementation_components.py --validate-manifests
 
+      - name: Check show_metrics.sh labels match the workbook
+        run: |
+          python3 scripts/generate_show_metrics.py --check
+
       - name: Validate template contracts
         run: |
           python3 scripts/validate_template_inputs.py \
@@ -144,6 +148,8 @@ jobs:
           test -f templates/shared-workflows/.github/workflows/self-test.yml
           test -f templates/suite-tools/scripts/run_benchmark_suite.sh
           test -f templates/suite-tools/scripts/get_remote_info.sh
+          test -f templates/suite-tools/scripts/show_metrics.sh
+          test -f scripts/generate_show_metrics.py
           test ! -f docs/examples/generated-repo-workflows/nightly.yml.example
           echo "✓ All required template files and directories present"
 

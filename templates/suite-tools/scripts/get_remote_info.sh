@@ -213,11 +213,19 @@ else
 fi
 hostname > "${tmp}/_meta/hostname.txt"
 
-if ((${#paths[@]} > 0)); then
-  tar -cf - "${paths[@]}" -C "${tmp}" _meta | gzip -1
-else
-  tar -cf - -C "${tmp}" _meta | gzip -1
+# GNU tar exits 1 when a file changed while it was being read (a benchmark is
+# still writing its results). The archive is still complete, so that is only a
+# warning; exit codes above 1 are real errors.
+tar -cf - "${paths[@]}" -C "${tmp}" _meta | gzip -1
+st=("${PIPESTATUS[@]}")
+if ((st[0] == 1)); then
+  echo "  WARNING: some files changed while they were being copied: a benchmark is" >&2
+  echo "           probably still running. Its results are partial; collect again" >&2
+  echo "           after it finishes." >&2
+  st[0]=0
 fi
+((st[0] == 0)) || exit "${st[0]}"
+exit "${st[1]}"
 REMOTE
 
 transfer() {
@@ -230,9 +238,14 @@ transfer() {
   # ssh joins its arguments into one remote command line, so quote them.
   local remote_args
   remote_args=$(printf '%q ' "${remote_root}" "${remote_ledger}" "${LEDGER_CANDIDATES[@]}")
+  # GNU tar warns about every file whose time stamp is a fraction of a second
+  # ahead of this computer's clock (files the remote machine just wrote).
+  # Those warnings are harmless; hide them.
+  local -a untar=(tar -xf - -C "${dest}")
+  if tar --version 2>/dev/null | grep -q 'GNU tar'; then untar+=(--warning=no-timestamp); fi
   "${ssh_cmd[@]}" "${remote_user}@${remote_host}" "bash -s -- ${remote_args}" <<<"${REMOTE_SCRIPT}" \
     | gzip -dc \
-    | tar -xf - -C "${dest}"
+    | "${untar[@]}"
   local -a status=("${PIPESTATUS[@]}")
   [[ "${status[0]}" -eq 0 ]] || die "the remote collection failed (exit code ${status[0]})"
   [[ "${status[1]}" -eq 0 && "${status[2]}" -eq 0 ]] || die "the transfer was incomplete (unpacking failed)"

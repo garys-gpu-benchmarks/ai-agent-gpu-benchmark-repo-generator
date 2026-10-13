@@ -387,6 +387,7 @@ def ci_fields(fields: dict[str, str]) -> dict[str, str]:
         "CI Shared Workflows Repo": str(contract["shared_workflows"]["repo"]),
         "CI Shared Workflows Ref": str(contract["shared_workflows"]["ref"]),
         "CI Install Root": str(contract["suite"]["install_root"]),
+        "CI Suite Tools Repo": str(contract["suite"]["tools_repo"]),
     }
 
 

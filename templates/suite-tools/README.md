@@ -9,6 +9,7 @@ Operator tools for the GPU benchmark suite under
 |---|---|---|
 | [`scripts/run_benchmark_suite.sh`](scripts/run_benchmark_suite.sh) | the GPU host | Runs the workloads already installed under one folder (default `__SUITE_INSTALL_ROOT__`), one after another, for each requested profile, optionally repeated. One log file for the whole run and a pass/fail summary at the end. It discovers workloads from the folder, so the same script serves all four platforms, and it downloads nothing. |
 | [`scripts/get_remote_info.sh`](scripts/get_remote_info.sh) | your laptop (Git Bash on Windows) | Over one SSH connection, copies back the runtime ledger (CSV, plus an Excel copy on Windows), every workload's `results/raw` and `results/parsed`, and the suite logs, into `RUNTIME_LEDGERS/` and `DIRECTORIES/`. |
+| [`scripts/show_metrics.sh`](scripts/show_metrics.sh) | your laptop or the GPU host | Prints one workload's runs from the runtime ledger (local file, or over SSH with `--host`) in fixed 7-character metric columns, with per-profile means. Column headings and the 12-character workload names are generated from the `Metric_Short_Labels` and `Workload_Short_Names` sheets in the generator. |
 
 `run_benchmark_suite.sh` is also published at the top of every bundle
 repository, next to `run.sh`.
@@ -54,6 +55,10 @@ may ask for your `sudo` password and, for ROCm, may need one reboot. Logs go to
 ./scripts/get_remote_info.sh ubuntu@203.0.113.10 2222            # another user and port
 ./scripts/get_remote_info.sh -i ~/.ssh/id_ed25519 -o ~/results 203.0.113.10
 ./scripts/get_remote_info.sh --help
+
+./scripts/show_metrics.sh 332 --host 203.0.113.10                 # workload 332, all profiles
+./scripts/show_metrics.sh 332 --baseline --file RUNTIME_LEDGERS/runtime_ledger_301_332_<time>.csv
+./scripts/show_metrics.sh --help
 ```
 
 Without `-i`, it tries your SSH defaults, then each private key in `~/.ssh`.

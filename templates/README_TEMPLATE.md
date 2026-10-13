@@ -29,7 +29,8 @@ RULES:
      workload name already includes "Benchmark"; in that case use
      "# {{Workload Name}}" without duplication.
   D. Preserve section numbers/order exactly as listed (1–11). Do not add,
-     remove, or reorder top-level sections.
+     remove, or reorder top-level sections. The unnumbered sections Quick
+     Start, Download as a Bundle and Suite Tools come before section 1.
   E. Repo name in shell commands = the repo slug portion of
      {{Repo Name}} (strip any trailing " [Remote_SSH]" / bracket tags).
   F. Output raw Markdown only — no commentary, no surrounding prose,
@@ -52,6 +53,52 @@ Target: {{OS Version}} · {{GPU Vendor}} · see Hardware Requirements. This is a
 [[GENERATE: Add one sentence that this workload is local-only and does not support remote SSH execution in `setup.sh` or `run_benchmark.sh`.]]
 
 [[GENERATE: A short Prerequisites paragraph plus bullets: OS Version, GPU vendor/model/HBM from Hardware Config, ROCm or CUDA version from Framework, Python version, that `setup.sh` needs root or sudo, and Hugging Face / `HF_TOKEN` / model-license notes when Framework names vLLM, SGLang, Diffusers, BERT, or RAG. State that this is a host benchmark, not a laptop `pip install` project. Then a mermaid flowchart: setup.sh --> scripts/build.sh (only if a compile step exists) --> run_benchmark.sh --> parse_results.py --> results/benchmark.db.]]
+
+
+## Download as a Bundle
+
+This repository is one of the 32 workloads in the {{GPU Vendor}} {{CI OS Display}} bundle, [`{{CI Bundle Repo}}`](https://github.com/{{CI Owner}}/{{CI Bundle Repo}}), which holds them as git submodules pinned to a release. To put every workload for this platform on a GPU host in one step:
+
+```bash
+git clone --recurse-submodules https://github.com/{{CI Owner}}/{{CI Bundle Repo}} {{CI Install Root}}
+cd {{CI Install Root}}
+./run.sh list                                   # every workload should show "ready"
+cd {{CI Install Root}}/{{CI GitHub Slug}}
+bash run_benchmark.sh --profile smoke --validate
+```
+
+To move to the newest published release later: `cd {{CI Install Root}} && git pull && git submodule update --init --recursive`.
+
+| Bundle repository | Platform | Workloads |
+|---|---|---|
+| [`bundle-amd-ubuntu-2404`](https://github.com/{{CI Owner}}/bundle-amd-ubuntu-2404) | AMD · Ubuntu 24.04 | 101–132 |
+| [`bundle-nvidia-ubuntu-2404`](https://github.com/{{CI Owner}}/bundle-nvidia-ubuntu-2404) | NVIDIA · Ubuntu 24.04 | 201–232 |
+| [`bundle-amd-ubuntu-2604`](https://github.com/{{CI Owner}}/bundle-amd-ubuntu-2604) | AMD · Ubuntu 26.04 | 301–332 |
+| [`bundle-nvidia-ubuntu-2604`](https://github.com/{{CI Owner}}/bundle-nvidia-ubuntu-2604) | NVIDIA · Ubuntu 26.04 | 401–432 |
+
+## Suite Tools
+
+Three operator scripts from [`{{CI Owner}}/{{CI Suite Tools Repo}}`](https://github.com/{{CI Owner}}/{{CI Suite Tools Repo}}) work across the whole bundle. `run_benchmark_suite.sh` is also at the top of every bundle; each script prints full usage with `--help`.
+
+- **`run_benchmark_suite.sh`** (on the GPU host) — runs the installed workloads one after another for each profile, writes one log to `{{CI Install Root}}/benchmark_suite_log/`, and ends with a pass/fail summary.
+  ```bash
+  cd {{CI Install Root}}
+  ./run_benchmark_suite.sh --dry-run                    # list what would run
+  ./run_benchmark_suite.sh -w {{Workload Number}} -p smoke,baseline   # just this workload
+  ./run_benchmark_suite.sh -p smoke                     # every workload, smoke profile
+  ./run_benchmark_suite.sh -r 20                        # soak: everything, 20 times
+  ```
+- **`get_remote_info.sh`** (on your laptop; Git Bash on Windows) — over one SSH connection, copies the runtime ledger and every workload's `results/raw`, `results/parsed` and suite logs into `RUNTIME_LEDGERS/` and `DIRECTORIES/`.
+  ```bash
+  git clone https://github.com/{{CI Owner}}/{{CI Suite Tools Repo}} && cd {{CI Suite Tools Repo}}
+  ./scripts/get_remote_info.sh 203.0.113.10                     # root@host, port 22
+  ./scripts/get_remote_info.sh -i ~/.ssh/id_ed25519 -o ~/results ubuntu@203.0.113.10 2222
+  ```
+- **`show_metrics.sh`** (laptop or GPU host) — prints one workload's runs from the runtime ledger in fixed-width metric columns with per-profile means.
+  ```bash
+  ./scripts/show_metrics.sh {{Workload Number}} --host 203.0.113.10            # over SSH, all profiles
+  ./scripts/show_metrics.sh {{Workload Number}} --baseline --file RUNTIME_LEDGERS/<ledger>.csv
+  ```
 
 
 ## 1. Overview
@@ -193,12 +240,4 @@ Derive failure modes from: the build/install step (Section 6), a hardware/resour
 
 Both files are short callers. The steps themselves live once, for every workload in the suite, in [`{{CI Owner}}/{{CI Shared Workflows Repo}}`](https://github.com/{{CI Owner}}/{{CI Shared Workflows Repo}}), pinned at `@{{CI Shared Workflows Ref}}`. The GPU workflow is never triggered by pull requests, so code from a fork cannot run on the GPU host.
 
-### Running it as part of the {{GPU Vendor}} {{CI OS Display}} bundle
-
-This repository is one of the 32 workloads in [`{{CI Bundle Repo}}`](https://github.com/{{CI Owner}}/{{CI Bundle Repo}}), which holds them as git submodules. To put the whole bundle on a GPU host and run this workload from it:
-
-```bash
-git clone --recurse-submodules https://github.com/{{CI Owner}}/{{CI Bundle Repo}} {{CI Install Root}}
-cd {{CI Install Root}}/{{CI GitHub Slug}}
-bash run_benchmark.sh --profile smoke --validate
-```
+The GPU Smoke Benchmark workflow runs one workload. To install and run the whole {{GPU Vendor}} {{CI OS Display}} bundle by hand on the same machines, see [Download as a Bundle](#download-as-a-bundle) and [Suite Tools](#suite-tools).

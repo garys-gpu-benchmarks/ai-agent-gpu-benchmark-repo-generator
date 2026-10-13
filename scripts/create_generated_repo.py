@@ -204,6 +204,68 @@ def _copy_template(source: Path, destination: Path) -> None:
     shutil.copytree(source, destination, ignore=_ignore_template_copy)
 
 
+# Laptop-side tools the operator runs from the project folder (the folder that
+# holds the template/workload folder). get_remote_info.sh writes DIRECTORIES/ and
+# RUNTIME_LEDGERS/ next to itself; show_metrics.sh prints one workload's metrics
+# from a runtime ledger (local or over ssh). The master copies stay in
+# templates/suite-tools/scripts/ (published as gpu-bench-suite); they are never
+# copied into a workload.
+OPERATOR_TOOLS = (
+    "templates/suite-tools/scripts/get_remote_info.sh",
+    "templates/suite-tools/scripts/show_metrics.sh",
+)
+
+
+def refresh_show_metrics(source_root: Path) -> bool:
+    """Regenerate show_metrics.sh's short-label table from the Metric_Short_Labels sheet.
+
+    A problem in the sheet is reported but does not stop workload generation;
+    the existing master copy is installed instead.
+    """
+    script = source_root / "scripts" / "generate_show_metrics.py"
+    if not script.is_file():
+        print("[WARN] scripts/generate_show_metrics.py is missing; show_metrics.sh labels not regenerated.")
+        return False
+    result = subprocess.run(
+        [sys.executable, str(script), "--template-root", str(source_root)],
+        cwd=source_root,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    for line in (result.stdout + result.stderr).splitlines():
+        print(line)
+    if result.returncode != 0:
+        print(
+            "[WARN] show_metrics.sh labels were not regenerated (see above); installing the existing copy. "
+            "Fix the Metric_Short_Labels sheet, then run python3 scripts/generate_show_metrics.py."
+        )
+        return False
+    return True
+
+
+def install_operator_tools(source_root: Path, project_root: Path) -> list[Path]:
+    """Copy OPERATOR_TOOLS into project_root.parent. An existing copy that differs is kept."""
+    target_dir = project_root.parent
+    installed: list[Path] = []
+    for rel in OPERATOR_TOOLS:
+        src = source_root / rel
+        if not src.is_file():
+            print(f"[WARN] Operator tool missing from the template: {rel}")
+            continue
+        dst = target_dir / src.name
+        data = src.read_bytes().replace(b"\r\n", b"\n")
+        if dst.exists():
+            if dst.read_bytes().replace(b"\r\n", b"\n") != data:
+                print(f"[INFO] Kept existing {dst}; it differs from {rel}. Delete it to get the generator's copy.")
+            continue
+        dst.write_bytes(data)
+        dst.chmod(dst.stat().st_mode | 0o111)
+        installed.append(dst)
+        print(f"[INFO] Installed operator tool: {dst}")
+    return installed
+
+
 def main() -> int:
     args = parse_args()
     source_root = Path(args.template_root).resolve()
@@ -382,6 +444,8 @@ def main() -> int:
 
         ensure_gitkeep(repo_root)
         normalize_text_tree(repo_root)
+        refresh_show_metrics(source_root)
+        install_operator_tools(source_root, project_root)
         print(f"[PASS] Created generated repository: {repo_root}")
         print(f"[PASS] Active template copy: {active_copy}")
         print(

@@ -179,7 +179,7 @@ my_project_root/
 ```text
 config/ci_contract.yaml ──► templates/workload/.github/workflows/   ──► 2 thin callers in each of the 128 workload repos
    (owner, tag, inputs,     templates/shared-workflows/            ──► shared-workflows repo  (published once, tagged v1)
-    runner labels, tools)   templates/suite-tools/                 ──► gpu-bench-suite repo   (run_benchmark_suite.sh, get_remote_info.sh)
+    runner labels, tools)   templates/suite-tools/                 ──► gpu-bench-suite repo   (run_benchmark_suite.sh, get_remote_info.sh, show_metrics.sh)
 ```
 
 | Where | File | Runs on | When |
@@ -274,9 +274,15 @@ The other bundles are `bundle-nvidia-ubuntu-2404`, `bundle-amd-ubuntu-2604` and 
 ```bash
 ./get_remote_info.sh 203.0.113.10                 # ledger + results/raw + results/parsed + suite logs
 ./get_remote_info.sh -i ~/.ssh/id_ed25519 -o ~/results ubuntu@203.0.113.10 2222
+./show_metrics.sh 332 --host 203.0.113.10         # one workload's metrics from the remote ledger
+./show_metrics.sh 332 --baseline --file RUNTIME_LEDGERS/runtime_ledger_301_332_<time>.csv
 ```
 
-Both suite scripts are kept in [`templates/suite-tools/scripts/`](templates/suite-tools/scripts) and emitted to `gpu-bench-suite/`.
+The suite scripts are kept in [`templates/suite-tools/scripts/`](templates/suite-tools/scripts) and emitted to `gpu-bench-suite/`.
+
+`show_metrics.sh` prints one row per run in fixed 7-character metric columns, at most 87 characters wide. Two sheets of `BenchmarkSpecDefinitions.xlsx` supply its text: `Metric_Short_Labels` (one row per workload metric; the column headings, at most 7 characters) and `Workload_Short_Names` (one row per workload; the Name column, at most 12 characters, for example `RAG Sweep` for "RAG Pipeline Sweep"). After changing either, run `python3 scripts/generate_show_metrics.py`; it checks both sheets against `Workload_Definitions` (metric keys from the `Metrics` column, full workload names, no short name used twice in a batch, one short name per full name) and rewrites the two tables in the script. `--check` reports drift without writing (CI runs it), and `--add-missing` adds rows for new metrics and workloads, marked `auto: review`.
+
+Generating a workload (`scripts/create_generated_repo.py`) also regenerates `show_metrics.sh` from the sheet and puts a copy of `get_remote_info.sh` and `show_metrics.sh` in the project folder, one level above the folder that holds the generator and the workloads (for example `Project347_.../get_remote_info.sh` next to `Project347_.../TEMPLATE_00_105/`). Run it from there; it writes `DIRECTORIES/` and `RUNTIME_LEDGERS/` beside itself. An existing copy that differs is kept. It is never copied into a workload, and it does not belong in `scripts/` next to `publish_benchmarks_to_github.sh`: everything in `scripts/` is copied into every workload.
 
 ## Limitations and prerequisites
 
@@ -303,7 +309,7 @@ Keep private keys, passwords, API tokens, SSH commands containing secrets, and o
 | `config/ci_contract.yaml` | CI contract: GitHub owner, `shared-workflows` tag, caller inputs, runner labels, tool versions, bundle names (generation-only) |
 | `templates/workload/.github/workflows/` | Thin caller workflows rendered into every generated repo |
 | `templates/shared-workflows/` | The reusable workflows, self-test and docs, emitted once to the `shared-workflows` repo |
-| `templates/suite-tools/` | `run_benchmark_suite.sh` and `get_remote_info.sh`, emitted to the `gpu-bench-suite` repo |
+| `templates/suite-tools/` | `run_benchmark_suite.sh`, `get_remote_info.sh` and `show_metrics.sh`, emitted to the `gpu-bench-suite` repo |
 | `docs/` | Phase-by-phase generation workflow and machine-checkable contracts |
 | `schemas/` | JSON Schemas that generated artifacts must validate against |
 | `scripts/` | Generation, validation, and smoke-check tooling |
