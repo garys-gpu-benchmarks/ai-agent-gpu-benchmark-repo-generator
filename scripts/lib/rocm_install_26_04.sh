@@ -34,6 +34,13 @@
 # Repository:   gpu-bench / sys-bench workload template
 # License:      Apache-2.0
 
+_rocm_kernel_guard="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/keep_running_kernel.sh"
+if [[ -f "${_rocm_kernel_guard}" ]]; then
+  # shellcheck disable=SC1090
+  source "${_rocm_kernel_guard}"
+fi
+unset _rocm_kernel_guard
+
 # ────────────────────────────────────────────────────────────────────────────
 # Version pins — override with environment variables before sourcing if needed.
 # ────────────────────────────────────────────────────────────────────────────
@@ -236,6 +243,9 @@ rocm_install_runtime() {
 
     if [[ "${stage}" == "stage1" ]]; then
         _rocm_status_phase "Phase 1:  ## Install ROCm Runtime Tools (On Bare Metal Ubuntu Server - NOT ROCm server) - 26.04"
+        if declare -f keep_running_kernel >/dev/null 2>&1; then
+            keep_running_kernel
+        fi
         # Step 01 — Advanced Package Tool updates the local list of available packages and versions from all configured repositories.
         _rocm_log "Advanced Package Tool updates the local list of available packages and versions from all configured repositories."
         run_noninteractive_root DEBIAN_FRONTEND=noninteractive apt update  # Update the list of available packages (does not install pkgs)
@@ -306,7 +316,9 @@ rocm_install_runtime() {
         # (Omitted for Ubuntu 26.04): sudo apt install -y linux-modules-extra-$(uname -r)
         # This package was removed/folded into linux-modules starting Ubuntu 25.10+;
         # attempting to install it on resolute fails with "Unable to locate package."
-        _rocm_log "Skipping linux-modules-extra install: deprecated/removed on Ubuntu 25.10+ (resolute), folded into linux-modules by default."
+        # There is no newest-/lib/modules branch. Do not install linux-modules or
+        # linux-modules-extra for any kernel other than uname -r.
+        _rocm_log "Skipping linux-modules-extra install: deprecated/removed on Ubuntu 25.10+ (resolute), folded into linux-modules by default. Running kernel only; no newest /lib/modules install."
 
         # Step 09 — Rebuild kernel module dependency map.
         _rocm_log "Refresh kernel module dependency map."

@@ -25,6 +25,8 @@ vendors:
         include: [iperf3, iperf]
       BENCHMARK_INSTALL_NCCL:
         include: [nccl]
+      BENCHMARK_INSTALL_PERF:
+        include: [linux perf, pmu]
   amd:
     flags:
       BENCHMARK_INSTALL_PYTORCH:
@@ -71,7 +73,7 @@ vendors:
       BENCHMARK_INSTALL_IPERF:
         include: [iperf]
       BENCHMARK_INSTALL_PERF:
-        include: [linux pmu, perf, stress-ng]
+        include: [linux pmu, linux perf, pmu]
   cpu:
     flags:
       BENCHMARK_INSTALL_FIO:

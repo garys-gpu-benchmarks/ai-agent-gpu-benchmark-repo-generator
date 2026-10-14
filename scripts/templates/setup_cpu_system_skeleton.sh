@@ -113,6 +113,9 @@ if [[ "${ASSUME_YES}" -ne 1 ]]; then
 fi
 
 log_status "PHASE setup.sh start ${REPO_NAME}"
+# shellcheck disable=SC1091
+source "${REPO_ROOT}/scripts/lib/keep_running_kernel.sh"
+keep_running_kernel
 record_cmd "DEBIAN_FRONTEND=noninteractive apt-get update -y"
 DEBIAN_FRONTEND=noninteractive apt-get update -y
 
@@ -135,11 +138,11 @@ if [[ "${BENCHMARK_INSTALL_LMBENCH}" == "1" ]]; then
   apt_install lmbench || true
 fi
 if [[ "${BENCHMARK_INSTALL_PERF}" == "1" ]]; then
-  apt_install linux-tools-common linux-tools-generic || true
-  KERNEL_RELEASE="$(uname -r || true)"
-  if [[ -n "${KERNEL_RELEASE}" ]]; then
-    apt_install "linux-tools-${KERNEL_RELEASE}" || true
-  fi
+  # linux-tools-generic follows the newest archive kernel and pulls its image
+  # and headers. Those postinst scripts build DKMS for a kernel that is not running.
+  apt_install linux-tools-common
+  KERNEL_RELEASE="$(uname -r)"
+  apt_install "linux-tools-${KERNEL_RELEASE}"
 fi
 
 PYTHON_BIN="${BENCHMARK_PYTHON:-python3}"
@@ -167,6 +170,9 @@ fi
 if [[ "${BENCHMARK_INSTALL_STRESS_NG}" == "1" ]]; then
   verify_cmd "stress-ng" stress-ng --version
 fi
+if [[ "${BENCHMARK_INSTALL_PERF}" == "1" ]]; then
+  verify_cmd "perf" perf --version
+fi
 
 if [[ -f scripts/build.sh ]]; then
   log_status "STEP scripts/build.sh"
@@ -189,4 +195,3 @@ printf 'setup_complete=1\nworkload=%s\nbundle=cpu-system\ncompleted_at=%s\n' \
   "${REPO_NAME}" "$(date -u +'%Y-%m-%dT%H:%M:%SZ')" > "${REPO_ROOT}/.setup_state"
 log_status "PHASE SETUP complete"
 echo "[PASS] setup.sh complete"
-wall "setup.sh now complete" >/dev/null 2>&1 || true

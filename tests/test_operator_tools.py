@@ -13,12 +13,14 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "scripts"))
 
 from create_generated_repo import OPERATOR_TOOLS, install_operator_tools  # noqa: E402
 from init_generated_repo import SHARED_DIRS  # noqa: E402
+import create_one_workload  # noqa: E402
 
 
 class OperatorToolTests(unittest.TestCase):
@@ -69,6 +71,37 @@ class OperatorToolTests(unittest.TestCase):
         self.assertEqual(installed, self.dsts[1:])
         self.assertIn("Kept existing", out)
         self.assertEqual(self.dst.read_text(encoding="utf-8"), "#!/usr/bin/env bash\necho mine\n")
+
+
+class RemoteShowMetricsInstallTests(unittest.TestCase):
+    def test_remote_copy_installs_show_metrics_at_opt_benchmarks(self) -> None:
+        calls: list[str] = []
+
+        def fake_run(command: str, cwd=None, timeout=None):
+            calls.append(command)
+
+            class Result:
+                returncode = 0
+                stdout = create_one_workload.COPY_OK + "\n"
+                stderr = ""
+
+            return Result()
+
+        with patch.object(create_one_workload, "run_host_bash", side_effect=fake_run):
+            rc = create_one_workload.remote_copy(
+                "ssh -i /c/Users/gary/.ssh/gmb-amd-ssh-key root@203.0.113.10",
+                Path("/tmp/101-sample"),
+                reuse=True,
+            )
+        self.assertEqual(rc, 0)
+        self.assertEqual(len(calls), 2)
+        install = calls[1]
+        self.assertIn("/opt/benchmarks/show_metrics.sh", install)
+        self.assertIn("chmod 755 /opt/benchmarks/show_metrics.sh", install)
+        self.assertIn("templates/suite-tools/scripts/show_metrics.sh", install.replace("\\", "/"))
+        publish = (ROOT / "scripts" / "publish_benchmarks_to_github.sh").read_text(encoding="utf-8")
+        self.assertIn('tr -d \'\\r\' <"${METRICS_SCRIPT}" >show_metrics.sh', publish)
+        self.assertIn("for f in run.sh run_benchmark_suite.sh show_metrics.sh", publish)
 
 
 if __name__ == "__main__":

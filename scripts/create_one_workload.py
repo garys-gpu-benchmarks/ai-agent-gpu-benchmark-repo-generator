@@ -15,7 +15,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from generated_repo_directory import find_generated_repo, generated_repo_directory_name
-from host_exec import normalize_remote_root, normalize_ssh_command, run_host_bash
+from host_exec import normalize_remote_root, normalize_ssh_command, run_host_bash, to_git_bash_path
 from framework_registry import resolve_flags
 from platform_policy import match_policy
 from remove_template_copy import remove_template_copy
@@ -211,6 +211,33 @@ def remote_copy(ssh: str, repo_dir: Path, *, reuse: bool) -> int:
     result = run_host_bash(command, cwd=cwd, timeout=1800)
     if result.returncode != 0 or COPY_OK not in (result.stdout or ""):
         print("[FAIL] remote copy failed", flush=True)
+        _emit(result.stdout or "")
+        _emit(result.stderr or "")
+        return result.returncode or 1
+    return install_remote_show_metrics(ssh)
+
+
+def install_remote_show_metrics(ssh: str) -> int:
+    """Install templates/suite-tools/scripts/show_metrics.sh at /opt/benchmarks/show_metrics.sh.
+
+    Workload trees live in /opt/benchmarks/<repo>. The suite script stays beside
+    them, where an operator runs `bash show_metrics.sh 101`.
+    """
+    src = Path(__file__).resolve().parents[1] / "templates" / "suite-tools" / "scripts" / "show_metrics.sh"
+    dest = f"{REMOTE_ROOT}/show_metrics.sh"
+    if not src.is_file():
+        print(f"[FAIL] {src} is missing; cannot install {dest}", flush=True)
+        return 1
+    remote = f"mkdir -p {REMOTE_ROOT} && cat > {dest} && chmod 755 {dest} && echo {COPY_OK}"
+    # Strip CR in Git Bash, before SSH, so the remote command needs no quotes.
+    command = (
+        f"tr -d '\\r' < {shlex.quote(to_git_bash_path(str(src)))} | "
+        f"{normalize_ssh_command(ssh)} {shlex.quote(remote)}"
+    )
+    print(f"[INFO] install {dest}", flush=True)
+    result = run_host_bash(command, timeout=120)
+    if result.returncode != 0 or COPY_OK not in (result.stdout or ""):
+        print(f"[FAIL] could not install {dest}", flush=True)
         _emit(result.stdout or "")
         _emit(result.stderr or "")
         return result.returncode or 1

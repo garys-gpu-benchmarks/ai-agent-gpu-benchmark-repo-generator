@@ -52,7 +52,7 @@ NAME_BEGIN_MARKER = "# BEGIN GENERATED WORKLOAD NAMES"
 NAME_END_MARKER = "# END GENERATED WORKLOAD NAMES"
 
 MAX_LABEL = 7  # show_metrics.sh prints every metric in a 7-character column
-MAX_NAME = 12  # show_metrics.sh Name column; with 7 metrics a line is then exactly 87 characters
+MAX_NAME = 12  # show_metrics.sh Name column; with the Exit column and 7 metrics a line is then exactly 93 characters
 METRIC_SLOTS = 7  # update_runtime_ledger.METRIC_SLOT_COUNT
 # Labels are read by awk as the last whitespace-separated word of a line and
 # may also be given in a CSV, so no spaces, tabs, commas, colons or quotes.

@@ -209,7 +209,8 @@ def _copy_template(source: Path, destination: Path) -> None:
 # RUNTIME_LEDGERS/ next to itself; show_metrics.sh prints one workload's metrics
 # from a runtime ledger (local or over ssh). The master copies stay in
 # templates/suite-tools/scripts/ (published as gpu-bench-suite); they are never
-# copied into a workload.
+# copied into a workload. The VM copy is separate: create_one_workload.py and
+# the bundle publish both install show_metrics.sh at /opt/benchmarks.
 OPERATOR_TOOLS = (
     "templates/suite-tools/scripts/get_remote_info.sh",
     "templates/suite-tools/scripts/show_metrics.sh",

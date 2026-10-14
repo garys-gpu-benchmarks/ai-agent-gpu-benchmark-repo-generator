@@ -237,5 +237,174 @@ class RuntimeInstallBranchTests(unittest.TestCase):
         self._check("rocm_install_26_04.sh", "firmware")
 
 
+class RunningKernelGuardTests(unittest.TestCase):
+    """Kernel-guard contract for both Ubuntu installers. Holds and module dirs are faked."""
+
+    HOLD_NAMES = (
+        "linux-image-generic",
+        "linux-image-virtual",
+        "linux-headers-generic",
+        "linux-headers-virtual",
+        "linux-generic",
+        "linux-virtual",
+        "linux-tools-generic",
+        "linux-generic-hwe-24.04",
+        "linux-image-generic-hwe-24.04",
+        "linux-headers-generic-hwe-24.04",
+        "linux-virtual-hwe-24.04",
+        "linux-image-virtual-hwe-24.04",
+        "linux-headers-virtual-hwe-24.04",
+        "linux-generic-hwe-26.04",
+        "linux-image-generic-hwe-26.04",
+        "linux-headers-generic-hwe-26.04",
+        "linux-virtual-hwe-26.04",
+        "linux-image-virtual-hwe-26.04",
+        "linux-headers-virtual-hwe-26.04",
+    )
+
+    def test_helper_holds_known_names_and_stops_on_any_audit(self):
+        text = (LIB / "keep_running_kernel.sh").read_text(encoding="utf-8")
+        for name in self.HOLD_NAMES:
+            self.assertIn(name, text)
+        self.assertIn("if ! apt-cache show", text)
+        self.assertIn("apt-mark hold", text)
+        self.assertIn("dpkg --audit", text)
+        self.assertIn("refuse_foreign_installed_kernel", text)
+        self.assertNotIn("Pin-Priority", text)
+        self.assertNotIn("apt-get remove", text)
+        self.assertNotIn("apt-get purge", text)
+
+    def test_both_installers_follow_every_kernel_rule(self):
+        for name in ("rocm_install_24_04.sh", "rocm_install_26_04.sh"):
+            raw = (LIB / name).read_bytes()
+            if name.endswith("26_04.sh"):
+                self.assertIn(b"\r\n", raw)
+                self.assertNotIn(b"\n", raw.replace(b"\r\n", b""))
+            else:
+                self.assertNotIn(b"\r\n", raw)
+            text = raw.decode("utf-8").replace("\r\n", "\n")
+            executable = "\n".join(
+                line for line in text.splitlines() if not line.lstrip().startswith("#")
+            )
+            self.assertIn("source \"${_rocm_kernel_guard}\"", executable, name)
+            call_at = executable.find("\n            keep_running_kernel\n")
+            upgrade_at = executable.find("apt-get upgrade -y")
+            self.assertGreaterEqual(call_at, 0, name)
+            self.assertLess(call_at, upgrade_at, name)
+            self.assertLess(call_at, executable.find("apt update"), name)
+            self.assertNotIn("sort -V", executable, name)
+            self.assertNotIn("linux-modules-extra-${newest}", text, name)
+        text24 = (LIB / "rocm_install_24_04.sh").read_text(encoding="utf-8")
+        executable24 = "\n".join(
+            line for line in text24.splitlines() if not line.lstrip().startswith("#")
+        )
+        self.assertIn('linux-modules-extra-${running}', executable24)
+        self.assertNotIn("linux-modules-extra-${newest}", text24)
+        text26 = (LIB / "rocm_install_26_04.sh").read_bytes().decode("utf-8").replace("\r\n", "\n")
+        executable26 = "\n".join(
+            line for line in text26.splitlines() if not line.lstrip().startswith("#")
+        )
+        self.assertNotIn("apt-get install -y linux-modules-extra", executable26)
+        self.assertNotIn("apt install -y linux-modules-extra", executable26)
+        self.assertIn("no newest /lib/modules install", text26)
+
+    def test_unknown_hold_names_are_skipped_and_foreign_module_fails(self):
+        if BASH is None:
+            self.skipTest("needs bash")
+        helper = (LIB / "keep_running_kernel.sh").as_posix()
+        script = textwrap.dedent(r'''
+            set -euo pipefail
+            running=$1
+            extra=$2
+            known=$3
+            moddir=$(mktemp -d)
+            mkdir -p "$moddir/$running"
+            if [[ -n "$extra" ]]; then mkdir -p "$moddir/$extra"; fi
+            export KEEP_RUNNING_KERNEL_MODULES_DIR="$moddir"
+            export FAKE_UNAME="$running"
+            export FAKE_KNOWN=" $known "
+            hold_log=$(mktemp)
+            export HOLD_LOG="$hold_log"
+            uname() { printf '%s\n' "$FAKE_UNAME"; }
+            apt-cache() {
+              local name="${2:-}"
+              [[ "$FAKE_KNOWN" == *" $name "* ]]
+            }
+            apt-mark() { printf '%s\n' "$2" >> "$HOLD_LOG"; }
+            dpkg() { return 0; }
+            # shellcheck disable=SC1090
+            source "$4"
+            set +e
+            keep_running_kernel
+            rc=$?
+            set -e
+            printf 'RC=%s\n' "$rc"
+            cat "$HOLD_LOG"
+        ''')
+        known = "linux-image-generic linux-virtual linux-image-virtual linux-headers-generic linux-headers-virtual"
+        clean = subprocess.run(
+            [BASH, "-c", script, "bash", "7.0.0-31-generic", "", known, helper],
+            capture_output=True, text=True, timeout=30,
+        )
+        self.assertEqual(clean.returncode, 0, clean.stderr)
+        self.assertIn("RC=0", clean.stdout)
+        held = [line.strip() for line in clean.stdout.splitlines() if line.strip() and not line.startswith("RC=")]
+        self.assertIn("linux-image-generic", held)
+        self.assertIn("linux-virtual", held)
+        self.assertNotIn("linux-generic-hwe-24.04", held)
+        self.assertNotIn("linux-generic-hwe-26.04", held)
+        foreign = subprocess.run(
+            [BASH, "-c", script, "bash", "7.0.0-31-generic", "7.0.0-38-generic", known, helper],
+            capture_output=True, text=True, timeout=30,
+        )
+        self.assertEqual(foreign.returncode, 0, foreign.stderr)
+        self.assertIn("RC=1", foreign.stdout)
+        self.assertIn("7.0.0-38-generic", foreign.stdout + foreign.stderr)
+
+    def test_self_check_fails_on_a_foreign_module_directory(self):
+        text = (ROOT / "scripts" / "self_check_generated_repo.sh").read_text(encoding="utf-8")
+        self.assertIn("scripts/lib/keep_running_kernel.sh", text)
+        self.assertIn("refuse_foreign_installed_kernel", text)
+        self.assertIn("[[ -d /lib/modules ]]", text)
+
+    def test_setup_does_not_install_linux_tools_generic(self):
+        skeletons = (
+            ROOT / "scripts" / "templates" / "setup_cpu_system_skeleton.sh",
+            ROOT / "scripts" / "templates" / "setup_nvidia_skeleton.sh",
+            ROOT / "scripts" / "templates" / "setup_rocm_reboot_skeleton.sh",
+        )
+        for path in skeletons:
+            executable = [
+                line
+                for line in path.read_text(encoding="utf-8").splitlines()
+                if not line.lstrip().startswith("#")
+            ]
+            joined = "\n".join(executable)
+            self.assertNotIn("linux-tools-generic", joined, path.name)
+            self.assertIn("keep_running_kernel", joined, path.name)
+            self.assertTrue(
+                "linux-tools-$(uname -r)" in joined or 'linux-tools-${KERNEL_RELEASE}' in joined,
+                path.name,
+            )
+        nvidia = (ROOT / "scripts" / "templates" / "setup_nvidia_skeleton.sh").read_text(encoding="utf-8")
+        self.assertIn('BENCHMARK_INSTALL_PERF', nvidia)
+        rocm = (ROOT / "scripts" / "templates" / "setup_rocm_reboot_skeleton.sh").read_text(encoding="utf-8")
+        self.assertNotIn("linux pmu|perf |stress-ng", rocm)
+
+    def test_perf_flag_is_not_selected_by_stress_ng(self):
+        registry = (ROOT / "config" / "framework_registry.yaml").read_text(encoding="utf-8")
+        amd = registry.split("  amd:", 1)[1].split("  cpu:", 1)[0]
+        nvidia = registry.split("  nvidia:", 1)[1].split("  amd:", 1)[0]
+        self.assertNotIn("stress-ng", amd[amd.find("BENCHMARK_INSTALL_PERF"):])
+        self.assertIn("BENCHMARK_INSTALL_PERF:", nvidia)
+        self.assertNotIn("stress-ng", nvidia[nvidia.find("BENCHMARK_INSTALL_PERF"):])
+
+    def test_vllm_self_check_requires_real_server_for_every_profile(self):
+        text = (ROOT / "scripts" / "self_check_generated_repo.sh").read_text(encoding="utf-8")
+        self.assertIn('scripts/tiny_kv_server.py --host', text)
+        self.assertNotIn("smoke must be able to start scripts/tiny_kv_server.py", text)
+        self.assertIn("vllm.entrypoints.openai.api_server", text)
+
+
 if __name__ == "__main__":
     unittest.main()

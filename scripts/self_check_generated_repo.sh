@@ -49,6 +49,7 @@ required_paths=(
   "scripts/lib/amdgpu_reload.sh"
   "scripts/lib/rocm_install_24_04.sh"
   "scripts/lib/rocm_install_26_04.sh"
+  "scripts/lib/keep_running_kernel.sh"
   "results/generation_manifest.json"
   "results/raw/.gitkeep"
   "results/parsed/.gitkeep"
@@ -76,6 +77,15 @@ for rel in "${required_paths[@]}"; do
         exit 1
     fi
 done
+
+# Ubuntu 26.04 can install a newer kernel without leaving dpkg half-configured.
+# The extra /lib/modules directory is then the only symptom, and the next reboot
+# boots that kernel. Skip the check when /lib/modules is absent.
+if [[ -d /lib/modules ]]; then
+    # shellcheck disable=SC1091
+    source scripts/lib/keep_running_kernel.sh
+    refuse_foreign_installed_kernel
+fi
 
 for stale in ".github/workflows/nightly.yml" ".github/dependabot.yml"; do
     if [[ -e "${stale}" ]]; then
@@ -706,16 +716,14 @@ if workload in {"131", "231", "331"} or "sglang-serving-latency" in repo:
     print("[PASS] 131/231/331 SGLang smoke-vs-real launch contract")
 if workload in {"127", "128", "129", "227", "228", "229", "327", "328", "329"}:
     runner = Path("run_benchmark.sh").read_text(encoding="utf-8", errors="replace")
-    smoke_real_vllm = (
-        "does not substitute the server" in runner
-        or "Every profile starts python -m vllm.entrypoints.openai.api_server" in runner
-    )
-    if "tiny_kv_server.py" not in runner and not smoke_real_vllm:
-        raise SystemExit("[FAIL] 127-129/227-229/327-329 smoke must be able to start scripts/tiny_kv_server.py.")
+    if "scripts/tiny_kv_server.py --host" in runner:
+        raise SystemExit(
+            "[FAIL] 127-129/227-229/327-329 must launch real vLLM for every profile, including smoke."
+        )
     if "vllm.entrypoints.openai.api_server" not in runner:
         raise SystemExit(
-            "[FAIL] 127-129/227-229/327-329 baseline/extended must start "
-            "python -m vllm.entrypoints.openai.api_server."
+            "[FAIL] 127-129/227-229/327-329 must start "
+            "python -m vllm.entrypoints.openai.api_server for every profile."
         )
     if workload in {"128", "129", "228", "229", "327", "328", "329"}:
         if "TOKENIZER_CONTEXT_SLACK" not in runner:

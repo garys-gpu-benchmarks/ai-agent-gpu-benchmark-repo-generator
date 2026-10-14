@@ -10,10 +10,10 @@
 # Help:    ./show_metrics.sh --help
 #
 # Every workload prints with the same column layout and the output never
-# exceeds 87 characters:
+# exceeds 93 characters:
 #
-#   WL  Name         Profile    Idx  E2E_ms TTFT_ms  Ret_ms GenTk/s EmbDc/s FAISS_N
-#   332 RAG Sweep    smoke       32 269.017  41.308 0.09230  62.754  63.522     217
+#   WL  Name         Profile    Idx  Exit E2E_ms TTFT_ms  Ret_ms GenTk/s EmbDc/s FAISS_N
+#   332 RAG Sweep    smoke       32     0 269.017  41.308 0.09230  62.754  63.522     217
 #
 # The Name column (12 characters max) is the workload's short name from the
 # built-in table in workload_name_table() below (or a --labels file line
@@ -45,7 +45,7 @@ set -uo pipefail
 
 readonly SCRIPT_NAME="${0##*/}"
 readonly DEFAULT_LEDGER="/var/opt/benchmarks/runtime_ledger.csv"
-readonly MAX_WIDTH=87
+readonly MAX_WIDTH=93
 
 # ------------------------------------------------------------------------------
 # Defaults (each can be changed with an option)
@@ -555,9 +555,10 @@ label_lines() {
 # Formatter: parses the CSV properly (quoted fields with commas) and prints
 # the fixed-width table.
 #   Column layout (identical for every workload):
-#     WL(3) Name(12) Profile(8) Idx(5: run index, * if it failed) then up to
-#     7 metrics of 7 chars each, every column separated by one space
-#     ->  at most 31 + 7*8 = 87 chars.
+#     WL(3) Name(12) Profile(8) Idx(5: run index, * if it failed)
+#     Exit(5: ledger exit_code) then up to 7 metrics of 7 chars each, every
+#     column separated by one space
+#     ->  at most 37 + 7*8 = 93 chars.
 # ------------------------------------------------------------------------------
 read -r -d '' FORMAT_AWK <<'AWK'
 function parse_csv(line, out,    n, i, c, field, inq) {
@@ -618,6 +619,19 @@ function fmt(v,    a, x, s, u) {
   return sprintf("%.1e", x)
 }
 function clip(s) { return (length(s) > W) ? substr(s, 1, W) : s }
+# Exit codes are 0 or 1. A mean of mixed codes still has to fit the 5-character column.
+function exit_cell(v,    x, s) {
+  v = trim(v)
+  if (v == "") return "-"
+  if (!is_num(v)) return substr(v, 1, 5)
+  x = v + 0
+  if (x == int(x)) return sprintf("%d", x)
+  s = sprintf("%.3f", x)
+  if (length(s) > 5) s = sprintf("%.2f", x)
+  if (length(s) > 5) s = sprintf("%.1f", x)
+  if (length(s) > 5) s = sprintf("%.0f", x)
+  return s
+}
 
 BEGIN { VW = 7; NW = 12; MAXM = 7 }
 
@@ -690,11 +704,11 @@ END {
   print clip("Ledger: " src)
   print ""
 
-  hfmt = "%-3s %-12s %-8s %5s"
-  line = sprintf(hfmt, "WL", "Name", "Profile", "Idx")
+  hfmt = "%-3s %-12s %-8s %5s %5s"
+  line = sprintf(hfmt, "WL", "Name", "Profile", "Idx", "Exit")
   for (m = 1; m <= nmet; m++) line = line sprintf(" %" VW "s", (m in M_lab) ? M_lab[m] : "M" m)
   print line
-  dash = sprintf(hfmt, "---", "------------", "--------", "-----")
+  dash = sprintf(hfmt, "---", "------------", "--------", "-----", "-----")
   for (m = 1; m <= nmet; m++) dash = dash " -------"
   print dash
 
@@ -703,7 +717,7 @@ END {
   for (r = 1; r <= nrows; r++) {
     idx = R_idx[r]
     if (R_exit[r] != "" && R_exit[r] != "0") { idx = idx "*"; fails++ }
-    line = sprintf(hfmt, substr(wl, 1, 3), sname, substr(R_prof[r], 1, 8), substr(idx, 1, 5))
+    line = sprintf(hfmt, substr(wl, 1, 3), sname, substr(R_prof[r], 1, 8), substr(idx, 1, 5), exit_cell(R_exit[r]))
     for (m = 1; m <= nmet; m++) line = line sprintf(" %" VW "s", fmt(R_val[r, m]))
     print line
 
@@ -711,6 +725,7 @@ END {
     p = R_prof[r]
     if (!(p in P_n)) { P_order[++np] = p }
     P_n[p]++
+    if (is_num(R_exit[r])) { P_esum[p] += R_exit[r]; P_ecnt[p]++ }
     for (m = 1; m <= nmet; m++) if (is_num(R_val[r, m])) { P_sum[p, m] += R_val[r, m]; P_cnt[p, m]++ }
   }
 
@@ -720,7 +735,8 @@ END {
       p = P_order[i]
       if (P_n[p] < 2) continue
       if (!printed) { print dash; printed = 1 }
-      line = sprintf(hfmt, substr(wl, 1, 3), "mean", substr(p, 1, 8), "n=" P_n[p])
+      ecell = (P_ecnt[p] > 0) ? exit_cell(P_esum[p] / P_ecnt[p]) : "-"
+      line = sprintf(hfmt, substr(wl, 1, 3), "mean", substr(p, 1, 8), "n=" P_n[p], ecell)
       for (m = 1; m <= nmet; m++)
         line = line sprintf(" %" VW "s", (P_cnt[p, m] > 0) ? fmt(P_sum[p, m] / P_cnt[p, m]) : "-")
       print line
@@ -729,6 +745,7 @@ END {
 
   if (legend) {
     print ""
+    print clip(sprintf("%-7s %s", "Exit", "Exit Code (0 is pass)"))
     for (m = 1; m <= nmet; m++) if (m in M_lab) print clip(sprintf("%-7s %s", M_lab[m], M_def[m]))
   }
   if (fails) print clip("* run did not exit 0 (" fails " run" (fails > 1 ? "s" : "") ")")

@@ -157,8 +157,9 @@
            explicit. Keep five metrics on 130. For 107/207 keep the official
            STREAM overlay `src/stream.c` (per-element relative checksum). For
            130/230 keep the leftover-DB-safe `scripts/parse_results.py` overlay.
-           For 127/128/129 and 227/228/229, smoke may use `tiny_kv_server.py`;
-           baseline/extended must launch `vllm.entrypoints.openai.api_server`.
+           For 127/128/129, 227/228/229, and 327/328/329, every profile launches
+           `vllm.entrypoints.openai.api_server`. A runner that contains
+           `scripts/tiny_kv_server.py --host` fails self-check.
            For 130/131/230/231, smoke may use the tiny SGLang server;
            baseline/extended must launch `sglang.launch_server`. Keep the
            00_54 `run_benchmark.sh` overlays for 131/227/228/229/230/231.
@@ -254,8 +255,8 @@
            around this guidance for readability.
 - [ ] 3.40h1 `results/install_status.txt` timestamps use
            `YYYY-MM-DD HH:MM:SS  PHASE|STEP|SETUP` formatting.
-- [ ] 3.40i On successful local completion, setup emits `wall` message
-           `setup.sh now complete` and writes persistent completion status to `/etc/motd`.
+- [ ] 3.40i On successful local completion, setup prints `setup.sh now complete`
+           to its own output (no `wall` broadcast) and writes persistent completion status to `/etc/motd`.
 - [ ] 3.40k For ROCm runtime setup flows, `setup.sh` follows
            `docs/rocm-reboot-install-contract.md`: installs/enables a systemd oneshot
            auto-resume service before reboot-capable ROCm steps, resumes with

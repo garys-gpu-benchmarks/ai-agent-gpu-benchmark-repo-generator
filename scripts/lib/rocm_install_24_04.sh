@@ -22,6 +22,13 @@
 # Repository:   gpu-bench / sys-bench workload template
 # License:      Apache-2.0
 
+_rocm_kernel_guard="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/keep_running_kernel.sh"
+if [[ -f "${_rocm_kernel_guard}" ]]; then
+  # shellcheck disable=SC1090
+  source "${_rocm_kernel_guard}"
+fi
+unset _rocm_kernel_guard
+
 # ────────────────────────────────────────────────────────────────────────────
 # Version pins — override with environment variables before sourcing if needed.
 # ────────────────────────────────────────────────────────────────────────────
@@ -165,16 +172,13 @@ _rocm_runtime_stage_boot_id() {
 }
 
 _rocm_install_linux_modules_extra() {
-    local running newest
+    local running
     running="$(uname -r)"
+    # Extras for a kernel other than the running one configure that kernel and
+    # run DKMS autoinstall. amdgpu-dkms 6.16.13 does not build on a newer
+    # Ubuntu kernel whose pci_resize_resource takes an extra argument.
     run_noninteractive_root DEBIAN_FRONTEND=noninteractive apt-get install -y "linux-modules-extra-${running}" \
         || _rocm_warn "linux-modules-extra-${running} not available"
-    newest="$(ls -1 /lib/modules 2>/dev/null | sort -V | tail -1 || true)"
-    if [[ -n "${newest}" && "${newest}" != "${running}" ]]; then
-        _rocm_log "Pending kernel ${newest} differs from running ${running}; installing extras for both."
-        run_noninteractive_root DEBIAN_FRONTEND=noninteractive apt-get install -y "linux-modules-extra-${newest}" \
-            || _rocm_warn "linux-modules-extra-${newest} not available"
-    fi
 }
 
 
@@ -190,8 +194,8 @@ _rocm_install_linux_modules_extra() {
 #          amdgpu_reload.sh; ROCM_RELOAD_INSTEAD_OF_REBOOT=0 always reboots).
 #          Step 02 uses apt-get upgrade, which keeps back new kernels, so the
 #          running kernel is the one DKMS built for. linux-modules-extra is
-#          still installed for a newer pending kernel too, in case the image
-#          already had one installed.
+#          installed only for that running kernel. Kernel metapackages that
+#          follow the newest archive kernel are held before the first apt.
 #
 # WARNING: If the reload fails, this function calls "sudo reboot" once. The
 #          caller must handle reconnection (e.g., systemd auto-resume in
@@ -219,6 +223,9 @@ rocm_install_runtime() {
 
     if [[ "${stage}" == "stage1" ]]; then
         _rocm_status_phase "Phase 1:  ## Install ROCm Runtime Tools (On Bare Metal Ubuntu Server - NOT ROCm server)"
+        if declare -f keep_running_kernel >/dev/null 2>&1; then
+            keep_running_kernel
+        fi
         # Step 01 — Advanced Package Tool updates the local list of available packages and versions from all configured repositories.
         _rocm_log "Advanced Package Tool updates the local list of available packages and versions from all configured repositories."
         run_noninteractive_root DEBIAN_FRONTEND=noninteractive apt update  # Update the list of available packages (does not install pkgs)
@@ -286,11 +293,10 @@ rocm_install_runtime() {
         _rocm_status_step 8 "sudo apt-get install -y rdma-core ibverbs-providers libibverbs1  # Install RDMA/InfiniBand userspace libraries"
 
         # Step 09 — Install extra kernel modules including peer memory symbols needed by amdgpu.
-        # Install for the running kernel and, if apt upgrade staged a newer one,
-        # that pending kernel too — there is no pre-driver reboot to switch first.
-        _rocm_log "Install kernel module extras for running and any pending kernel."
+        # Only the running kernel. A newer kernel's package postinst runs DKMS.
+        _rocm_log "Install kernel module extras for the running kernel."
         _rocm_install_linux_modules_extra
-        _rocm_status_step 9 "sudo apt-get install -y linux-modules-extra-\$(uname -r)  # plus pending kernel if different"
+        _rocm_status_step 9 "sudo apt-get install -y linux-modules-extra-\$(uname -r)"
 
         # Step 10 — Rebuild kernel module dependency map.
         _rocm_log "Refresh kernel module dependency map."

@@ -57,15 +57,28 @@ Target: {{OS Version}} · {{GPU Vendor}} · see Hardware Requirements. This is a
 
 ## Download as a Bundle
 
-This repository is one of the 32 workloads in the {{GPU Vendor}} {{CI OS Display}} bundle, [`{{CI Bundle Repo}}`](https://github.com/{{CI Owner}}/{{CI Bundle Repo}}), which holds them as git submodules pinned to a release. To put every workload for this platform on a GPU host in one step:
+This repository is one of the 32 workloads in the {{GPU Vendor}} {{CI OS Display}} bundle, [`{{CI Bundle Repo}}`](https://github.com/{{CI Owner}}/{{CI Bundle Repo}}), which holds them as git submodules pinned to a release. To put every workload for this platform on a GPU host in one step, run this as root (or put `sudo` in front of the `apt-get` and `git clone` commands):
 
 ```bash
-git clone --recurse-submodules https://github.com/{{CI Owner}}/{{CI Bundle Repo}} {{CI Install Root}}
-cd {{CI Install Root}}
-./run.sh list                                   # every workload should show "ready"
-cd {{CI Install Root}}/{{CI GitHub Slug}}
-bash run_benchmark.sh --profile smoke --validate
+apt-get update && apt-get install -y git
+git clone --recurse-submodules https://github.com/{{CI Owner}}/{{CI Bundle Repo}} {{CI Install Root}} \
+  && cd {{CI Install Root}} \
+  && ./run.sh list \
+  && cd {{CI Install Root}}/{{CI GitHub Slug}} \
+  && bash run_benchmark.sh --profile smoke --validate \
+  && cd {{CI Install Root}} \
+  && echo "Done: 32 workloads in {{CI Install Root}}; {{CI GitHub Slug}} smoke run passed. Next: ./run_benchmark_suite.sh --help"
 ```
+
+Every line in `./run.sh list` should show `ready`. The commands are joined with `&&`, so if the clone or the smoke run fails, the chain stops there, and the closing message appears only when everything succeeded. The chain ends in `{{CI Install Root}}`, where the suite runner is. For more extensive testing:
+
+```bash
+./run_benchmark_suite.sh -p smoke                 # smoke test of all 32 workloads
+./run_benchmark_suite.sh -w {{CI Bundle Example Workload}} -p baseline       # workload {{CI Bundle Example Workload}}, baseline profile
+./run_benchmark_suite.sh --help                   # all options
+```
+
+A workload that is not set up yet sets itself up on its first run (its `run_benchmark.sh` calls `scripts/ensure_setup.sh`). See [Suite Tools](#suite-tools) for more.
 
 To move to the newest published release later: `cd {{CI Install Root}} && git pull && git submodule update --init --recursive`.
 
@@ -78,7 +91,7 @@ To move to the newest published release later: `cd {{CI Install Root}} && git pu
 
 ## Suite Tools
 
-Three operator scripts from [`{{CI Owner}}/{{CI Suite Tools Repo}}`](https://github.com/{{CI Owner}}/{{CI Suite Tools Repo}}) work across the whole bundle. `run_benchmark_suite.sh` is also at the top of every bundle; each script prints full usage with `--help`.
+Three operator scripts from [`{{CI Owner}}/{{CI Suite Tools Repo}}`](https://github.com/{{CI Owner}}/{{CI Suite Tools Repo}}) work across the whole bundle. `run_benchmark_suite.sh` and `show_metrics.sh` are also at the top of every bundle (and the generator's remote copy installs `show_metrics.sh` at `{{CI Install Root}}`); each script prints full usage with `--help`.
 
 - **`run_benchmark_suite.sh`** (on the GPU host) — runs the installed workloads one after another for each profile, writes one log to `{{CI Install Root}}/benchmark_suite_log/`, and ends with a pass/fail summary.
   ```bash
@@ -94,8 +107,9 @@ Three operator scripts from [`{{CI Owner}}/{{CI Suite Tools Repo}}`](https://git
   ./scripts/get_remote_info.sh 203.0.113.10                     # root@host, port 22
   ./scripts/get_remote_info.sh -i ~/.ssh/id_ed25519 -o ~/results ubuntu@203.0.113.10 2222
   ```
-- **`show_metrics.sh`** (laptop or GPU host) — prints one workload's runs from the runtime ledger in fixed-width metric columns with per-profile means.
+- **`show_metrics.sh`** (laptop or GPU host) — prints one workload's runs from the runtime ledger in fixed-width metric columns with per-profile means. On the GPU host it is `{{CI Install Root}}/show_metrics.sh`.
   ```bash
+  cd {{CI Install Root}} && ./show_metrics.sh {{Workload Number}}             # on the GPU host
   ./scripts/show_metrics.sh {{Workload Number}} --host 203.0.113.10            # over SSH, all profiles
   ./scripts/show_metrics.sh {{Workload Number}} --baseline --file RUNTIME_LEDGERS/<ledger>.csv
   ```
@@ -158,7 +172,7 @@ The tables below describe the machine used to generate the reference results. Th
 - `setup.sh` writes a chronological install status file at `results/install_status.txt`, writes bare executed install commands to `results/install_commands.txt`, and keeps a mirrored install-status block in `/etc/motd` during reboot-driven install, and
 - during reboot-driven install, `setup.sh` updates `/etc/motd` with in-progress phase/resume status and writes a persistent completion status block when installation is finished, and
 - `/etc/motd` should include operator guidance lines: `To see latest status on install, execute the following:` followed by `cat <repo-root>/results/install_status.txt`, and
-- on successful local completion, `setup.sh` emits a `wall` broadcast (`setup.sh now complete`), and
+- on successful local completion, `setup.sh` prints `setup.sh now complete` to its own output only (no `wall` broadcast, no terminal bell), and
 - for ROCm workloads using PyTorch, setup installs PyTorch/torchvision from the official ROCm wheel index rather than default PyPI, with configurable index and version variables, and verifies HIP plus GPU availability before writing the completion marker, and
 - for ROCm LLM Serving workloads, setup installs AMD AITER from its official repository with recursive submodules and compiles SGLang `sgl-kernel` for the target GFX architecture; generic CUDA `sgl_kernel` wheels are rejected.]]
 

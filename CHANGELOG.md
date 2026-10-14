@@ -1,5 +1,33 @@
 # Changelog
 
+## 2026-10-13 — show_metrics.sh is installed at /opt/benchmarks
+
+- **`scripts/create_one_workload.py`:** after a workload is copied onto the VM, `templates/suite-tools/scripts/show_metrics.sh` is installed at `/opt/benchmarks/show_metrics.sh` (LF, mode 755). It is not placed inside the workload tree.
+- **`scripts/publish_benchmarks_to_github.sh`:** every bundle includes `show_metrics.sh` next to `run.sh` and `run_benchmark_suite.sh`. Cloning a bundle into `/opt/benchmarks` leaves it there. Publish stops if the script is missing.
+
+## 2026-10-13 — show_metrics.sh Exit column
+
+- **`templates/suite-tools/scripts/show_metrics.sh`:** each run row has an Exit column (ledger `exit_code`, 5 characters) after Idx. The legend line is `Exit    Exit Code (0 is pass)`. A per-profile mean includes the mean exit code. Widest line, 7 metrics: 93 characters. A non-zero exit still marks Idx with `*`.
+
+## 2026-10-13 — Keep the running kernel; vLLM smoke starts the real server
+
+- **`scripts/lib/keep_running_kernel.sh`:** before apt work, hold `linux-image-generic`, `linux-image-virtual`, `linux-headers-generic`, `linux-headers-virtual`, `linux-generic`, `linux-virtual`, `linux-tools-generic`, and the Ubuntu 24.04 and 26.04 HWE generic and virtual metapackages. `apt-cache show` is inside an `if`, so a name that does not exist on that release is skipped and does not abort setup under `set -e`. If `dpkg --audit` is not empty, setup exits and, when the text names `linux-image` or `linux-headers`, says the running kernel. If `/lib/modules` contains any kernel other than `uname -r`, setup and `scripts/self_check_generated_repo.sh` exit. That extra directory is the Ubuntu 26.04 symptom: workload 311's `linux-tools-generic` install moved the virtual and generic kernel metapackages to `7.0.0-38` while dpkg stayed healthy, and the next reboot would boot it. Setup does not remove kernels.
+- **Perf packages:** `setup_cpu_system_skeleton.sh`, `setup_nvidia_skeleton.sh`, and `setup_rocm_reboot_skeleton.sh` are the only setup skeletons, shared by the 24.04 and 26.04 repos. They no longer install `linux-tools-generic`. That metapackage depends on the newest kernel image and headers. On 24.04, configuring kernel `6.8.0-147` fails `amdgpu` DKMS `6.16.13` (`pci_resize_resource` needs a fourth argument). On 26.04 the same install leaves the new kernel ready for the next boot. Perf workloads install `linux-tools-common` and `linux-tools-$(uname -r)` and fail if that package is missing. `stress-ng` no longer selects the perf install. NVIDIA installs those tools only when `BENCHMARK_INSTALL_PERF=1`.
+- **`scripts/lib/rocm_install_24_04.sh`:** `linux-modules-extra` is installed only for `uname -r`. **`scripts/lib/rocm_install_26_04.sh`:** does not install `linux-modules-extra` (it is folded into `linux-modules` on 26.04) and has no newest-`/lib/modules` branch. Both Ubuntu installers call `keep_running_kernel` at the start of stage 1.
+- **`scripts/self_check_generated_repo.sh`:** workloads 127–129, 227–229, and 327–329 fail when `run_benchmark.sh` contains `scripts/tiny_kv_server.py --host`. Every profile must start `vllm.entrypoints.openai.api_server`.
+- **Docs:** `docs/rocm-reboot-install-contract.md`, `AGENTS.md`, `docs/SUBMISSION_CHECKLIST.md`.
+
+## 2026-10-13 — setup.sh: no wall broadcast or terminal bell
+
+- **`scripts/templates/setup_rocm_reboot_skeleton.sh`, `setup_nvidia_skeleton.sh`, `setup_cpu_system_skeleton.sh`:** removed the `wall` calls (the `setup.sh now complete` broadcast, and on ROCm the "rebooting once" broadcast). `wall` rang the terminal bell and printed a "Broadcast message from root@<host>" banner on every logged-in terminal after each install, which is noisy when the suite installs 32 workloads. All four bundles (101–132, 201–232, 301–332, 401–432) are built from these templates. Completion is still printed by setup (`[PASS] setup.sh complete` / `setup.sh now complete`), logged to `results/install_status.txt` and mirrored to `/etc/motd`. The ROCm first-run notice no longer says completion is announced with `wall`.
+- **Docs:** `templates/README_TEMPLATE.md`, `docs/rocm-reboot-install-contract.md`, `docs/SUBMISSION_CHECKLIST.md` (3.40i), `docs/generation-workflow.md` and `AGENTS.md` no longer ask for a `wall` message.
+
+## 2026-10-13 — README: Download as a Bundle block installs git and shows next steps
+
+- **`templates/README_TEMPLATE.md`:** the Download as a Bundle block now starts with `apt-get update && apt-get install -y git` and says to run it as root (or with `sudo`). The clone, `./run.sh list`, this workload's smoke run and a closing `echo` are joined with `&&`, so the chain stops at the first failure and the "Done" message appears only on success. The chain ends back in `/opt/benchmarks`, where `run_benchmark_suite.sh` is. After the block, a short paragraph and three `run_benchmark_suite.sh` examples (`-p smoke`, `-w N07 -p baseline`, `--help`), with a note that each workload sets itself up on first run (`scripts/ensure_setup.sh`). No trailing whitespace.
+- **`scripts/fill_generated_docs.py`:** new README token `{{CI Bundle Example Workload}}`: 107, 207, 307 or 407, from the workload's hundreds digit, so each bundle's example names one of its own workloads.
+- **Tests:** `tests/test_readme_bundle_sections.py` checks the git install line, the `&&` chain ending in `/opt/benchmarks`, the per-bundle example workload and that the section has no trailing whitespace.
+
 ## 2026-10-13 — README: Download as a Bundle and Suite Tools sections
 
 - **`templates/README_TEMPLATE.md`:** two new unnumbered sections between Quick Start and `## 1. Overview`, filled for every workload (128): **Download as a Bundle** (`git clone --recurse-submodules https://github.com/<owner>/<bundle> /opt/benchmarks`, using the workload's own bundle from `config/ci_contract.yaml`, then `./run.sh list` and a smoke run of this workload, how to update to the newest release, and a table of all four bundles) and **Suite Tools** (one line plus example commands each for `run_benchmark_suite.sh`, `get_remote_info.sh` and `show_metrics.sh`, with this workload's number filled in). The old "Running it as part of the … bundle" subsection under Continuous Integration is now a one-line pointer to these sections. Rule D in the template's agent block names the unnumbered sections.

@@ -14,7 +14,7 @@ if grep -q $'\r' "$0"; then echo "This file has Windows (CRLF) line endings. Fix
 #                               its 32 workloads as pinned git submodules
 #   shared-workflows            the CI every workload calls (@v1)
 #   gpu-bench-suite             operator tools (run_benchmark_suite.sh,
-#                               get_remote_info.sh)
+#                               get_remote_info.sh, show_metrics.sh)
 #   the generator               ai-agent-gpu-benchmark-repo-generator
 #
 # Where this script lives:
@@ -503,6 +503,11 @@ own, and run the same command again.
 
 Each run prints a short block, and the suite ends with a pass/fail summary.
 The full output is in `/opt/benchmarks/benchmark_suite_log/`.
+`show_metrics.sh` is in this same folder. After a run, print one benchmark's ledger rows:
+
+```bash
+./show_metrics.sh @S@01
+```
 
 To run a single benchmark with its output on screen:
 
@@ -825,8 +830,10 @@ fi
 #   tag is vN.0.0, each later change the next vN.x.0, and vN is moved to it.
 #
 # gpu-bench-suite: operator tools (scripts/run_benchmark_suite.sh for the GPU
-#   host, scripts/get_remote_info.sh for the laptop). Tagged with this run's
-#   version. Step 7 copies its run_benchmark_suite.sh into every bundle.
+#   host, scripts/get_remote_info.sh for the laptop, scripts/show_metrics.sh
+#   for the ledger table). Tagged with this run's version. Step 7 copies
+#   run_benchmark_suite.sh and show_metrics.sh into every bundle, so a clone
+#   into /opt/benchmarks leaves both at /opt/benchmarks.
 #
 # Runs every time; nothing is pushed or tagged when nothing changed.
 
@@ -927,10 +934,13 @@ else
   echo "${TOOLS_REPO} is published: https://github.com/${ORG}/${TOOLS_REPO}"
 fi
 
-# Where the bundles get run_benchmark_suite.sh: the generator's copy, or, for
-# a generator without suite tools, a copy next to this script.
+# Where the bundles get run_benchmark_suite.sh and show_metrics.sh: the
+# emitted gpu-bench-suite copies, or the generator templates.
 SUITE_SCRIPT="${TOOLS_DIR:+${TOOLS_DIR}/scripts/run_benchmark_suite.sh}"
 [[ -n "${SUITE_SCRIPT}" && -f "${SUITE_SCRIPT}" ]] || SUITE_SCRIPT="${SCRIPT_DIR}/run_benchmark_suite.sh"
+METRICS_SCRIPT="${TOOLS_DIR:+${TOOLS_DIR}/scripts/show_metrics.sh}"
+[[ -n "${METRICS_SCRIPT}" && -f "${METRICS_SCRIPT}" ]] || METRICS_SCRIPT="${GEN}/${GENREPO}/templates/suite-tools/scripts/show_metrics.sh"
+[[ -f "${METRICS_SCRIPT}" ]] || stop "show_metrics.sh was not found at ${METRICS_SCRIPT}; a bundle clone into /opt/benchmarks must include it"
 cd "${PUB}" || stop "cannot open ${PUB}"
 
 
@@ -1000,14 +1010,16 @@ if ((newly > 0)); then rm -f _logs/done-bundles _logs/done-enduser-test _logs/do
 # ==============================================================================
 # Each bundle holds its 32 workloads as git submodules pinned to this run's
 # version, at the top level under their full repository names, plus run.sh,
-# run_benchmark_suite.sh and a README for the technician. Cloning a bundle
-# into /opt/benchmarks puts the workloads straight into /opt/benchmarks.
+# run_benchmark_suite.sh, show_metrics.sh and a README for the technician.
+# Cloning a bundle into /opt/benchmarks puts the workloads, run_benchmark_suite.sh
+# and show_metrics.sh straight into /opt/benchmarks.
 
 if is_done bundles; then skipped 7; else
   step 7 "Build and publish the 4 bundle repositories"
   mkdir -p "${WORK}" || stop "cannot create ${WORK}"
   write_bundle_run_sh "${WORK}/run.sh.template"
   if [[ -f "${SUITE_SCRIPT}" ]]; then echo "run_benchmark_suite.sh for the bundles: ${SUITE_SCRIPT}"; else echo "NOTE: no run_benchmark_suite.sh found; the bundles will not include it"; fi
+  echo "show_metrics.sh for the bundles: ${METRICS_SCRIPT}"
   for spec in "amd-ubuntu-2404:1" "nvidia-ubuntu-2404:2" "amd-ubuntu-2604:3" "nvidia-ubuntu-2604:4"; do
     IFS=: read -r name s <<<"${spec}"
     bundle="bundle-${name}"
@@ -1036,9 +1048,11 @@ if is_done bundles; then skipped 7; else
       tr -d '\r' <"${SUITE_SCRIPT}" >run_benchmark_suite.sh
       suite_files="run_benchmark_suite.sh"
     fi
+    tr -d '\r' <"${METRICS_SCRIPT}" >show_metrics.sh
+    suite_files="${suite_files:+${suite_files} }show_metrics.sh"
     printf 'results/\nbenchmark_suite_log/\n' >.gitignore
     bundle_readme "${s}" "${bundle}" "${want}" "${rows}" >README.md
-    # shellcheck disable=SC2086  # suite_files is empty or one name
+    # shellcheck disable=SC2086  # suite_files is one or two script names
     again git add .gitmodules .gitignore README.md run.sh ${suite_files} || stop "git add failed in ${bundle}"
     # shellcheck disable=SC2086
     git update-index --chmod=+x run.sh ${suite_files}
@@ -1075,7 +1089,7 @@ if is_done enduser-test; then skipped 8; else
     got=$(cd "${WORK}/_test_clone" && ./run.sh list | grep -c ' ready$')
     (cd "${WORK}/_test_clone" && ./run.sh list | head -n 3)
     echo "Benchmarks ready in the test clone: ${got} of ${want}"
-    for f in run.sh run_benchmark_suite.sh; do
+    for f in run.sh run_benchmark_suite.sh show_metrics.sh; do
       [[ ! -f "${WORK}/_test_clone/${f}" || -x "${WORK}/_test_clone/${f}" ]] || stop "${f} in the bundle is not executable"
     done
     rm -rf "${WORK}/_test_clone"

@@ -88,6 +88,9 @@ if [[ "${ASSUME_YES}" -ne 1 ]]; then
 fi
 
 log_status "PHASE|SETUP start ${REPO_NAME}"
+# shellcheck disable=SC1091
+source "${REPO_ROOT}/scripts/lib/keep_running_kernel.sh"
+keep_running_kernel
 record_cmd "DEBIAN_FRONTEND=noninteractive apt-get update -y"
 DEBIAN_FRONTEND=noninteractive apt-get update -y
 
@@ -107,11 +110,7 @@ PY_VER="$(${BENCHMARK_PYTHON:-python3} -c 'import sys; print(f"{sys.version_info
 apt_install \
   python3 python3-venv "python${PY_VER}-venv" python3-dev "python${PY_VER}-dev" python3-pip \
   build-essential g++ gcc make cmake sqlite3 jq pkg-config pciutils numactl libnuma-dev \
-  curl ca-certificates ripgrep stress-ng lmbench linux-tools-common linux-tools-generic
-KERNEL_RELEASE="$(uname -r || true)"
-if [[ -n "${KERNEL_RELEASE}" ]]; then
-  apt_install "linux-tools-${KERNEL_RELEASE}"
-fi
+  curl ca-certificates ripgrep stress-ng lmbench
 # cuDNN is selected after nvcc is on PATH. Ubuntu 26.04's only nvcc is CUDA
 # 13.3, and scripts/build.sh then links the venv cu13 wheel. Installing
 # libcudnn9-cuda-12 here made that build exit before compile.
@@ -171,6 +170,7 @@ if [[ -f benchmark_specification.json && -f "${REPO_ROOT}/scripts/framework_regi
 fi
 export BENCHMARK_INSTALL_PYTORCH BENCHMARK_INSTALL_TORCHVISION BENCHMARK_INSTALL_JAX BENCHMARK_INSTALL_TRANSFORMERS
 export BENCHMARK_INSTALL_FIO BENCHMARK_INSTALL_IPERF BENCHMARK_INSTALL_NCCL
+BENCHMARK_INSTALL_PERF="${BENCHMARK_INSTALL_PERF:-0}"
 
 if [[ "${BENCHMARK_INSTALL_FIO}" == "1" ]]; then
   apt_install fio libaio-dev || apt_install fio
@@ -180,6 +180,13 @@ if [[ "${BENCHMARK_INSTALL_IPERF}" == "1" ]]; then
 fi
 if [[ "${BENCHMARK_INSTALL_NCCL}" == "1" || -f src/nccl_bw.cu ]]; then
   apt_install libnccl2 libnccl-dev
+fi
+if [[ "${BENCHMARK_INSTALL_PERF}" == "1" ]]; then
+  # linux-tools-generic follows the newest archive kernel. Install tools for
+  # the running kernel only, and fail this perf workload if that package is absent.
+  log_status "STEP|SETUP apt-get install linux-tools-$(uname -r)"
+  record_cmd "DEBIAN_FRONTEND=noninteractive apt-get install -y linux-tools-common linux-tools-$(uname -r)"
+  DEBIAN_FRONTEND=noninteractive apt-get install -y linux-tools-common "linux-tools-$(uname -r)"
 fi
 
 if [[ "${BENCHMARK_INSTALL_PYTORCH}" == "1" || "${BENCHMARK_INSTALL_JAX}" == "1" ]]; then
@@ -216,6 +223,9 @@ if [[ "${BENCHMARK_INSTALL_FIO}" == "1" ]]; then
 fi
 if [[ "${BENCHMARK_INSTALL_IPERF}" == "1" ]]; then
   verify_cmd "iperf3" iperf3 --version
+fi
+if [[ "${BENCHMARK_INSTALL_PERF}" == "1" ]]; then
+  verify_cmd "perf" perf --version
 fi
 if [[ "${BENCHMARK_INSTALL_NCCL}" == "1" || -f src/nccl_bw.cu ]]; then
   if [[ ! -f /usr/include/nccl.h && ! -f /usr/include/x86_64-linux-gnu/nccl.h ]]; then
@@ -334,4 +344,3 @@ fi
 } > "${REPO_ROOT}/.setup_state"
 log_status "PHASE|SETUP complete"
 echo "[PASS] setup.sh complete"
-wall "setup.sh now complete" >/dev/null 2>&1 || true

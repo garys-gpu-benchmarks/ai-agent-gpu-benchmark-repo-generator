@@ -388,6 +388,9 @@ def ci_fields(fields: dict[str, str]) -> dict[str, str]:
         "CI Shared Workflows Ref": str(contract["shared_workflows"]["ref"]),
         "CI Install Root": str(contract["suite"]["install_root"]),
         "CI Suite Tools Repo": str(contract["suite"]["tools_repo"]),
+        # The README's bundle example names the same workload in every bundle:
+        # 107, 207, 307 or 407, matching this workload's hundreds digit.
+        "CI Bundle Example Workload": f"{str(fields.get('Workload Number', '1')).strip()[:1] or '1'}07",
     }
 
 

@@ -61,7 +61,7 @@ When the reload fails, generated `setup.sh` does not reboot in the middle of set
 
 | Run | What happens |
 |---|---|
-| First run (reboot pending) | Status `PHASE amdgpu could not be reloaded in place; installing everything now and rebooting once at the end`. Repository, RVS build, venv and requirements, framework wheels (vLLM, SGLang, AITER, JAX, FAISS), model prefetch, and the rocBLAS clients build (it names `GFX_TARGET`) all run. Checks that need a working GPU are not fatal (`gpu_check` / `gpu_check_failed` warn); PyTorch is checked for a ROCm build only. `scripts/build.sh` does not run: plain `hipcc` builds pick the GPU architecture from the GPU they can see, and there is none yet. Then `PHASE All software installed. Rebooting once ...`, a `wall` message, and one reboot. |
+| First run (reboot pending) | Status `PHASE amdgpu could not be reloaded in place; installing everything now and rebooting once at the end`. Repository, RVS build, venv and requirements, framework wheels (vLLM, SGLang, AITER, JAX, FAISS), model prefetch, and the rocBLAS clients build (it names `GFX_TARGET`) all run. Checks that need a working GPU are not fatal (`gpu_check` / `gpu_check_failed` warn); PyTorch is checked for a ROCm build only. `scripts/build.sh` does not run: plain `hipcc` builds pick the GPU architecture from the GPU they can see, and there is none yet. Then `PHASE All software installed. Rebooting once ...`, and one reboot. |
 | After the reboot (systemd resume) | `rocm_install_runtime` sees `stage3` in a new boot, logs `STEP 10` (26.04) / `STEP 12` (24.04) `sudo reboot`, and clears the stage. The rest of setup runs as usual; installs are already present, so it mainly runs `scripts/build.sh` and the GPU checks (`torch.zeros(1, device="cuda")`, `jax.devices()`, vLLM/SGLang/AITER imports, RAG `torch.cuda.is_available()`), then `SETUP complete` and service cleanup. |
 | Rerun in the same boot (first run stopped on an error) | The boot ID still matches, so the reboot stays pending (`ROCM_REBOOT_PENDING=1`); setup continues installing and reboots at its end. |
 
@@ -70,6 +70,10 @@ When the reload fails, generated `setup.sh` does not reboot in the middle of set
 `ROCM_DEFER_REBOOT=0` restores the earlier behavior: reboot right after the driver install, exit, and continue the whole setup after the reboot.
 
 Step 02 runs `apt-get upgrade -y`, not `apt upgrade -y`. `apt-get upgrade` never installs new packages, so a new kernel is kept back and the running kernel stays the one the driver was built or reloaded for. Kernel updates are installed separately when wanted.
+
+Before that upgrade, and before the first `apt-get install` in each setup skeleton, `scripts/lib/keep_running_kernel.sh` holds the kernel metapackages that follow the newest archive kernel. The same three skeletons (`setup_cpu_system_skeleton.sh`, `setup_nvidia_skeleton.sh`, `setup_rocm_reboot_skeleton.sh`) are used for Ubuntu 24.04 and 26.04. The held names are `linux-image-generic`, `linux-image-virtual`, `linux-headers-generic`, `linux-headers-virtual`, `linux-generic`, `linux-virtual`, `linux-tools-generic`, and the HWE generic and virtual names for 24.04 and 26.04. `apt-cache show` is inside an `if`, so a name the archive does not have (a 24.04 HWE package on 26.04, or the reverse) is skipped and does not abort setup under `set -e`. Setup does not install `linux-tools-generic`. A perf workload installs `linux-tools-common` and `linux-tools-$(uname -r)` only. On Ubuntu 24.04, `linux-modules-extra` is installed only for `uname -r`. Ubuntu 26.04 does not install `linux-modules-extra` at all, and it has no branch that installs modules for the newest `/lib/modules` directory.
+
+If `dpkg --audit` prints anything before those apt commands, setup exits 1 and names the packages. When the audit text includes `linux-image` or `linux-headers`, the message also names the running kernel. Setup and `scripts/self_check_generated_repo.sh` also exit 1 when `/lib/modules` contains any directory other than `uname -r`. On Ubuntu 26.04 that extra directory is the symptom that a newer kernel was installed while dpkg stayed consistent; the next reboot would boot it. Setup does not remove or configure those packages. The modules check is skipped when `/lib/modules` is absent.
 
 Because a reload does not start a new login, generated `setup.sh` calls `grant_gpu_access_this_session` after `rocm_add_repository`: a non-root user who was just added to `render`/`video` gets an ACL on `/dev/kfd` and `/dev/dri/*` for the current boot (setup installs `acl`). If `setfacl` fails, setup warns to log out and back in or run `newgrp render`.
 
@@ -98,7 +102,6 @@ On an interactive first run, before any reboot-capable ROCm step, `setup.sh` mus
 - status is written to `results/install_status.txt`,
 - executed install commands are appended to `results/install_commands.txt` as bare command lines,
 - status is mirrored into `/etc/motd`,
-- completion is announced with `wall` message `setup.sh now complete`,
 - pressing Enter starts the reboot-capable installation.
 
 Do not prompt when running with `--assume-yes` or `--resume-from-service`.
@@ -201,13 +204,7 @@ cat /opt/benchmarks/<repo-name>/results/install_status.txt
 
 with a blank line before and after the two guidance lines.
 
-After successful completion, perform one final MOTD sync so the complete step history and `SETUP complete` marker are visible on the next login. The MOTD/status should indicate completion and the script must emit:
-
-```bash
-echo "setup.sh now complete" | wall
-```
-
-when `wall` is available.
+After successful completion, perform one final MOTD sync so the complete step history and `SETUP complete` marker are visible on the next login. The MOTD/status should indicate completion, and the script prints `setup.sh now complete` to its own output. It does not use `wall`: the broadcast rang the terminal bell and printed a "Broadcast message from root" banner on every logged-in terminal.
 
 ## Completion Cleanup
 
