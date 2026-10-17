@@ -70,20 +70,23 @@ def ras_counter_totals(text: str):
     yields no data row is "na (RAS table not parsed)", not blank and not 0.
     Text that never names the columns stays blank.
     """
-    bad = [
-        int(item) for item in re.findall(
-            r"\bUncorrectable(?:\s+Error)?(?:\s+Count)?\s*[:=|]\s*(\d+)",
-            text,
-            re.I,
-        )
-    ]
-    good = [
-        int(item) for item in re.findall(
-            r"\bCorrectable(?:\s+Error)?(?:\s+Count)?\s*[:=|]\s*(\d+)",
-            text,
-            re.I,
-        )
-    ]
+    bad = [int(item) for item in re.findall(r"TOTAL_UNCORRECTABLE_COUNT\s*[:=]\s*(\d+)", text, re.I)]
+    good = [int(item) for item in re.findall(r"TOTAL_CORRECTABLE_COUNT\s*[:=]\s*(\d+)", text, re.I)]
+    if not bad and not good:
+        bad = [
+            int(item) for item in re.findall(
+                r"\bUncorrectable(?:\s+Error)?(?:\s+Count)?\s*[:=|]\s*(\d+)",
+                text,
+                re.I,
+            )
+        ]
+        good = [
+            int(item) for item in re.findall(
+                r"\bCorrectable(?:\s+Error)?(?:\s+Count)?\s*[:=|]\s*(\d+)",
+                text,
+                re.I,
+            )
+        ]
     if bad or good:
         return float(sum(bad)), float(sum(good))
     low = text.lower()
@@ -113,6 +116,8 @@ def ecc_counts() -> tuple[str, str]:
     for cmd in (
         ["rocm-smi", "--showrasinfo"],
         ["/opt/rocm/bin/rocm-smi", "--showrasinfo"],
+        ["amd-smi", "metric"],
+        ["/opt/rocm/bin/amd-smi", "metric"],
     ):
         try:
             out = subprocess.run(cmd, capture_output=True, text=True, timeout=15)

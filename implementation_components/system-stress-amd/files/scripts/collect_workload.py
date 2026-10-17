@@ -91,8 +91,25 @@ def is_gpu_power_line(low: str) -> bool:
 
 
 def ecc_from_ras_text(chunk: str):
-    """Uncorrectable count, or na when the RAS table is not key:value text."""
-    hits = [int(item) for item in re.findall(r"Uncorrectable Error\s*[:=]?\s*(\d+)", chunk, re.I)]
+    """Uncorrectable count, or na when the RAS table is not key:value text.
+
+    amd-smi metric prints TOTAL_UNCORRECTABLE_COUNT. rocm-smi prints
+    "Uncorrectable Error". amd-smi metric -e is not used; it crashes on some guests.
+    """
+    labeled = [
+        int(item)
+        for item in re.findall(r"TOTAL_UNCORRECTABLE_COUNT\s*[:=]\s*(\d+)", chunk, re.I)
+    ]
+    if labeled:
+        return float(sum(labeled))
+    hits = [
+        int(item)
+        for item in re.findall(
+            r"Uncorrectable(?:\s+Error)?(?:\s+Count)?\s*[:=]\s*(\d+)",
+            chunk,
+            re.I,
+        )
+    ]
     if hits:
         return float(sum(hits))
     if "uncorrectable error" in chunk.lower():
@@ -155,18 +172,29 @@ def gpu_metrics():
             power = max(power, nums[-1])
     if power <= 0:
         power = read_sysfs_power_w()
-    # rocm-smi --showrasinfo prints "Uncorrectable Error". amd-smi metric does
-    # not, and amd-smi metric -e crashes on some guests.
+    # rocm-smi --showrasinfo prints "Uncorrectable Error". amd-smi metric prints
+    # TOTAL_UNCORRECTABLE_COUNT. amd-smi metric -e crashes on some guests.
     ecc = ""
-    for cmd in (["rocm-smi", "--showrasinfo"], ["/opt/rocm/bin/rocm-smi", "--showrasinfo"]):
-        try:
-            ras = subprocess.run(cmd, capture_output=True, text=True, timeout=15)
-        except (OSError, subprocess.TimeoutExpired):
-            continue
-        parsed = ecc_from_ras_text((ras.stdout or "") + "\n" + (ras.stderr or ""))
+    for chunk in outputs:
+        parsed = ecc_from_ras_text(chunk)
         if parsed is not None:
             ecc = parsed
             break
+    if ecc == "":
+        for cmd in (
+            ["rocm-smi", "--showrasinfo"],
+            ["/opt/rocm/bin/rocm-smi", "--showrasinfo"],
+            ["amd-smi", "metric"],
+            ["/opt/rocm/bin/amd-smi", "metric"],
+        ):
+            try:
+                ras = subprocess.run(cmd, capture_output=True, text=True, timeout=15)
+            except (OSError, subprocess.TimeoutExpired):
+                continue
+            parsed = ecc_from_ras_text((ras.stdout or "") + "\n" + (ras.stderr or ""))
+            if parsed is not None:
+                ecc = parsed
+                break
     throttle = ""
     for chunk in outputs:
         events = re.findall(r"(?:throttle|violation)[^\n]{0,40}?(\d+)", chunk, re.I)

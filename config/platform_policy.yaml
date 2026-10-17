@@ -10,14 +10,14 @@ policies:
     driver: rocm
     reboots: 1
     setup: scripts/lib/rocm_install_24_04.sh
-    notes: Reload amdgpu onto the DKMS driver; reboot once only if the reload fails. Do not reboot before the driver install.
+    notes: Install amdgpu-dkms 31.60 and ROCm 10.1.0. Reload amdgpu; reboot once only if the reload fails. Do not reboot before the driver install.
   - id: amd-ubuntu-26.04
     os: "26.04"
     vendor: AMD
     driver: rocm
     reboots: 1
     setup: scripts/lib/rocm_install_26_04.sh
-    notes: Reload the in-tree amdgpu to load new firmware; reboot once only if the reload fails. Do not reboot before the driver install.
+    notes: Install amdgpu-dkms 31.60 and ROCm 10.1.0. Reload amdgpu; reboot once only if the reload fails. Do not reboot before the driver install.
   - id: nvidia-ubuntu-24.04
     os: "24.04"
     vendor: NVIDIA

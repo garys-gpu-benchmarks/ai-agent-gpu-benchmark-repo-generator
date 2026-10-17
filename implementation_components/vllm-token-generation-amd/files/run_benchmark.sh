@@ -238,7 +238,7 @@ chmod +x "${COMMAND_LOG}"
 [[ -n "${SAVE_OPTIONS_FILE}" ]] && printf 'profile=%s\noutput_format=%s\n' "${PROFILE}" "${OUTPUT_FORMAT}" > "${SAVE_OPTIONS_FILE}"
 printf 'profile=%s\ndevice=%s\noutput_format=%s\n' "${PROFILE}" "${DEVICE}" "${OUTPUT_FORMAT}" > "${RUN_DIR}/cli_options.env"
 export PYTHONUNBUFFERED=1
-export PATH="/opt/rocm/bin:/opt/rocm/core-7.14/bin:${PATH}"
+export PATH="/opt/rocm/bin:/opt/rocm/core-10.1/bin:${PATH}"
 export LD_LIBRARY_PATH="/opt/rocm/lib:/opt/rocm/lib64:${LD_LIBRARY_PATH:-}"
 cp run_benchmark.sh "${RUN_DIR}/script.sh"
 mask_environment "${RUN_DIR}/env_variables.txt"

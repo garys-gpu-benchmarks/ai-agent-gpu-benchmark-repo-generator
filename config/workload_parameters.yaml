@@ -5586,10 +5586,10 @@ parameters:
     workload_specific_overrides:
       '101':
         workload_name: System Config Verification
-        meaning: expected amdgpu kernel driver version (e.g. amdgpu 6.x)
+        meaning: expected amdgpu product version (e.g. 31.60.0)
       '301':
         workload_name: System Config Verification
-        meaning: expected amdgpu kernel driver version (e.g. amdgpu 6.x)
+        meaning: expected amdgpu product version (e.g. 31.60.0)
     cli_config_key: workload-specific
     interaction_precedence: workload-specific interaction rules
     notes_constraints: Do not assume this shared name has identical units or semantics across all workloads.
@@ -5712,10 +5712,10 @@ parameters:
     workload_specific_overrides:
       '101':
         workload_name: System Config Verification
-        meaning: expected ROCm stack version (e.g. 7.2.1)
+        meaning: expected ROCm stack version (e.g. 10.1.0)
       '301':
         workload_name: System Config Verification
-        meaning: expected ROCm stack version (e.g. 7.2.1)
+        meaning: expected ROCm stack version (e.g. 10.1.0)
     cli_config_key: workload-specific
     interaction_precedence: workload-specific interaction rules
     notes_constraints: Do not assume this shared name has identical units or semantics across all workloads.

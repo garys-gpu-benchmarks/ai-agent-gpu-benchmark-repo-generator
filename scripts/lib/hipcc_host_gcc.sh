@@ -13,8 +13,8 @@
 # Repository: gpu-bench/sys-bench template
 # License: Apache-2.0
 #
-# Ubuntu 26.04 + ROCm 7.14 hipcc is Clang 23 and prefers GCC 16. That GCC 16
-# tree does not expose <cstdlib>/<cmath> to the HIP wrapper, so a bare
+# Ubuntu 26.04 + ROCm 10.1.0 hipcc is Clang 24. A newer host GCC can fail to
+# expose <cstdlib>/<cmath> to the HIP wrapper, so a bare
 # `hipcc -O2 src/foo.cpp` dies with:
 #   __clang_hip_runtime_wrapper.h:115:10: fatal error: 'cstdlib' file not found
 # Pinning --gcc-install-dir to GCC 15 (or 14/13) restores those headers.

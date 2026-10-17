@@ -1,5 +1,18 @@
 # Changelog
 
+## 2026-10-16 — ROCm 10.1.0 and amdgpu 31.60
+
+- **Software levels** come from `Tmp_ROC_10_1_0_Migration_NewSoftwareLevels_20261016a.xlsx`, which supersedes the version cells in `BenchmarkSpecDefinitions.xlsx`. AMD rows now pin ROCm 10.1.0, PyTorch `2.13.0+rocm10.1.0`, torchvision `0.28.0+rocm10.1.0`, torchaudio `2.11.0.2+rocm10.1.0`, vLLM `0.29.1.dev0+rocm10.1.0` (cp314), SGLang 0.5.18 at commit `71de97b264b04dcd514cf904003028aefe9775c8`, JAX 0.11.1 with `jax_rocm10_plugin`, rocBLAS 5.7.0, and uv-managed CPython 3.14 for every benchmark virtualenv.
+- **Installers:** `scripts/lib/rocm_install_24_04.sh` and `scripts/lib/rocm_install_26_04.sh` register `https://repo.radeon.com/amdgpu/31.60/ubuntu` and install `amdgpu-dkms`, then register `https://stable.repo.amd.com/rocm/core/packages/` and install `amdrocm10.1-gfx942` plus `amdrocm-core-dev10.1-gfx942`. RVS is apt package `amdrocm10-rvs` 1.6.131-844. Distro CMake is kept; the Kitware repository is not added. The reload-or-one-reboot contract is unchanged. Both Ubuntu releases reload the DKMS module.
+- **Setup skeleton:** wheel index `https://stable.repo.amd.com/rocm/whl-next/`. `scripts/lib/uv_python_314.sh` creates the benchmark venv. AMD CPU workloads use that interpreter too. NVIDIA skeletons are unchanged.
+
+## 2026-10-14 — Publish scripts lint the generator before pushing
+
+- **`tests/test_readme_bundle_sections.py`:** removed the `f` prefix from a string with no placeholders (ruff F541). This failed the generator's `Lint Python scripts` CI step after the v1.0.12 publish.
+- **`scripts/publish_benchmarks_to_github.sh`, `scripts/publish_benchmarks_to_github_manual.sh`:** new `lint_generator` runs the `ruff check` commands read from the generator's `.github/workflows/*.yml`, with `--no-cache`, in step 0 (on the run folder's generator) and again in step 9 (on the `_PubTree` copy that is pushed). A lint error stops the run before anything is pushed. `LINT_GENERATOR="no"` near the top skips it. Needs ruff on the publishing machine (`python -m pip install ruff`; CI pins 0.16.8).
+- **Step 9:** removes `__pycache__`, `.pytest_cache`, `.ruff_cache`, `.mypy_cache` and `*.pyc`/`*.pyo` from the generator copy, and its never-publish check now also flags `__pycache__` and `*.pyc`.
+- **`scripts/publish_benchmarks_to_github_manual.sh`:** added to the generator as the master copy of the manual variant.
+
 ## 2026-10-13 — show_metrics.sh is installed at /opt/benchmarks
 
 - **`scripts/create_one_workload.py`:** after a workload is copied onto the VM, `templates/suite-tools/scripts/show_metrics.sh` is installed at `/opt/benchmarks/show_metrics.sh` (LF, mode 755). It is not placed inside the workload tree.

@@ -8,7 +8,7 @@ cd "${REPO_ROOT}"
 # shellcheck disable=SC1091
 source scripts/lib/hipcc_host_gcc.sh
 mkdir -p bin
-INCLUDES="-I/opt/rocm/include -I/opt/rocm/core-7.14/include"
+INCLUDES="-I/opt/rocm/include -I/opt/rocm/core-10.1/include"
 LIBS="-L/opt/rocm/lib -L/opt/rocm/lib64 -lrccl"
 hipcc -O2 src/rccl_perf.cpp ${INCLUDES} ${LIBS} -o bin/all_reduce_perf
 cp -f bin/all_reduce_perf bin/all_gather_perf

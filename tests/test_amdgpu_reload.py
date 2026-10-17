@@ -234,7 +234,7 @@ class RuntimeInstallBranchTests(unittest.TestCase):
         self._check("rocm_install_24_04.sh", "dkms")
 
     def test_26_04(self):
-        self._check("rocm_install_26_04.sh", "firmware")
+        self._check("rocm_install_26_04.sh", "dkms")
 
 
 class RunningKernelGuardTests(unittest.TestCase):

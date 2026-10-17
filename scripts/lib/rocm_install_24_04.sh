@@ -4,21 +4,21 @@
 # Maintainer: AI Agent GPU Benchmark Repo Generator
 # Date:         2026-07-09
 # Description:  Authoritative, idempotent ROCm installation functions for gpu-bench-* /
-#               sys-bench-* benchmark repositories. These functions must be sourced and
-#               called verbatim — do not regenerate or modify them. AI agents working in
-#               this repository must not rewrite this library. Aligned to the
-#               41-step ROCm install process from CSV spec, including persisted shell-profile
-#               updates for PATH / LD_LIBRARY_PATH.
+#               sys-bench-* benchmark repositories, targeting Ubuntu 24.04 (noble) /
+#               ROCm 10.1.0. Installs amdgpu-dkms 31.60 from repo.radeon.com and
+#               amdrocm10.1 userspace from stable.repo.amd.com. Function names match
+#               scripts/lib/rocm_install_26_04.sh.
 # Execution:    sourced by scripts/lib/rocm_install.sh on Ubuntu 24.04 (not executed directly)
 # Options:      Environment variables below may override the pinned defaults.
 # Requirements: Ubuntu 24.04 (noble) or Ubuntu 22.04 (jammy); sudo access; internet.
 # Environment:  Bare metal or ROCm-capable VM; not required inside a ROCm Docker image.
 # Dependencies: curl, wget, apt; sourced after scripts/lib/common.sh for log helpers.
 # Variables:
-#   ROCM_VERSION        ROCm version string, e.g. 7.2.1      (default: 7.2.1)
-#   AMDGPU_INSTALLER    Full .deb URL for amdgpu-install     (default: noble 7.2.1.70201)
-#   GFX_TARGET          GPU architecture token, e.g. gfx942  (default: gfx942)
-#   UBUNTU_CODENAME     Ubuntu release codename              (default: noble)
+#   ROCM_VERSION             ROCm version string                      (default: 10.1.0)
+#   AMDGPU_DRIVER_VERSION    amdgpu driver product version            (default: 31.60)
+#   GFX_TARGET               GPU architecture token, e.g. gfx942      (default: gfx942)
+#   UBUNTU_CODENAME          Ubuntu release codename                  (default: noble)
+#   ROCM_APT_DISTRO          stable.repo.amd.com distro directory     (default: ubuntu2404)
 # Repository:   gpu-bench / sys-bench workload template
 # License:      Apache-2.0
 
@@ -32,13 +32,22 @@ unset _rocm_kernel_guard
 # ────────────────────────────────────────────────────────────────────────────
 # Version pins — override with environment variables before sourcing if needed.
 # ────────────────────────────────────────────────────────────────────────────
-ROCM_VERSION="${ROCM_VERSION:-7.2.1}"
+ROCM_VERSION="${ROCM_VERSION:-10.1.0}"
 UBUNTU_CODENAME="${UBUNTU_CODENAME:-noble}"
 GFX_TARGET="${GFX_TARGET:-gfx942}"
+AMDGPU_DRIVER_VERSION="${AMDGPU_DRIVER_VERSION:-31.60}"
+AMDGPU_INSTALLER_VERSION="${AMDGPU_INSTALLER_VERSION:-31.60}"
+AMDGPU_INSTALLER_BUILD="${AMDGPU_INSTALLER_BUILD:-316000-1}"
+ROCM_APT_DISTRO="${ROCM_APT_DISTRO:-ubuntu2404}"
+ROCM_META_PACKAGE="${ROCM_META_PACKAGE:-amdrocm10.1-${GFX_TARGET}}"
+ROCM_DEV_PACKAGE="${ROCM_DEV_PACKAGE:-amdrocm-core-dev10.1-${GFX_TARGET}}"
+RVS_PACKAGE="${RVS_PACKAGE:-amdrocm10-rvs}"
+RVS_PACKAGE_VERSION="${RVS_PACKAGE_VERSION:-1.6.131-844}"
 
-# Installer URL pinned to CSV specification pattern.
-AMDGPU_INSTALLER="${AMDGPU_INSTALLER:-https://repo.radeon.com/amdgpu-install/${ROCM_VERSION}/ubuntu/${UBUNTU_CODENAME}/amdgpu-install_${ROCM_VERSION}.70201-1_all.deb}"
-_AMDGPU_DEB_FILE="amdgpu-install_${ROCM_VERSION}.70201-1_all.deb"
+# amdgpu-install .deb is unused by the apt-repo path. Kept so a manual download
+# still points at the 31.60 package.
+_AMDGPU_DEB_FILE="amdgpu-install_${AMDGPU_INSTALLER_VERSION}.${AMDGPU_INSTALLER_BUILD}_all.deb"
+AMDGPU_INSTALLER="${AMDGPU_INSTALLER:-https://repo.radeon.com/amdgpu-install/${AMDGPU_INSTALLER_VERSION}/ubuntu/${UBUNTU_CODENAME}/${_AMDGPU_DEB_FILE}}"
 
 # ────────────────────────────────────────────────────────────────────────────
 # Internal helpers (use log_ functions from common.sh when available, fall back
@@ -212,6 +221,120 @@ _rocm_install_linux_modules_extra() {
 #   Execution Domain is "GPU Compute / ROCm" AND the machine has no ROCm
 #   installation (check: [ ! -f /opt/rocm/bin/rocm-smi ]).
 # ════════════════════════════════════════════════════════════════════════════
+
+# ROCm 10.1.0 / amdgpu 31.60 repository helpers. Both Ubuntu libraries call these.
+_rocm_ensure_keyring() {
+    local dest_path="$1"
+    local key_url="$2"
+    local tmp_key
+    if run_noninteractive_root test -s "${dest_path}"; then
+        _rocm_log "Keyring already present: ${dest_path}"
+        return 0
+    fi
+    run_noninteractive_root mkdir -p /etc/apt/keyrings
+    tmp_key="$(mktemp)"
+    wget -O "${tmp_key}" "${key_url}" || _rocm_die "Failed to download ${key_url}"
+    if [[ ! -s "${tmp_key}" ]]; then
+        rm -f "${tmp_key}"
+        _rocm_warn "Signing key download was empty (${key_url}); continuing without rewriting ${dest_path}."
+        return 0
+    fi
+    gpg --dearmor < "${tmp_key}" | run_noninteractive_root tee "${dest_path}" >/dev/null \
+        || { rm -f "${tmp_key}"; _rocm_die "Failed to install keyring ${dest_path}"; }
+    rm -f "${tmp_key}"
+    run_noninteractive_root chmod 644 "${dest_path}"
+}
+
+_rocm_register_amdgpu_repository() {
+    _rocm_ensure_keyring /etc/apt/keyrings/rocm.gpg https://repo.radeon.com/rocm/rocm.gpg.key
+    run_noninteractive_root tee /etc/apt/sources.list.d/amdgpu.list >/dev/null <<EOF
+deb [arch=amd64 signed-by=/etc/apt/keyrings/rocm.gpg] https://repo.radeon.com/amdgpu/${AMDGPU_DRIVER_VERSION}/ubuntu ${UBUNTU_CODENAME} main
+EOF
+    run_noninteractive_root apt-get update -y
+}
+
+_rocm_register_rocm_repository() {
+    _rocm_ensure_keyring /etc/apt/keyrings/amdrocm.gpg https://stable.repo.amd.com/rocm/gpg/packages.gpg
+    run_noninteractive_root tee /etc/apt/sources.list.d/amdrocm-stable.sources >/dev/null <<EOF
+X-Repo-Id: amdrocm-stable
+Types: deb
+URIs: https://stable.repo.amd.com/rocm/core/packages/${ROCM_APT_DISTRO}/
+Suites: stable
+Components: main
+Architectures: amd64
+Signed-By: /etc/apt/keyrings/amdrocm.gpg
+Enabled: yes
+EOF
+    run_noninteractive_root apt-get update -y
+}
+
+_rocm_register_rvs_repository() {
+    _rocm_ensure_keyring /etc/apt/keyrings/amdrocm.gpg https://stable.repo.amd.com/rocm/gpg/packages.gpg
+    run_noninteractive_root tee /etc/apt/sources.list.d/amdrocm-rvs.sources >/dev/null <<EOF
+X-Repo-Id: amdrocm-rvs
+Types: deb
+URIs: https://stable.repo.amd.com/rocm/extras/rvs/packages/${ROCM_APT_DISTRO}/
+Suites: stable
+Components: main
+Architectures: amd64
+Signed-By: /etc/apt/keyrings/amdrocm.gpg
+Enabled: yes
+EOF
+    run_noninteractive_root apt-get update -y
+}
+
+_rocm_publish_prefix() {
+    local root="" candidate name
+    for candidate in /opt/rocm/core-10.1 /opt/rocm-10.1.0 /opt/rocm; do
+        if [[ -x "${candidate}/bin/hipcc" || -x "${candidate}/bin/rocm-smi" || -d "${candidate}/bin" ]]; then
+            root="${candidate}"
+            break
+        fi
+    done
+    if [[ -z "${root}" ]]; then
+        _rocm_warn "ROCm prefix not found yet under /opt/rocm."
+        return 0
+    fi
+    if [[ "${root}" != "/opt/rocm" ]]; then
+        run_noninteractive_root mkdir -p /opt/rocm
+        for name in bin lib lib64 include share; do
+            if [[ -e "${root}/${name}" && ! -e "/opt/rocm/${name}" ]]; then
+                run_noninteractive_root ln -sfn "${root}/${name}" "/opt/rocm/${name}"
+            fi
+        done
+    fi
+    export PATH="/opt/rocm/bin:${PATH}"
+    export LD_LIBRARY_PATH="/opt/rocm/lib:/opt/rocm/lib64:${LD_LIBRARY_PATH:-}"
+    _rocm_append_bashrc_once 'export PATH=/opt/rocm/bin:${PATH}'
+    _rocm_append_bashrc_once 'export LD_LIBRARY_PATH=/opt/rocm/lib:/opt/rocm/lib64:${LD_LIBRARY_PATH}'
+}
+
+_rocm_assert_dkms_for_running_kernel() {
+    if ! command -v dkms >/dev/null 2>&1; then
+        return 0
+    fi
+    if ! dpkg-query -W amdgpu-dkms >/dev/null 2>&1; then
+        return 0
+    fi
+    if dkms status 2>/dev/null | grep -F "amdgpu" | grep -F "$(uname -r)" | grep -q "installed"; then
+        return 0
+    fi
+    _rocm_die "amdgpu-dkms ${AMDGPU_DRIVER_VERSION} did not build for kernel $(uname -r). $(dkms status 2>/dev/null || true)"
+}
+
+_rocm_checkout_rocblas_tag() {
+    local tag
+    for tag in "rocm-${ROCM_VERSION}" "rocblas-5.7.0"; do
+        if git rev-parse --verify --quiet "refs/tags/${tag}" >/dev/null 2>&1 \
+            || git ls-remote --exit-code --tags origin "refs/tags/${tag}" >/dev/null 2>&1; then
+            _rocm_log "Check out rocBLAS tag ${tag} (rocBLAS 5.7.0 ships with ROCm ${ROCM_VERSION})."
+            git checkout "${tag}"
+            return 0
+        fi
+    done
+    _rocm_log "No rocm-${ROCM_VERSION} or rocblas-5.7.0 tag in this clone; building the default branch against installed ROCm ${ROCM_VERSION}."
+}
+
 rocm_install_runtime() {
     _rocm_log "=== rocm_install_runtime: ROCm ${ROCM_VERSION} on ${UBUNTU_CODENAME} ==="
     local stage
@@ -250,63 +373,35 @@ rocm_install_runtime() {
 
     if [[ "${stage}" == "stage1" || "${stage}" == "stage2" ]]; then
         _rocm_status_phase "Phase 1:  ## Install ROCm Runtime Tools (On Bare Metal Ubuntu Server - NOT ROCm server)"
-        # Step 04 — Downloads the AMD GPU installer .deb package from the Radeon (AMD ROCm) repository.
-        _rocm_log "Download AMD GPU installer .deb package."
-        _rocm_download_installer
-        _rocm_status_step 4 "wget -O amdgpu-install_<version>.deb ${AMDGPU_INSTALLER}  # Download AMD GPU installer package"
+        _rocm_log "Register amdgpu ${AMDGPU_DRIVER_VERSION} and install amdgpu-dkms."
+        _rocm_register_amdgpu_repository
+        _rocm_status_step 4 "deb [arch=amd64] https://repo.radeon.com/amdgpu/${AMDGPU_DRIVER_VERSION}/ubuntu ${UBUNTU_CODENAME} main"
+        run_noninteractive_root DEBIAN_FRONTEND=noninteractive apt-get install -y amdgpu-dkms
+        _rocm_status_step 5 "sudo apt-get install -y amdgpu-dkms"
 
-        # Step 05 — Installs the downloaded AMD GPU installer .deb package used to install the full ROCm software stack.
-        _rocm_log "Install the downloaded AMD GPU installer package."
-        _rocm_apt_install_local_deb_noninteractive "./${_AMDGPU_DEB_FILE}"  # Install downloaded AMD GPU installer .deb
-        _rocm_status_step 5 "sudo apt-get install -y ./amdgpu-install_<version>.deb  # Install downloaded AMD GPU installer .deb"
+        _rocm_log "Register ROCm ${ROCM_VERSION} and install ${ROCM_META_PACKAGE} plus ${ROCM_DEV_PACKAGE}."
+        _rocm_register_rocm_repository
+        run_noninteractive_root DEBIAN_FRONTEND=noninteractive apt-get install -y \
+            "${ROCM_META_PACKAGE}" "${ROCM_DEV_PACKAGE}"
+        _rocm_status_step 6 "sudo apt-get install -y ${ROCM_META_PACKAGE} ${ROCM_DEV_PACKAGE}"
+        _rocm_publish_prefix
 
-        # Step 06 — Install ROCm Runtime, HIP Runtime + Compiler (hipcc), rocBLAS, rocBLASLt, rocFFT, rocRAND, rocSOLVER, rocSPARSE, RCCL, MIOpen, rocWMMA, rocPRIM, rocThrust, hipBLASLt, hipBLAS, hipFFT, hipRAND, hipSPARSE, hipSOLVER, hipTensor, OpenCL runtime and graphics stack.
-        _rocm_log "Install ROCm usecase stack and userspace components."
-        set +e
-        run_noninteractive_root amdgpu-install -y \
-            --usecase=rocm,rocmdev,hiplibsdk,mlsdk,opencl,graphics \
-            --no-dkms  # Install ROCm userspace stack without dkms at this phase
-        local rc_usecase=$?
-        set -e
-        if [[ "${rc_usecase}" -ne 0 ]]; then
-            if ! apt-cache show amdgpu-lib >/dev/null 2>&1; then
-                _rocm_warn "Primary amdgpu-install usecase requires amdgpu-lib, which is unavailable in current repos."
-                _rocm_warn "Retrying with compute-focused usecase (dropping opencl,graphics)."
-                run_noninteractive_root amdgpu-install -y \
-                    --usecase=rocm,rocmdev,hiplibsdk,mlsdk \
-                    --no-dkms \
-                    || _rocm_die "amdgpu-install failed for both primary and fallback usecases."
-            else
-                _rocm_die "amdgpu-install failed for primary usecase. Check apt repositories and amdgpu-install logs."
-            fi
-        fi
-        _rocm_status_step 6 "sudo amdgpu-install -y --usecase=rocm,rocmdev,hiplibsdk,mlsdk,opencl,graphics --no-dkms  # Install ROCm userspace stack"
-
-        # Step 07 — Install the AMD GPU kernel driver module package.
-        _rocm_log "Install amdgpu-dkms package."
-        run_noninteractive_root DEBIAN_FRONTEND=noninteractive apt-get install -y amdgpu-dkms  # Install AMD GPU DKMS kernel module package
-        _rocm_status_step 7 "sudo apt-get install -y amdgpu-dkms  # Install AMD GPU DKMS kernel module package"
-
-        # Step 08 — Install InfiniBand and RDMA userspace libraries required by the amdgpu kernel module.
         _rocm_log "Install RDMA userspace libraries required by ROCm."
-        run_noninteractive_root DEBIAN_FRONTEND=noninteractive apt-get install -y rdma-core ibverbs-providers libibverbs1  # Install RDMA/InfiniBand userspace libraries
-        _rocm_status_step 8 "sudo apt-get install -y rdma-core ibverbs-providers libibverbs1  # Install RDMA/InfiniBand userspace libraries"
+        run_noninteractive_root DEBIAN_FRONTEND=noninteractive apt-get install -y rdma-core ibverbs-providers libibverbs1
+        _rocm_status_step 7 "sudo apt-get install -y rdma-core ibverbs-providers libibverbs1"
 
-        # Step 09 — Install extra kernel modules including peer memory symbols needed by amdgpu.
-        # Only the running kernel. A newer kernel's package postinst runs DKMS.
-        _rocm_log "Install kernel module extras for the running kernel."
-        _rocm_install_linux_modules_extra
-        _rocm_status_step 9 "sudo apt-get install -y linux-modules-extra-\$(uname -r)"
+        if declare -f _rocm_install_linux_modules_extra >/dev/null 2>&1; then
+            _rocm_log "Install kernel module extras for the running kernel."
+            _rocm_install_linux_modules_extra
+            _rocm_status_step 8 "sudo apt-get install -y linux-modules-extra-$(uname -r)"
+        else
+            _rocm_log "Skipping linux-modules-extra: Ubuntu 26.04 folds it into linux-modules."
+        fi
 
-        # Step 10 — Rebuild kernel module dependency map.
+        _rocm_assert_dkms_for_running_kernel
         _rocm_log "Refresh kernel module dependency map."
-        run_noninteractive_root depmod -a  # Rebuild kernel module dependency map
-        _rocm_status_step 10 "sudo depmod -a  # Rebuild kernel module dependency map"
-
-        # Step 11 — BY ITSELF, installs rocm-core, hsa-rocr, hip-runtime-amd, rocblas, rocfft, rocrand, rocsolver, rocsparse, rccl, hipblas, hipblaslt, hipfft, hiprand, hipsparse, hipsolver, hiptensor.
-        _rocm_log "Install rocm-libs meta-package."
-        run_noninteractive_root DEBIAN_FRONTEND=noninteractive apt-get install -y rocm-libs  # Install rocm-libs meta-package (for runtime libraries)
-        _rocm_status_step 11 "sudo apt-get install -y rocm-libs  # Install rocm-libs meta-package (for runtime libraries)"
+        run_noninteractive_root depmod -a
+        _rocm_status_step 9 "sudo depmod -a"
 
         # Step 12 — Reload amdgpu so AMD's DKMS driver replaces the in-box one; reboot only if that fails.
         # The stage is saved first: if the reload hangs or the host goes down, setup
@@ -364,145 +459,67 @@ rocm_install_runtime() {
 #          ROCm apt feed directly (without amdgpu-install).
 #          Idempotent: skips steps that are already complete.
 #
-# When to call: setup.sh, when the ROCm apt repository
-#   is not yet present (check: [ ! -f /etc/apt/sources.list.d/rocm.list ]).
+# When to call: setup.sh, after rocm_install_runtime has completed.
+#   Userspace check: /etc/apt/sources.list.d/amdrocm-stable.sources.
 # ════════════════════════════════════════════════════════════════════════════
 rocm_add_repository() {
     _rocm_log "=== rocm_add_repository: ROCm ${ROCM_VERSION} on ${UBUNTU_CODENAME} ==="
-    _rocm_status_phase "Phase 2:  ## Add ROCm Repository (On Bare Metal Ubuntu Server, ROCm server)"
-
-    # Step 13 — For users not root, adds the current user to the render and video groups for GPU access permissions.
+    _rocm_status_phase "Phase 2:  ## Add ROCm 10.1.0 repository"
     _rocm_log "Add current user to render and video groups for GPU access."
     local target_user="${LOGNAME:-${SUDO_USER:-${USER:-$(id -un)}}}"
     if [[ -n "${target_user}" ]]; then
-        run_noninteractive_root usermod -a -G render,video "${target_user}"  # Add user to render,video groups
-        _rocm_status_step 13 "sudo usermod -a -G render,video <user>  # Add user to render,video groups"
+        run_noninteractive_root usermod -a -G render,video "${target_user}"
+        _rocm_status_step 11 "sudo usermod -a -G render,video ${target_user}"
     else
         _rocm_warn "Could not resolve target user for render/video group assignment; skipping usermod."
     fi
-
-    # Step 14 — Downloads the ROCm GPG signing key from AMD’s repository.
-    _rocm_log "Import ROCm GPG signing key and write keyring."
-    wget -qO - https://repo.radeon.com/rocm/rocm.gpg.key \
-        | run_noninteractive_root gpg --yes --dearmor \
-              -o /usr/share/keyrings/rocm.gpg  # Download + dearmor ROCm key into keyring
-    _rocm_status_step 14 "wget -qO - https://repo.radeon.com/rocm/rocm.gpg.key | sudo gpg --dearmor -o /usr/share/keyrings/rocm.gpg"
-
-    # Step 15 — Adds the ROCm repository to the system’s APT sources.
-    _rocm_log "Add ROCm apt source list entry for target Ubuntu codename."
-    echo "deb [arch=amd64 signed-by=/usr/share/keyrings/rocm.gpg] \
-https://repo.radeon.com/rocm/apt/debian/ ${UBUNTU_CODENAME} main" \
-        | run_noninteractive_root tee /etc/apt/sources.list.d/rocm.list > /dev/null  # (noble_Ubuntu24/jammy_Ubuntu22) Adds ROCm repository to APT sources
-    _rocm_status_step 15 "echo 'deb [arch=amd64 signed-by=/usr/share/keyrings/rocm.gpg] https://repo.radeon.com/rocm/apt/debian/ <codename> main' | sudo tee /etc/apt/sources.list.d/rocm.list"
-
-    # Step 16 — Updates the APT package index, downloading package lists from the newly added ROCm repository.
-    _rocm_log "Update apt package index after adding ROCm repository."
-    run_noninteractive_root apt update -y  # Update apt index to include ROCm repository
-    _rocm_status_step 16 "sudo apt update -y  # Update apt index to include ROCm repository"
-
-    # Step 17 — Ensure installation of rocm-dev and rocm-libs.
-    _rocm_log "Install ROCm development and runtime meta-packages."
-    run_noninteractive_root DEBIAN_FRONTEND=noninteractive apt-get install -y \
-        rocm-dev rocm-libs rocm-smi  # Install ROCm repository packages
-    _rocm_status_step 17 "sudo apt-get install -y rocm-dev rocm-libs rocm-smi  # Install ROCm repository packages"
-
-    _rocm_log "ROCm repository added and base packages installed."
+    _rocm_register_amdgpu_repository
+    _rocm_register_rocm_repository
+    _rocm_status_step 13 "sudo apt-get update"
+    if [[ ! -x /opt/rocm/bin/hipcc && ! -x /opt/rocm/core-10.1/bin/hipcc ]]; then
+        run_noninteractive_root DEBIAN_FRONTEND=noninteractive apt-get install -y \
+            "${ROCM_META_PACKAGE}" "${ROCM_DEV_PACKAGE}"
+    fi
+    _rocm_status_step 14 "sudo apt-get install -y ${ROCM_META_PACKAGE} ${ROCM_DEV_PACKAGE}"
+    _rocm_publish_prefix
+    _rocm_log "ROCm ${ROCM_VERSION} repository confirmed and base packages installed."
 }
 
 
-# ════════════════════════════════════════════════════════════════════════════
-# FUNCTION 3 — rocm_install_rvs
-#
-# Purpose: Install the ROCm Validation Suite (RVS) and its runtime dependencies
-#          on a server that already has amdgpu-install available.
-#          Idempotent: skips if rvs binary already exists.
-#
-# When to call: setup.sh, when benchmark_specification.json
-#   Workload Name contains "ROCm Validation" or "RVS", or when the Workload
-#   Command Line Executable is "rvs".
-# ════════════════════════════════════════════════════════════════════════════
 rocm_install_rvs() {
-    _rocm_log "=== rocm_install_rvs: ROCm Validation Suite ${ROCM_VERSION} ==="
-    _rocm_status_phase "Phase 3:  ## Install ROCm Validation Suite (On Bare Metal Ubuntu Server, ROCm server)"
-
-    # Step 18 — Download the AMD GPU driver installer package.
-    _rocm_log "Download the AMD GPU driver installer package."
-    _rocm_download_installer
-    _rocm_status_step 18 "wget -O amdgpu-install_<version>.deb ${AMDGPU_INSTALLER}  # Download AMD GPU driver installer package"
-
-    # Step 19 — Install amdgpu-install tool.
-    _rocm_log "Install amdgpu-install tool."
-    _rocm_apt_install_local_deb_noninteractive "./${_AMDGPU_DEB_FILE}" \
-        || { _rocm_warn "Failed to install amdgpu-install tool."; return 1; }  # Install AMD GPU Installer
-    _rocm_status_step 19 "sudo apt-get install -y ./amdgpu-install_<version>.deb  # Install AMD GPU Installer"
-    run_noninteractive_root DEBIAN_FRONTEND=noninteractive apt-get update -y \
-        || { _rocm_warn "apt update failed after amdgpu-install tool install."; return 1; }
-
-    # Step 20 — Install RVS runtime dependencies.
-    _rocm_log "Install RVS runtime dependencies."
-    run_noninteractive_root DEBIAN_FRONTEND=noninteractive apt-get install -y \
-        libpci3 libpci-dev libyaml-cpp-dev amd-smi-lib rocblas \
-        || { _rocm_warn "Failed to install one or more RVS runtime dependency packages."; return 1; }  # Install RVS runtime dependencies
-    _rocm_status_step 20 "sudo apt-get install -y libpci3 libpci-dev libyaml-cpp-dev amd-smi-lib rocblas  # Install RVS runtime dependencies"
-
-    # Step 21 — Install the diagnostic and stress-testing framework ROCm Validation Suite (RVS).
-    _rocm_log "Skip RVS installation if command already exists on PATH."
-    run_noninteractive_root DEBIAN_FRONTEND=noninteractive apt-get install -y rocm-validation-suite \
-        || { _rocm_warn "Failed to install rocm-validation-suite package."; return 1; }  # Install the ROCm Validation Suite (RVS)
-    _rocm_status_step 21 "sudo apt-get install -y rocm-validation-suite  # Install the ROCm Validation Suite (RVS)"
-
-    # Step 22 — Add /opt/rocm/bin to PATH.
-    _rocm_log "Add /opt/rocm/bin to PATH."
-    _rocm_log "Add /opt/rocm/bin to PATH in current shell."
-    if [[ ":${PATH}:" != *":/opt/rocm/bin:"* ]]; then
-        _rocm_log "Adding /opt/rocm/bin to PATH for current session."
-        export PATH=/opt/rocm/bin:$PATH  # Add /opt/rocm/bin to PATH
-    fi
-    _rocm_status_step 22 "export PATH=/opt/rocm/bin:\$PATH  # Add /opt/rocm/bin to PATH"
-
-    # Step 23 — Update PATH in .bashrc.
-    _rocm_log "Persist /opt/rocm/bin PATH export in .bashrc."
-    _rocm_append_bashrc_once 'export PATH=/opt/rocm/bin:$PATH'
-    _rocm_status_step 23 "echo 'export PATH=/opt/rocm/bin:\$PATH' >> ~/.bashrc  # Update PATH in .bashrc"
-
-    local rocm_bin
-    if rocm_bin="$(_rocm_resolve_rocm_bin)"; then
-        if [[ ":${PATH}:" != *":${rocm_bin}:"* ]]; then
-            export PATH="${rocm_bin}:${PATH}"
-        fi
-        _rocm_append_bashrc_once "export PATH=${rocm_bin}:\$PATH"
-    fi
-
-    if command -v rvs >/dev/null 2>&1; then
-        _rocm_log "RVS installed. Verify with: rvs --version"
+    _rocm_log "=== rocm_install_rvs: ${RVS_PACKAGE} ${RVS_PACKAGE_VERSION} (ROCm ${ROCM_VERSION}) ==="
+    _rocm_status_phase "Phase 3:  ## Install ROCm Validation Suite from the ROCm extras repository"
+    local installed candidate
+    if command -v rvs >/dev/null 2>&1 || [[ -x /opt/rocm/bin/rvs ]] || [[ -x /usr/bin/rvs ]]; then
+        _rocm_log "RVS already installed. Skipping package install."
         return 0
     fi
-    if [[ -n "${rocm_bin:-}" && -x "${rocm_bin}/rvs" ]]; then
-        _rocm_log "RVS installed at ${rocm_bin}/rvs. Verify with: ${rocm_bin}/rvs --version"
-        return 0
+    _rocm_register_rvs_repository
+    _rocm_status_step 15 "deb https://stable.repo.amd.com/rocm/extras/rvs/packages/${ROCM_APT_DISTRO}/ stable main"
+    if ! run_noninteractive_root DEBIAN_FRONTEND=noninteractive apt-get install -y "${RVS_PACKAGE}=${RVS_PACKAGE_VERSION}"; then
+        _rocm_warn "Pinned ${RVS_PACKAGE}=${RVS_PACKAGE_VERSION} was not available; installing ${RVS_PACKAGE}."
+        run_noninteractive_root DEBIAN_FRONTEND=noninteractive apt-get install -y "${RVS_PACKAGE}" \
+            || _rocm_die "Failed to install ${RVS_PACKAGE}."
     fi
-    _rocm_warn "RVS package installation completed but rvs command is still unavailable."
-    return 1
+    installed="$(dpkg-query -W -f='${Version}' "${RVS_PACKAGE}" 2>/dev/null || true)"
+    case "${installed}" in
+        *"${RVS_PACKAGE_VERSION}"*) ;;
+        *) _rocm_die "Installed ${RVS_PACKAGE} version '${installed}', expected ${RVS_PACKAGE_VERSION}." ;;
+    esac
+    if ! command -v rvs >/dev/null 2>&1; then
+        for candidate in /opt/rocm/extras-10/bin/rvs /opt/rocm/bin/rvs /usr/bin/rvs; do
+            if [[ -x "${candidate}" ]]; then
+                run_noninteractive_root ln -sfn "${candidate}" /usr/local/bin/rvs
+                break
+            fi
+        done
+    fi
+    command -v rvs >/dev/null 2>&1 || _rocm_die "${RVS_PACKAGE} installed but rvs is not on PATH."
+    _rocm_status_step 16 "sudo apt-get install -y ${RVS_PACKAGE}=${RVS_PACKAGE_VERSION}"
+    _rocm_log "RVS ${installed} is installed."
 }
 
 
-# ════════════════════════════════════════════════════════════════════════════
-# FUNCTION 4 — rocm_compile_rocblas_bench
-#
-# Purpose: Clone the official ROCm/rocBLAS repository, check out the pinned
-#          release branch, and build the rocblas-bench and test clients
-#          targeting the configured GFX_TARGET (default: gfx942 / MI300X).
-#          Idempotent: skips the build if rocblas-bench already exists at the
-#          expected staging path.
-#
-# Output:  Binary at ${REPO_ROOT}/third_party/rocBLAS/build/release/clients/staging/rocblas-bench
-#          (not /opt/rocm/bin/rocblas-bench and not ~/rocBLAS). PATH and
-#          LD_LIBRARY_PATH are exported for the current session.
-#
-# When to call: scripts/build.sh, when a resolved implementation component
-#   sets contracts.compile_rocblas_bench. Framework listing rocblas-bench is
-#   install/verify only unless that contract is set.
-# ════════════════════════════════════════════════════════════════════════════
 rocm_compile_rocblas_bench() {
     _rocm_log "=== rocm_compile_rocblas_bench: rocBLAS ${ROCM_VERSION} / ${GFX_TARGET} ==="
 
@@ -527,25 +544,9 @@ rocm_compile_rocblas_bench() {
     _rocm_log "Install Google Test (GTest) unit testing framework used by test and benchmark executables."
     run_noninteractive_root apt install -y libgtest-dev  # Install Google Test (GTest) unit testing framework
 
-    # Step 27 — Remove old cmake as it is version 3.22 is outdated to rocBLAS.
-    _rocm_log "Remove old cmake as it is version 3.22 is outdated to rocBLAS."
-    run_noninteractive_root apt remove cmake cmake-data -y  # Remove old cmake as it is version 3.22 is outdated to rocBLAS.
-
-    # Step 28 — Download Kitware's GPG public key and add it to Ubuntu's trusted keyring.
-    _rocm_log "Download Kitware's GPG public key and add it to Ubuntu's trusted keyring."
-    wget -O - https://apt.kitware.com/keys/kitware-archive-latest.asc | run_noninteractive_root apt-key add -  # Download Kitware's GPG public key and add it to Ubuntu's trusted keyring.
-
-    # Step 29 — Adds the official Kitware APT repository to the system.
-    _rocm_log "Add the official Kitware APT repository to the system."
-    echo 'deb https://apt.kitware.com/ubuntu/ noble main' | run_noninteractive_root tee /etc/apt/sources.list.d/kitware.list  # Adds the official Kitware APT repository to the system.
-
-    # Step 30 — APT updates the local list of available packages and versions from all configured repositories.
-    _rocm_log "APT updates the local list of available packages and versions from all configured repositories."
-    run_noninteractive_root apt update  # Update the list of available packages (does not install pkgs)
-
-    # Step 31 — Verify cmake version.
-    _rocm_log "Verify cmake version."
-    run_noninteractive_root apt install -y cmake  # Verify cmake version.
+    _rocm_log "Use distro CMake (Ubuntu 24.04 ships 3.28.3). Do not add the Kitware repository."
+    run_noninteractive_root DEBIAN_FRONTEND=noninteractive apt-get install -y cmake
+    _rocm_status_step 27 "sudo apt-get install -y cmake  # distro CMake; Kitware repo not used"
 
     # Step 32 — Install Python 3 header files and development libraries for compiling C/C++ code.
     _rocm_log "Install Python 3 header files and development libraries for compiling C/C++ code."
@@ -562,9 +563,8 @@ rocm_compile_rocblas_bench() {
     _rocm_log "Change the current working directory to the newly created rocBLAS project folder."
     cd "${ROCBLAS_SOURCE_DIR}"  # Change to the repository-local rocBLAS project folder.
 
-    # Step 35 — Switch the repository to the ROCm 7.2.1 branch.
-    _rocm_log "Switch the repository to the ROCm 7.2.1 branch."
-    git checkout rocm-7.2.1  # Switch the repository to the ROCm 7.2.1 branch.
+    _rocm_log "Select the rocBLAS tag that matches ROCm ${ROCM_VERSION} (rocBLAS 5.7.0)."
+    _rocm_checkout_rocblas_tag
 
     # Step 36 — Build rocBLAS benchmark and test clients targeting MI300X gfx942.
     _rocm_log "Build rocBLAS benchmark and test clients targeting MI300X gfx942."

@@ -122,6 +122,14 @@ def is_smi_noise_line(line: str) -> bool:
     return any(marker in lower for marker in _SMI_NOISE_MARKERS)
 
 
+def _leading_label_value(line: str, label: str) -> str:
+    """Value for a label that starts the line. Avoids SIZE matching CACHE_SIZE."""
+    match = re.match(rf"\s*{re.escape(label)}\s*:\s*(.+)$", line, flags=re.IGNORECASE)
+    if not match:
+        return ""
+    return match.group(1).strip()
+
+
 def labeled_value(line: str, label: str) -> str:
     match = re.search(rf"{re.escape(label)}\s*:\s*(.+)$", line, flags=re.IGNORECASE)
     if not match:
@@ -153,7 +161,7 @@ def parse_gpu_name_text(
     return ""
 
 
-def parse_gpu_vram_text(*, nvidia: str = "", rocm_mem: str = "") -> str:
+def parse_gpu_vram_text(*, nvidia: str = "", rocm_mem: str = "", amd_smi: str = "") -> str:
     for line in nvidia.splitlines():
         text = line.strip()
         if text:
@@ -171,7 +179,35 @@ def parse_gpu_vram_text(*, nvidia: str = "", rocm_mem: str = "") -> str:
             return value
         if ":" in line:
             return line.rsplit(":", 1)[-1].strip()
+    section = ""
+    for line in amd_smi.splitlines():
+        if is_smi_noise_line(line):
+            continue
+        stripped = line.strip()
+        header = stripped[:-1].strip().lower() if stripped.endswith(":") and " " not in stripped[:-1].strip() else ""
+        if header:
+            section = header
+        for label in ("VRAM_TOTAL", "VRAM Total Memory (B)", "VRAM Total Memory", "VRAM Total", "TOTAL_VRAM"):
+            value = _leading_label_value(line, label)
+            if value and "used" not in line.lower():
+                return value
+        if section in {"vram", "mem_usage", "memory"}:
+            value = _leading_label_value(line, "SIZE") or _leading_label_value(line, "TOTAL")
+            if value and "used" not in line.lower():
+                return value
     return ""
+
+
+def amd_gpu_count(text: str) -> str:
+    """Count `GPU: <id>` blocks from amd-smi static or amd-smi list."""
+    ids = []
+    for line in text.splitlines():
+        match = re.match(r"\s*GPU:\s*(\d+)\s*$", line)
+        if match:
+            ids.append(match.group(1))
+    if not ids:
+        return ""
+    return str(len(set(ids)))
 
 
 def os_version() -> str:
@@ -212,6 +248,7 @@ def gpu_vram() -> str:
             "nvidia-smi --query-gpu=memory.total --format=csv,noheader 2>/dev/null"
         ),
         rocm_mem=command_output("rocm-smi --showmeminfo vram 2>/dev/null"),
+        amd_smi=command_output("amd-smi static 2>/dev/null; amd-smi metric 2>/dev/null"),
     )
 
 
@@ -219,12 +256,15 @@ def gpu_count() -> str:
     nvidia = command_output("nvidia-smi -L 2>/dev/null | wc -l")
     if nvidia.isdigit() and int(nvidia) > 0:
         return nvidia
-    amd = command_output(
+    amd = amd_gpu_count(command_output("amd-smi static 2>/dev/null"))
+    if amd.isdigit() and int(amd) > 0:
+        return amd
+    rocm = command_output(
         "rocm-smi -i 2>/dev/null | "
         "grep -Eo 'GPU\\[[0-9]+\\]|GPU [0-9]+' | sort -u | wc -l"
     )
-    if amd.isdigit() and int(amd) > 0:
-        return amd
+    if rocm.isdigit() and int(rocm) > 0:
+        return rocm
     return ""
 
 

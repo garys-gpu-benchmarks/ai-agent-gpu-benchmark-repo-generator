@@ -231,7 +231,7 @@ run_collection() {
         die "Triton gluon gfx1250 optional-import patch failed."
     fi
     export SGLANG_USE_AITER=1
-    export PATH="/opt/rocm/bin:/opt/rocm/core-7.14/bin:${PATH}"
+    export PATH="/opt/rocm/bin:/opt/rocm/core-10.1/bin:${PATH}"
     export LD_LIBRARY_PATH="/opt/rocm/lib:/opt/rocm/lib64:${LD_LIBRARY_PATH:-}"
     export BENCHMARK_READY_WAIT_SEC="${BENCHMARK_READY_WAIT_SEC:-1800}"
     # A leftover lock_module_* from a killed JIT makes the first decode wait

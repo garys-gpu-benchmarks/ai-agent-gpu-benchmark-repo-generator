@@ -193,7 +193,7 @@ if [[ -e "CLAUDE.md" ]]; then
     exit 1
 fi
 
-# hipcc on Ubuntu 26.04 / Clang 23 needs a GCC 15 host toolchain for <cstdlib>.
+# hipcc on Ubuntu 26.04 / ROCm 10.1.0 (Clang 24) needs a GCC 15 host toolchain for <cstdlib>.
 # The pin must stay off CXXFLAGS: host g++ (sgl-kernel) rejects --gcc-install-dir.
 if [[ -f scripts/lib/hipcc_host_gcc.sh ]]; then
     if rg -n '_hipcc_append_flag CXXFLAGS|CXXFLAGS.*gcc-install-dir' scripts/lib/hipcc_host_gcc.sh >/dev/null 2>&1; then
@@ -206,7 +206,7 @@ fi
 if rg -n '\bhipcc\b' scripts/build.sh Makefile >/dev/null 2>&1; then
     if ! rg -n 'hipcc_host_gcc|gcc-install-dir|HIPCC_COMPILE_FLAGS_APPEND' \
         scripts/build.sh Makefile >/dev/null 2>&1; then
-        echo "[FAIL] scripts/build.sh or Makefile invokes hipcc without pinning a host GCC. Source scripts/lib/hipcc_host_gcc.sh or pass --gcc-install-dir=/usr/lib/gcc/x86_64-linux-gnu/15 (Ubuntu 26.04 Clang 23 otherwise misses <cstdlib>)." >&2
+        echo "[FAIL] scripts/build.sh or Makefile invokes hipcc without pinning a host GCC. Source scripts/lib/hipcc_host_gcc.sh or pass --gcc-install-dir=/usr/lib/gcc/x86_64-linux-gnu/15 (Ubuntu 26.04 ROCm 10.1.0 hipcc otherwise misses <cstdlib>)." >&2
         exit 1
     fi
     echo "[PASS] hipcc host-GCC pin is present"

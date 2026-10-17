@@ -90,8 +90,8 @@ loading `distilbert-base-uncased` MLM weights into
 ## 114 / 314, 115 / 315, 116 / 316 — hipcc on Ubuntu 26.04
 
 These workloads compile a HIP binary from `scripts/build.sh` on every
-collection. On Ubuntu 26.04 / ROCm 7.14, hipcc is Clang 23 and prefers
-GCC 16. That GCC 16 tree does not expose `<cstdlib>` to
+collection. On Ubuntu 26.04 / ROCm 10.1.0, hipcc is Clang 24. The GCC 15
+host pin still supplies `<cstdlib>` to
 `__clang_hip_runtime_wrapper.h`, so a bare `hipcc -O2` fails in about one
 second on smoke, baseline, and extended. Generation smoke can still pass
 if that session's hipcc happened to see GCC 15.

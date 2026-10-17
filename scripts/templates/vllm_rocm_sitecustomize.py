@@ -3,7 +3,7 @@
 #
 # Cache AMD SMI GPU handles before torch initializes HIP.
 # vLLM 0.23 ROCm infers the platform from amdsmi_get_processor_handles().
-# On Ubuntu 26.04 / ROCm 7.14 / torch 2.11+rocm7.14, importing torch first
+# On Ubuntu 26.04 / ROCm 10.1.0 / torch 2.13+rocm10.1.0, importing torch first
 # makes that call return [] (and torch.cuda.device_count() stays 0 even
 # though hipGetDeviceCount is 1 and torch.zeros(..., device="cuda") works).
 # Result: UnspecifiedPlatform and

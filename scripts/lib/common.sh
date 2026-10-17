@@ -28,8 +28,8 @@ if [[ -z "${PIP_CACHE_DIR:-}" ]]; then
   export PIP_CACHE_DIR="${HOME}/.cache/pip"
 fi
 
-# hipcc on Ubuntu 26.04 / ROCm 7.14 (Clang 23) prefers GCC 16, which does
-# not expose <cstdlib> to the HIP wrapper. Export HIPCC_COMPILE_FLAGS_APPEND
+# hipcc on Ubuntu 26.04 / ROCm 10.1.0 (Clang 24) still needs a GCC 15 host
+# pin so <cstdlib> is visible to the HIP wrapper. Export HIPCC_COMPILE_FLAGS_APPEND
 # so child `bash scripts/build.sh` from setup and collect inherits the pin.
 if [[ -f "${BASH_SOURCE[0]%/*}/hipcc_host_gcc.sh" ]]; then
   # shellcheck disable=SC1091

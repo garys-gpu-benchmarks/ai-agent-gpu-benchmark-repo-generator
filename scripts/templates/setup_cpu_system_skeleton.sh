@@ -145,7 +145,36 @@ if [[ "${BENCHMARK_INSTALL_PERF}" == "1" ]]; then
   apt_install "linux-tools-${KERNEL_RELEASE}"
 fi
 
+if [[ -f benchmark_specification.json ]]; then
+  gpu_vendor="$("${BENCHMARK_PYTHON:-python3}" - <<'PY'
+import json
+from pathlib import Path
+fields = {
+    item.get("field_name", ""): str(item.get("value", ""))
+    for item in json.loads(Path("benchmark_specification.json").read_text(encoding="utf-8"))
+}
+print(fields.get("GPU Vendor", ""))
+PY
+  )"
+fi
+
 PYTHON_BIN="${BENCHMARK_PYTHON:-python3}"
+if grep -Eiq 'amd' <<< "${gpu_vendor:-}"; then
+  # shellcheck disable=SC1091
+  source "${REPO_ROOT}/scripts/lib/uv_python_314.sh"
+  ensure_uv_python_314 || {
+    echo "[FAIL] uv could not install CPython 3.14 for the AMD benchmark virtualenv." >&2
+    exit 1
+  }
+  PYTHON_BIN="${UV_PYTHON}"
+fi
+if [[ -x "${REPO_ROOT}/.venv/bin/python" ]]; then
+  existing_py="$("${REPO_ROOT}/.venv/bin/python" -c 'import sys; print(f"{sys.version_info.major}.{sys.version_info.minor}")')"
+  wanted_py="$("${PYTHON_BIN}" -c 'import sys; print(f"{sys.version_info.major}.{sys.version_info.minor}")')"
+  if [[ "${existing_py}" != "${wanted_py}" ]]; then
+    rm -rf "${REPO_ROOT}/.venv"
+  fi
+fi
 if [[ ! -x "${REPO_ROOT}/.venv/bin/python" ]]; then
   log_status "STEP python created ${REPO_ROOT}/.venv"
   record_cmd "${PYTHON_BIN} -m venv ${REPO_ROOT}/.venv"

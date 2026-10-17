@@ -77,6 +77,9 @@ if grep -q $'\r' "$0"; then echo "This file has Windows (CRLF) line endings. Fix
 #   1  stopped on a problem (see the STOPPED line)
 #   2  usage error
 #
+# Revision: 2026-10-14 (step 0 and step 9 run the generator's own ruff lint
+#           before anything is pushed; step 9 removes __pycache__ and other
+#           Python caches from the generator copy)
 # Revision: 2026-10-10b (master copy moved into the generator's scripts/;
 #           Z:\ServersProcsMemory paths; step 0 fills the run folder
 #           src_342_343_344_345 from Projects 341-345)
@@ -115,6 +118,13 @@ readonly -a WORKLOAD_SOURCES=(
   "3:${PROJECTS_ROOT}/Project344_301_to_332_TEMPLATE_00_104_20261010/DIRECTORIES"
   "4:${PROJECTS_ROOT}/Project345_401_to_432_TEMPLATE_00_104_20261010/DIRECTORIES"
 )
+# Run the generator's own ruff lint (the "ruff check" lines in its
+# .github/workflows/*.yml) in step 0 and again in step 9, so a lint error
+# stops the run here instead of failing the generator's CI on GitHub:
+#   yes  stop if ruff is not installed or the lint fails (default)
+#   no   skip the lint
+readonly LINT_GENERATOR="yes"
+
 # The run folder name used in the examples and messages (the folder you give
 # on the command line, inside Publish_<YYYYMMDD>_<NN>).
 readonly RUN_FOLDER_NAME="src_342_343_344_345"
@@ -374,6 +384,46 @@ emit_repo() {
   (cd "${GEN}/${GENREPO}" && PYTHONDONTWRITEBYTECODE=1 "${PY[@]}" scripts/emit_shared_workflows.py "${args[@]}") </dev/null >"${PUB}/_logs/emit-${only}.log" 2>&1 \
     || { tail -n 20 "${PUB}/_logs/emit-${only}.log"; stop "building $(basename "${dir}") from the generator failed (see above and ${PUB}/_logs/emit-${only}.log)"; }
   echo "Built ${dir} from the generator"
+}
+
+# Runs the same ruff lint as the generator's CI, in the generator folder $1,
+# without writing a .ruff_cache or __pycache__ there. The commands are read
+# from the "ruff check" lines in its .github/workflows/*.yml, so they stay in
+# step with CI. Stops the run if a command fails.
+lint_generator() {
+  local dir=$1 cmds cmd n=0
+  [[ "${LINT_GENERATOR}" == yes ]] || { echo "Lint of ${GENREPO}: skipped (LINT_GENERATOR=\"${LINT_GENERATOR}\")"; return 0; }
+  cmds=$(cat "${dir}"/.github/workflows/*.yml "${dir}"/.github/workflows/*.yaml 2>/dev/null | tr -d '\r' |
+         sed -nE 's/^[[:space:]]*(-[[:space:]]+)?(run:[[:space:]]*)?(ruff[[:space:]]+check([[:space:]].*)?)$/\3/p' | sort -u)
+  if [[ -z "${cmds}" ]]; then
+    echo "Lint of ${GENREPO}: its CI runs no ruff check, nothing to do"
+    return 0
+  fi
+  local -a RUFF=()
+  if command -v ruff >/dev/null 2>&1; then
+    RUFF=(ruff)
+  else
+    local p
+    for p in python3 python py; do
+      command -v "${p}" >/dev/null 2>&1 || continue
+      if [[ "${p}" == py ]]; then RUFF=(py -3 -m ruff); else RUFF=("${p}" -m ruff); fi
+      "${RUFF[@]}" --version >/dev/null 2>&1 && break
+      RUFF=()
+    done
+  fi
+  ((${#RUFF[@]} > 0)) || stop "ruff is needed to lint ${GENREPO} the way its CI does. Install it with:  python -m pip install ruff   (or set LINT_GENERATOR=\"no\" near the top of this file)"
+  echo "Lint of ${GENREPO} in ${dir} with $("${RUFF[@]}" --version 2>/dev/null)"
+  while IFS= read -r cmd; do
+    [[ -n "${cmd}" ]] || continue
+    n=$((n + 1))
+    echo "  ${cmd}"
+    # Replace the leading "ruff check" with this machine's ruff, keep CI's
+    # arguments, and add --no-cache so nothing is written into the folder.
+    if ! (cd "${dir}" && PYTHONDONTWRITEBYTECODE=1 eval "\"\${RUFF[@]}\" check --no-cache ${cmd#ruff*check}") </dev/null; then
+      stop "the generator fails its own ruff lint (above), so its CI on GitHub would fail. Fix it in the generator source and in ${dir}, then run again. Many problems are fixed by running the same command with --fix."
+    fi
+  done <<<"${cmds}"
+  echo "Lint of ${GENREPO}: ${n} ruff command(s) passed"
 }
 
 # Waits for the Self-test workflow run of commit $1 in $SHARED_REPO and
@@ -663,6 +713,9 @@ if ! cmp -s "${SCRIPT_DIR}/${SCRIPT_NAME}" "${GEN}/${GENREPO}/scripts/${SCRIPT_N
   echo "NOTE: this script differs from ${GENREPO}/scripts/${SCRIPT_NAME} in the run folder (or the generator has none)."
   echo "      The generator holds the master copy; copy it over this one if it is newer."
 fi
+# The generator's CI runs ruff; catch a lint error now, before hours of
+# publishing, instead of on GitHub after step 9.
+lint_generator "${GEN}/${GENREPO}"
 # Git for Windows refuses a repository folder ($GIT_DIR) longer than 220
 # characters (PATH_MAX 260 minus 40), even with core.longpaths. The longest
 # one this run creates is a bundle's submodule store:
@@ -1157,9 +1210,16 @@ if is_done generator; then skipped 9; else
     echo "copied  ${GENREPO}"
   fi
   cd "${PUB}/${GENREPO}" || stop "cannot open ${PUB}/${GENREPO}"
+  # Python caches come along with cp -a whenever the generator's scripts or
+  # tests were run before the copy. They are never published.
+  removed=$(find . -path ./.git -prune -o -type d \( -name __pycache__ -o -name .pytest_cache -o -name .ruff_cache -o -name .mypy_cache \) -prune -print -exec rm -rf {} + | wc -l)
+  removed=$((removed + $(find . -path ./.git -prune -o -type f -name '*.py[co]' -print -delete | wc -l)))
+  echo "--- Python cache folders and files removed: ${removed}"
+  # The copy is kept between runs, so lint it too: it is what gets pushed.
+  lint_generator "${PUB}/${GENREPO}"
   problems=0
   check_zero "nested *_copy and .git folders" < <(find . -mindepth 1 \( -path ./.git -prune \) -o -type d \( -name '*_copy' -o -name .git \) -print)
-  check_zero "never-publish items and generated workload folders" < <(find . -path ./.git -prune -o \( -name RESULTS -o -name runtime_ledger.csv -o -name '*.zip' -o -name .env -o -name .venv -o -type d -name '[1-4][0-9][0-9]-*' \) -print)
+  check_zero "never-publish items and generated workload folders" < <(find . -path ./.git -prune -o \( -name RESULTS -o -name runtime_ledger.csv -o -name '*.zip' -o -name .env -o -name .venv -o -name __pycache__ -o -name '*.py[co]' -o -type d -name '[1-4][0-9][0-9]-*' \) -print)
   missing=""
   for f in LICENSE legal/NOTICE .gitattributes .gitignore; do [[ -e "${f}" ]] || missing="${missing} ${f}"; done
   echo "--- files the publish doc says to keep, missing (must be none):${missing:- none}"

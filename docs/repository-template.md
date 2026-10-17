@@ -129,12 +129,12 @@ Do not invent new top-level directories unless the change is required by the ben
 │   ├── check_github_publish_ready.sh # Final GitHub publication-readiness gate
 │   ├── lib/
 │       ├── common.sh               # Shared logging, die()/ledger-on-error, wait_for_server (600 s), sources hipcc_host_gcc.sh
-│       ├── hipcc_host_gcc.sh       # Pin hipcc to GCC 15/14/13 so Clang 23 HIP wrappers find <cstdlib>
+│       ├── hipcc_host_gcc.sh       # Pin hipcc to GCC 15/14/13 so Clang 24 HIP wrappers find <cstdlib>
 │       ├── reboot_resume.sh        # Helper: local reboot state + resume after login
 │       ├── remote_reboot_wait.sh   # Deprecated helper retained for compatibility; do not use in local-only flows
 │       ├── rocm_install.sh         # PROTECTED dispatcher: sources the Ubuntu-specific library
-│       ├── rocm_install_24_04.sh   # PROTECTED: Ubuntu 24.04 / ROCm 7.2.1 functions
-│       ├── rocm_install_26_04.sh   # PROTECTED: Ubuntu 26.04 / ROCm 7.14 functions
+│       ├── rocm_install_24_04.sh   # PROTECTED: Ubuntu 24.04 / ROCm 10.1.0 functions
+│       ├── rocm_install_26_04.sh   # PROTECTED: Ubuntu 26.04 / ROCm 10.1.0 functions
 │   └── templates/
 │       ├── setup_rocm_reboot_skeleton.sh # Reusable setup.sh skeleton for ROCm reboot flows
 │       └── run_benchmark_help_skeleton.sh # Copy-this usage() and early --help / --matrix-definition handler

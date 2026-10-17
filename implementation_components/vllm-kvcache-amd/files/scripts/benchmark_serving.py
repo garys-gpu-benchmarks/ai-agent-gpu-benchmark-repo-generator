@@ -215,6 +215,9 @@ def _device_vram_gb() -> float:
         ["rocm-smi", "--showmeminfo", "vram"],
         ["/opt/rocm/bin/rocm-smi", "--showmeminfo", "vram"],
         ["amd-smi", "metric"],
+        ["/opt/rocm/bin/amd-smi", "metric"],
+        ["amd-smi", "static"],
+        ["/opt/rocm/bin/amd-smi", "static"],
     ):
         try:
             out = subprocess.run(cmd, capture_output=True, text=True, timeout=8)

@@ -28,35 +28,28 @@ if [[ -r /etc/os-release ]]; then
 fi
 case "${VERSION_ID:-}" in
   26.04*)
-    export ROCM_VERSION="${ROCM_VERSION:-7.14}"
+    export ROCM_VERSION="${ROCM_VERSION:-10.1.0}"
     export UBUNTU_CODENAME="${UBUNTU_CODENAME:-resolute}"
-    # download.pytorch.org/whl/rocm7.14 is empty; AMD publishes 7.14 wheels here.
-    PYTORCH_ROCM_INDEX_URL="${PYTORCH_ROCM_INDEX_URL:-https://repo.amd.com/rocm/whl-multi-arch/}"
-    PYTORCH_VERSION="${PYTORCH_VERSION:-2.12.0+rocm7.14.0}"
-    TORCHVISION_VERSION="${TORCHVISION_VERSION:-0.27.0+rocm7.14.0}"
-    PYTORCH_INSTALL_SPEC="${PYTORCH_INSTALL_SPEC:-torch==${PYTORCH_VERSION} amd-torch-device-gfx942==${PYTORCH_VERSION}}"
-    TORCHVISION_INSTALL_SPEC="${TORCHVISION_INSTALL_SPEC:-torchvision==${TORCHVISION_VERSION}}"
     ;;
   *)
-    export ROCM_VERSION="${ROCM_VERSION:-7.2.1}"
+    export ROCM_VERSION="${ROCM_VERSION:-10.1.0}"
     export UBUNTU_CODENAME="${UBUNTU_CODENAME:-noble}"
-    PYTORCH_ROCM_INDEX_URL="${PYTORCH_ROCM_INDEX_URL:-https://download.pytorch.org/whl/rocm7.2}"
-    PYTORCH_VERSION="${PYTORCH_VERSION:-2.11.0+rocm7.2}"
-    TORCHVISION_VERSION="${TORCHVISION_VERSION:-0.26.0+rocm7.2}"
-    PYTORCH_INSTALL_SPEC="${PYTORCH_INSTALL_SPEC:-torch==${PYTORCH_VERSION}}"
-    TORCHVISION_INSTALL_SPEC="${TORCHVISION_INSTALL_SPEC:-torchvision==${TORCHVISION_VERSION}}"
     ;;
 esac
 export GFX_TARGET="${GFX_TARGET:-gfx942}"
-VLLM_WHEEL_INDEX_URL="${VLLM_WHEEL_INDEX_URL:-https://wheels.vllm.ai/rocm/}"
-# wheels.vllm.ai/rocm/ is still cp312/rocm723. Ubuntu 26.04 / Python 3.14 uses the AMD CDNA wheel.
-VLLM_AMD_CP314_WHEEL_URL="${VLLM_AMD_CP314_WHEEL_URL:-https://rocm.frameworks.amd.com/whl-multi-arch/vllm-cdna/vllm/vllm-0.23.1.dev1%2Brocm7.14.0.g9ddef7117.d20260715-cp314-cp314-linux_x86_64.whl}"
-FLASH_ATTN_AMD_CP314_WHEEL_URL="${FLASH_ATTN_AMD_CP314_WHEEL_URL:-https://rocm.frameworks.amd.com/whl-multi-arch/vllm-cdna/flash-attn/flash_attn-2.8.3-cp314-cp314-linux_x86_64.whl}"
-AITER_AMD_CP314_WHEEL_URL="${AITER_AMD_CP314_WHEEL_URL:-https://rocm.frameworks.amd.com/whl-multi-arch/vllm-cdna/amd-aiter/amd_aiter-0.1.13.post2.dev1%2Bgb32deb267-cp314-cp314-linux_x86_64.whl}"
-PYTORCH_VERSION="${PYTORCH_VERSION:-2.11.0+rocm7.2}"
-TORCHVISION_VERSION="${TORCHVISION_VERSION:-0.26.0+rocm7.2}"
-PYTORCH_INSTALL_SPEC="${PYTORCH_INSTALL_SPEC:-torch==${PYTORCH_VERSION}}"
-TORCHVISION_INSTALL_SPEC="${TORCHVISION_INSTALL_SPEC:-torchvision==${TORCHVISION_VERSION}}"
+# ROCm 10.1.0 wheels. torch[device-gfx942] pulls the gfx942 device package.
+PYTORCH_ROCM_INDEX_URL="${PYTORCH_ROCM_INDEX_URL:-https://stable.repo.amd.com/rocm/whl-next/}"
+PYTORCH_VERSION="${PYTORCH_VERSION:-2.13.0+rocm10.1.0}"
+TORCHVISION_VERSION="${TORCHVISION_VERSION:-0.28.0+rocm10.1.0}"
+TORCHAUDIO_VERSION="${TORCHAUDIO_VERSION:-2.11.0.2+rocm10.1.0}"
+PYTORCH_INSTALL_SPEC="${PYTORCH_INSTALL_SPEC:-torch[device-gfx942]==${PYTORCH_VERSION}}"
+TORCHVISION_INSTALL_SPEC="${TORCHVISION_INSTALL_SPEC:-torchvision[device-gfx942]==${TORCHVISION_VERSION}}"
+TORCHAUDIO_INSTALL_SPEC="${TORCHAUDIO_INSTALL_SPEC:-torchaudio==${TORCHAUDIO_VERSION}}"
+VLLM_WHEEL_INDEX_URL="${VLLM_WHEEL_INDEX_URL:-https://rocm.frameworks.amd.com/whl-multi-arch/vllm/}"
+VLLM_AMD_CP314_WHEEL_URL="${VLLM_AMD_CP314_WHEEL_URL:-https://rocm.frameworks.amd.com/whl-multi-arch/vllm/vllm/vllm-0.29.1.dev0%2Brocm10.1.0.g98dff2a81.d20261002-cp314-cp314-linux_x86_64.whl}"
+FLASH_ATTN_VERSION="${FLASH_ATTN_VERSION:-2.8.3}"
+AITER_VERSION="${AITER_VERSION:-0.1.22.post2.dev0+gb4d9154d1.d20261002}"
+TENSORIZER_VERSION="${TENSORIZER_VERSION:-2.12.1}"
 BENCHMARK_INSTALL_PYTORCH_WAS_SET="${BENCHMARK_INSTALL_PYTORCH+x}"
 BENCHMARK_INSTALL_AITER_WAS_SET="${BENCHMARK_INSTALL_AITER+x}"
 BENCHMARK_INSTALL_SGLANG_WAS_SET="${BENCHMARK_INSTALL_SGLANG+x}"
@@ -71,9 +64,8 @@ BENCHMARK_COMPILE_SGLANG="${BENCHMARK_COMPILE_SGLANG:-0}"
 BENCHMARK_BUILD_FAISS_ROCM="${BENCHMARK_BUILD_FAISS_ROCM:-0}"
 SGLANG_SOURCE_DIR="${SGLANG_SOURCE_DIR:-}"
 SGLANG_REPO_URL="${SGLANG_REPO_URL:-https://github.com/sgl-project/sglang.git}"
-# AMD ROCm 7.14 / cp314 pairing. main imports aiter.ops.shuffle.shuffle_scale,
-# which the published amd-aiter 0.1.13 wheel does not export.
-SGLANG_REPO_REF="${SGLANG_REPO_REF:-v0.5.13.post1}"
+# ROCm 10.1.0 lists SGLang 0.5.18. Pin the commit AMD pairs with torch 2.13.
+SGLANG_REPO_REF="${SGLANG_REPO_REF:-71de97b264b04dcd514cf904003028aefe9775c8}"
 AITER_SOURCE_DIR="${AITER_SOURCE_DIR:-}"
 AITER_REPO_URL="${AITER_REPO_URL:-https://github.com/ROCm/aiter.git}"
 
@@ -163,17 +155,6 @@ PY
     if grep -Eiq '(^|[,[:space:]])faiss([,[:space:]]|$)' <<< "${workload_framework}"; then
       BENCHMARK_BUILD_FAISS_ROCM=1
     fi
-  fi
-  if grep -Eiq '(^|[,[:space:]])vllm([,[:space:]]|$)' <<< "${workload_framework}"; then
-    case "${VERSION_ID:-}" in
-      26.04*)
-        # vLLM 0.23.1 AMD cp314 wheel pairs with torch 2.11, not 2.12.
-        PYTORCH_VERSION="2.11.0+rocm7.14.0"
-        TORCHVISION_VERSION="0.26.0+rocm7.14.0"
-        PYTORCH_INSTALL_SPEC="torch==${PYTORCH_VERSION} amd-torch-device-gfx942==${PYTORCH_VERSION}"
-        TORCHVISION_INSTALL_SPEC="torchvision==${TORCHVISION_VERSION}"
-        ;;
-    esac
   fi
 fi
 export ROCM_SOURCE_ROOT="${ROCM_SOURCE_ROOT:-${REPO_ROOT}/third_party}"
@@ -523,8 +504,16 @@ if [[ "${SKIP_ROCM}" != 1 ]]; then
      compgen -G "/lib/firmware/amdgpu/*" >/dev/null; then
     amdgpu_firmware_present=1
   fi
-  if [[ -f "${RUNTIME_STAGE_FILE}" || ! -x /opt/rocm/bin/rocm-smi || "${amdgpu_firmware_present}" != 1 ]]; then
-    if [[ -x /opt/rocm/bin/rocm-smi && "${amdgpu_firmware_present}" != 1 ]]; then
+  # ROCm 10.1 ships amd-smi and hipcc. The older rocm-smi binary is not in the
+  # amdrocm10.1 packages (Ubuntu's separate rocm-smi 7.1 package is not this stack).
+  rocm_smi_present=0
+  if [[ -x /opt/rocm/bin/amd-smi || -x /opt/rocm/core-10.1/bin/amd-smi ||
+        -x /opt/rocm/bin/hipcc || -x /opt/rocm/core-10.1/bin/hipcc ||
+        -x /opt/rocm/bin/rocm-smi || -x /opt/rocm/core-10.1/bin/rocm-smi ]]; then
+    rocm_smi_present=1
+  fi
+  if [[ -f "${RUNTIME_STAGE_FILE}" || "${rocm_smi_present}" != 1 || "${amdgpu_firmware_present}" != 1 ]]; then
+    if [[ "${rocm_smi_present}" == 1 && "${amdgpu_firmware_present}" != 1 ]]; then
       log_resume_event "ROCm userspace present but no amdgpu firmware; running runtime install"
     fi
     # ROCM_DEFER_REBOOT=1: if the driver reload fails, the installer does not
@@ -548,7 +537,7 @@ if [[ "${SKIP_ROCM}" != 1 ]]; then
       exit 0
     fi
   fi
-  [[ -f /etc/apt/sources.list.d/rocm.list ]] || rocm_add_repository
+  rocm_add_repository
   grant_gpu_access_this_session
 else
   install_status_log_step rocm "skipped by operator flag"
@@ -560,6 +549,11 @@ else
   install_status_log_step rvs "skipped by operator flag"
 fi
 
+# shellcheck disable=SC1091
+source "${REPO_ROOT}/scripts/lib/uv_python_314.sh"
+ensure_uv_python_314 || die "uv could not install CPython 3.14 for the benchmark virtualenv."
+PYTHON_BOOTSTRAP="${UV_PYTHON}"
+PYTHON_TARGET_VERSION="3.14"
 if [[ -x "${VENV_ROOT}/bin/python" ]]; then
   VENV_PYTHON_VERSION="$("${VENV_ROOT}/bin/python" -c 'import sys; print(f"{sys.version_info.major}.{sys.version_info.minor}")')"
   [[ "${VENV_PYTHON_VERSION}" == "${PYTHON_TARGET_VERSION}" ]] ||
@@ -576,12 +570,35 @@ if ! "${VENV_ROOT}/bin/python" -c 'import pip' >/dev/null 2>&1; then
 fi
 source "${VENV_ROOT}/bin/activate"
 "${PYTHON_BIN}" -m pip install --upgrade pip
-if grep -Eq '^[[:space:]]*(torch|torchvision)(\[.*\])?([<>=].*)?$' requirements.txt; then
-  grep -Fq "download.pytorch.org/whl/rocm" requirements.txt || \
+if grep -Eq '^[[:space:]]*(torch|torchvision|torchaudio)(\[.*\])?([<>=].*)?$' requirements.txt; then
+  grep -Eq 'stable.repo.amd.com/rocm/whl-next|download.pytorch.org/whl/rocm' requirements.txt || \
     die "ROCm workload requirements must reference the official ROCm wheel index."
 fi
 "${PYTHON_BIN}" -m pip install -r requirements.txt --extra-index-url "${PYTORCH_ROCM_INDEX_URL}"
 install_status_log_step python "created ${VENV_ROOT} and installed requirements"
+
+install_rocm_bundled_amdsmi() {
+  # PyPI amdsmi 7.x references amdsmi_set_gpu_clk_range, which libamd_smi.so
+  # from ROCm 10.1.0 does not export. Use the Python package shipped with ROCm.
+  local amd_smi_py="" candidate site_pkg amdsmi_err
+  for candidate in /opt/rocm/share/amd_smi /opt/rocm/core-*/share/amd_smi; do
+    if [[ -f "${candidate}/amdsmi/__init__.py" ]]; then
+      amd_smi_py="${candidate}"
+      break
+    fi
+  done
+  if [[ -z "${amd_smi_py}" ]]; then
+    die "ROCm Python amdsmi package is missing under /opt/rocm."
+  fi
+  "${PYTHON_BIN}" -m pip uninstall -y amdsmi >/dev/null 2>&1 || true
+  site_pkg="$("${PYTHON_BIN}" -c 'import site; print(site.getsitepackages()[0])')"
+  printf '%s\n' "${amd_smi_py}" > "${site_pkg}/rocm_amdsmi.pth"
+  export LD_LIBRARY_PATH="/opt/rocm/lib${LD_LIBRARY_PATH:+:${LD_LIBRARY_PATH}}"
+  if ! amdsmi_err="$("${PYTHON_BIN}" -c 'import amdsmi; print(amdsmi.__file__)' 2>&1)"; then
+    die "amdsmi installation verification failed: ${amdsmi_err}"
+  fi
+  printf '%s\n' "${amdsmi_err}"
+}
 
 install_workload_rocm_packages() {
   local framework wheel_url
@@ -600,30 +617,26 @@ fields = {item.get("field_name", ""): item.get("value", "") for item in json.loa
 print(fields.get("vLLM Wheel/Source Index", "").strip())
 PY
 )"
-    # Workbook 26.04 rows name the AMD CDNA index. Older rows name wheels.vllm.ai/rocm/.
     case "${wheel_url}" in
-      https://wheels.vllm.ai/rocm/*|https://rocm.frameworks.amd.com/whl-multi-arch/vllm-cdna/*) ;;
-      *) die "ROCm vLLM workload lacks an official wheels.vllm.ai/rocm wheel URL." ;;
+      https://wheels.vllm.ai/rocm/*|https://rocm.frameworks.amd.com/whl-multi-arch/vllm/*|https://rocm.frameworks.amd.com/whl-multi-arch/vllm-cdna/*) ;;
+      *) die "ROCm vLLM workload lacks an official ROCm vLLM wheel URL." ;;
     esac
-    case "${VERSION_ID:-}" in
-      26.04*)
-        if [[ "${wheel_url}" != *cp314* ]]; then
-          log_warn "Spec vLLM URL is not cp314; installing AMD ROCm 7.14 / cp314 wheel after the wheels.vllm.ai/rocm/ prefix check."
-          wheel_url="${VLLM_AMD_CP314_WHEEL_URL}"
-        fi
-        ;;
-    esac
+    if [[ "${wheel_url}" != *cp314* ]]; then
+      log_warn "Spec vLLM URL is not cp314; installing the ROCm 10.1.0 cp314 wheel."
+      wheel_url="${VLLM_AMD_CP314_WHEEL_URL}"
+    fi
     "${PYTHON_BIN}" -m pip install \
       --index-url "${PYTORCH_ROCM_INDEX_URL}" \
       --extra-index-url https://pypi.org/simple \
-      ${PYTORCH_INSTALL_SPEC} ${TORCHVISION_INSTALL_SPEC}
+      ${PYTORCH_INSTALL_SPEC} ${TORCHVISION_INSTALL_SPEC} ${TORCHAUDIO_INSTALL_SPEC}
     "${PYTHON_BIN}" -m pip install --no-deps "${wheel_url}"
-    case "${VERSION_ID:-}" in
-      26.04*)
-        "${PYTHON_BIN}" -m pip install --no-deps "${FLASH_ATTN_AMD_CP314_WHEEL_URL}" ||
-          log_warn "AMD flash-attn wheel skipped"
-        ;;
-    esac
+    "${PYTHON_BIN}" -m pip install \
+      "flash-attn==${FLASH_ATTN_VERSION}" \
+      --index-url "${VLLM_WHEEL_INDEX_URL}" \
+      --extra-index-url https://pypi.org/simple ||
+      log_warn "AMD flash-attn ${FLASH_ATTN_VERSION} install skipped"
+    "${PYTHON_BIN}" -m pip install "tensorizer==${TENSORIZER_VERSION}" ||
+      log_warn "tensorizer ${TENSORIZER_VERSION} install skipped"
     "${PYTHON_BIN}" -m pip install packaging
     "${PYTHON_BIN}" - <<'PY' > "${REPO_ROOT}/.vllm_requirements.txt"
 from importlib.metadata import requires
@@ -646,12 +659,15 @@ PY
       --extra-index-url "${PYTORCH_ROCM_INDEX_URL}" ||
       log_warn "vLLM extra-deps install was non-fatal; installing API-server extras next"
     rm -f "${REPO_ROOT}/.vllm_requirements.txt"
+    # vLLM's dependency pin reinstalls tensorizer 2.10.1, whose libsodium lookup
+    # raises KeyError: crypto_stream_salsa20_NONCEBYTES on Ubuntu 26.04.
+    "${PYTHON_BIN}" -m pip install "tensorizer==${TENSORIZER_VERSION}" ||
+      die "tensorizer ${TENSORIZER_VERSION} reinstall failed after vLLM extra-deps."
     # api_server.py imports uvloop on startup. Extra-deps can skip it when
     # amd-quark>=0.8.99 is missing.
     "${PYTHON_BIN}" -m pip install uvloop fastapi "aiohttp>=3.13.3" ||
       die "vLLM API-server extras (uvloop/fastapi/aiohttp) failed."
-    gpu_check "Official vLLM ROCm wheel verification failed." \
-      "${PYTHON_BIN}" -c 'import vllm, uvloop; print(f"vLLM {vllm.__version__}")'
+    install_rocm_bundled_amdsmi
     # Importing torch first empties amdsmi handles on this stack. A .pth
     # import runs before vLLM argparse so baseline/extended can infer ROCm.
     # Do not install sitecustomize.py: Ubuntu's /usr/lib/python3.14 copy wins.
@@ -662,12 +678,12 @@ PY
     fi
     cp -a "${src_custom}" "${site_pkg}/vllm_rocm_bootstrap.py"
     printf '%s\n' 'import vllm_rocm_bootstrap' > "${site_pkg}/vllm_rocm_bootstrap.pth"
+    gpu_check "Official vLLM ROCm wheel verification failed." \
+      "${PYTHON_BIN}" -c 'import vllm, uvloop; print(f"vLLM {vllm.__version__}")'
     install_status_log_step vllm "installed and verified official ROCm wheel"
   fi
   if grep -Eiq '(^|[,[:space:]])amd-smi([,[:space:]]|$)' <<< "${framework}"; then
-    "${PYTHON_BIN}" -m pip install amdsmi
-    "${PYTHON_BIN}" -c 'import amdsmi' ||
-      die "amdsmi installation verification failed."
+    install_rocm_bundled_amdsmi
     install_status_log_step amdsmi "installed and verified Python amdsmi package"
   fi
 }
@@ -700,7 +716,8 @@ install_rocm_pytorch() {
     find_links_args=(--find-links "${PYTORCH_FIND_LINKS}")
   fi
   "${PYTHON_BIN}" -m pip install --index-url "${PYTORCH_ROCM_INDEX_URL}" \
-    --extra-index-url https://pypi.org/simple "${find_links_args[@]}" "${torch_packages[@]}"
+    --extra-index-url https://pypi.org/simple "${find_links_args[@]}" \
+    "${torch_packages[@]}" "${TORCHAUDIO_INSTALL_SPEC}"
   if [[ "${GPU_CHECKS_AFTER_REBOOT}" == 1 ]]; then
     # No usable GPU until the postponed reboot: check the ROCm build only. The
     # run after the reboot does the full GPU check below.
@@ -773,39 +790,30 @@ if [[ -n "${workload_framework:-}${workload_name:-}" ]]; then
 fi
 
 if [[ "${BENCHMARK_INSTALL_JAX}" == 1 ]]; then
-  # Plugin first, then jax/jaxlib from PyPI. Do not list jax in requirements.txt.
-  # Ubuntu 24.04 / ROCm 7.2 publishes jax-rocm7-plugin==0.10.0 on the ROCm 7.2
-  # wheel index. The +rocm7.14.0 build is only on the Ubuntu 26.04 AMD index.
-  if [[ "${VERSION_ID:-}" == 26.04* ]]; then
-    JAX_ROCM_PLUGIN_SPEC="jax_rocm7_plugin==0.10.0+rocm7.14.0"
-    JAX_ROCM_PJRT_SPEC="jax_rocm7_pjrt==0.10.0+rocm7.14.0"
-  else
-    JAX_ROCM_PLUGIN_SPEC="jax-rocm7-plugin==0.10.0"
-    JAX_ROCM_PJRT_SPEC="jax-rocm7-pjrt==0.10.0"
-  fi
+  # jax and jaxlib come from PyPI. The ROCm 10 plugin and PJRT come from whl-next.
+  JAX_ROCM_PLUGIN_SPEC="${JAX_ROCM_PLUGIN_SPEC:-jax_rocm10_plugin==0.11.1+rocm10.1.0}"
+  JAX_ROCM_PJRT_SPEC="${JAX_ROCM_PJRT_SPEC:-jax_rocm10_pjrt==0.11.1+rocm10.1.0}"
   "${PYTHON_BIN}" -m pip install --index-url "${PYTORCH_ROCM_INDEX_URL}" \
     --extra-index-url https://pypi.org/simple \
     "${JAX_ROCM_PLUGIN_SPEC}" "${JAX_ROCM_PJRT_SPEC}" ||
     die "JAX ROCm plugin wheel install failed."
-  "${PYTHON_BIN}" -m pip install jax==0.10.0 jaxlib==0.10.0
+  "${PYTHON_BIN}" -m pip install jax==0.11.1 jaxlib==0.11.1
   gpu_check "JAX ROCm verification failed." \
     "${PYTHON_BIN}" -c 'import jax, sys; devs=[d for d in jax.devices() if "cpu" not in str(d).lower()]; print(devs); sys.exit(0 if devs else 1)'
   install_status_log_step jax "installed and verified JAX ROCm plugin"
 fi
 
 if [[ "${BENCHMARK_INSTALL_AITER}" == 1 ]]; then
-  # Prefer the AMD-published ROCm 7.14 / cp314 wheel. Source compile from
-  # github.com/ROCm/aiter.git remains available when the wheel is missing.
-  # The wheel provides import aiter, not import amd_aiter.
-  # First import JIT-links module_aiter_core with -L.venv/lib -lamdhip64.
-  # TheRock ships the unversioned .so under /opt/rocm/lib.
+  # ROCm 10.1.0 publishes amd-aiter on the vLLM multi-arch index. Import name is aiter.
   export LIBRARY_PATH="/opt/rocm/lib:${LIBRARY_PATH:-}"
   export LD_LIBRARY_PATH="/opt/rocm/lib:${LD_LIBRARY_PATH:-}"
   if [[ -e /opt/rocm/lib/libamdhip64.so && ! -e "${VENV_ROOT}/lib/libamdhip64.so" ]]; then
     ln -sfn /opt/rocm/lib/libamdhip64.so "${VENV_ROOT}/lib/libamdhip64.so"
   fi
   if ! "${PYTHON_BIN}" -c 'import aiter' >/dev/null 2>&1; then
-    "${PYTHON_BIN}" -m pip install "${AITER_AMD_CP314_WHEEL_URL}" || true
+    "${PYTHON_BIN}" -m pip install "amd-aiter==${AITER_VERSION}" \
+      --index-url "${VLLM_WHEEL_INDEX_URL}" \
+      --extra-index-url https://pypi.org/simple || true
   fi
   if ! "${PYTHON_BIN}" -c 'import aiter' >/dev/null 2>&1; then
     if [[ "${BENCHMARK_COMPILE_SGLANG}" == 1 ]]; then
@@ -851,7 +859,8 @@ if [[ "${BENCHMARK_INSTALL_SGLANG}" == 1 ]]; then
     install_status_log_step sglang "already importable from this repo"
   elif [[ "${BENCHMARK_COMPILE_SGLANG}" == 1 ]]; then
     if [[ ! -d "${SGLANG_SOURCE_DIR}/.git" ]]; then
-      git clone --depth 1 --branch "${SGLANG_REPO_REF}" "${SGLANG_REPO_URL}" "${SGLANG_SOURCE_DIR}"
+      git clone --filter=blob:none "${SGLANG_REPO_URL}" "${SGLANG_SOURCE_DIR}"
+      git -C "${SGLANG_SOURCE_DIR}" checkout "${SGLANG_REPO_REF}"
     fi
     # Current sglang.git moved sgl-kernel to python/sglang/kernels/aot.
     SGL_KERNEL_SETUP=""
@@ -865,8 +874,10 @@ if [[ "${BENCHMARK_INSTALL_SGLANG}" == 1 ]]; then
         cd "$(dirname "${SGL_KERNEL_SETUP}")"
         export AMDGPU_TARGET="${GFX_TARGET}"
         export PYTORCH_ROCM_ARCH="${GFX_TARGET}"
-        # The venv ships a rocm_sdk_core hipcc that does not add /opt/rocm/include,
-        # so thrust/hipblas/hipsparse headers are invisible. Prefer the ROCm hipcc.
+        # The venv ships a rocm_sdk_core hipcc that does not add /opt/rocm/include
+        # and has no amdgcn device library. Point torch at the system ROCm hipcc.
+        export ROCM_HOME=/opt/rocm
+        export ROCM_PATH=/opt/rocm
         export PATH="/opt/rocm/bin:${PATH}"
         export CPATH="/opt/rocm/include${CPATH:+:${CPATH}}"
         export CPLUS_INCLUDE_PATH="/opt/rocm/include${CPLUS_INCLUDE_PATH:+:${CPLUS_INCLUDE_PATH}}"
@@ -918,7 +929,7 @@ if [[ "${BENCHMARK_INSTALL_SGLANG}" == 1 ]]; then
     fi
     install_status_log_step sglang "installed and verified SGLang from the python subdirectory"
   else
-    die "SGLang is not importable. There is no proven ROCm 7.14/cp314 wheel. Re-run setup with BENCHMARK_COMPILE_SGLANG=1 (the default for SGLang workloads) or install a ROCm SGLang wheel. Smoke-only hosts may set BENCHMARK_INSTALL_SGLANG=0, but baseline/extended will fail."
+    die "SGLang is not importable. ROCm 10.1.0 builds SGLang 0.5.18 from source against torch 2.13. Re-run setup with BENCHMARK_COMPILE_SGLANG=1 (the default for SGLang workloads). Smoke-only hosts may set BENCHMARK_INSTALL_SGLANG=0, but baseline/extended will fail."
   fi
   # Already-importable and compile paths both skip launch_server extras unless we
   # run them here. Missing pyzmq dies at import zmq. New transformers already
@@ -958,6 +969,7 @@ fi
 # Torch 2.11/2.12 on this host report device_count=0 after HIP init.
 # Cache amdsmi handles so SGLang can see the MI300X (vLLM has its own copy).
 if [[ "${BENCHMARK_INSTALL_SGLANG}" == 1 ]]; then
+  install_rocm_bundled_amdsmi
   site_pkg="${VENV_ROOT}/lib/python${PYTHON_TARGET_VERSION}/site-packages"
   src_custom="${REPO_ROOT}/scripts/templates/vllm_rocm_sitecustomize.py"
   if [[ ! -f "${src_custom}" ]]; then
@@ -998,12 +1010,44 @@ if [[ -f scripts/install_rag_nvidia.sh ]]; then
   bash scripts/install_rag_nvidia.sh
 fi
 
+install_rocblas_client_smi_deps() {
+  if [[ ! -f scripts/build.sh ]] || ! grep -q 'rocm_compile_rocblas_bench' scripts/build.sh; then
+    return 0
+  fi
+  if [[ -f /usr/include/rocm_smi/rocm_smi.h ]]; then
+    return 0
+  fi
+  # rocBLAS clients still search for include/rocm_smi/rocm_smi.h and librocm_smi64.
+  # ROCm 10.1 ships libamd_smi.so instead. Ubuntu's SMI library package provides
+  # the old names. The SONAME package is librocm-smi64-7 on 26.04 and
+  # librocm-smi64-1 on 24.04. Do not install the rocm-smi CLI package: on 24.04
+  # it replaces /opt/rocm/bin/rocm-smi.
+  local package
+  local -a packages=()
+  for package in librocm-smi64-7 librocm-smi64-1 librocm-smi64; do
+    if apt-cache show "${package}" >/dev/null 2>&1; then
+      packages+=("${package}")
+      break
+    fi
+  done
+  if apt-cache show librocm-smi-dev >/dev/null 2>&1; then
+    packages+=(librocm-smi-dev)
+  fi
+  if [[ "${#packages[@]}" -eq 0 ]]; then
+    die "rocBLAS clients need librocm-smi64 and librocm-smi-dev, and neither package is available."
+  fi
+  run_privileged env DEBIAN_FRONTEND=noninteractive apt-get install -y "${packages[@]}"
+  [[ -f /usr/include/rocm_smi/rocm_smi.h ]] ||
+    die "rocBLAS clients still cannot find /usr/include/rocm_smi/rocm_smi.h."
+}
+
 if [[ "${GPU_CHECKS_AFTER_REBOOT}" == 1 ]]; then
   # Everything is installed. The rocBLAS clients name their GPU target
   # (GFX_TARGET), so that long compile runs now; the run after the reboot finds
   # it built. scripts/build.sh itself waits for the reboot: plain hipcc builds
   # pick the GPU architecture from the GPU they can see, and there is none yet.
   if [[ -f scripts/build.sh ]] && grep -q 'rocm_compile_rocblas_bench' scripts/build.sh; then
+    install_rocblas_client_smi_deps
     (
       export ROCM_SOURCE_ROOT="${REPO_ROOT}/third_party"
       export ROCBLAS_SOURCE_DIR="${ROCM_SOURCE_ROOT}/rocBLAS"
@@ -1019,6 +1063,7 @@ if [[ "${GPU_CHECKS_AFTER_REBOOT}" == 1 ]]; then
 fi
 
 if [[ -f scripts/build.sh ]]; then
+  install_rocblas_client_smi_deps
   bash scripts/build.sh
 fi
 # Mark setup complete before touching the resume service, so a signal during

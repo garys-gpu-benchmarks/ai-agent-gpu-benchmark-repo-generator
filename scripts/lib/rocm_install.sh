@@ -6,8 +6,8 @@
 # Description:  Thin Ubuntu-release dispatcher for protected ROCm install functions.
 #               Callers continue to `source scripts/lib/rocm_install.sh`. This file
 #               does not implement install steps; it sources
-#               scripts/lib/rocm_install_24_04.sh (Ubuntu 24.04 / noble, ROCm 7.2.1)
-#               or scripts/lib/rocm_install_26_04.sh (Ubuntu 26.04 / resolute, ROCm 7.14).
+#               scripts/lib/rocm_install_24_04.sh (Ubuntu 24.04 / noble, ROCm 10.1.0, amdgpu 31.60)
+#               or scripts/lib/rocm_install_26_04.sh (Ubuntu 26.04 / resolute, ROCm 10.1.0, amdgpu 31.60).
 #               Function names and signatures are identical in both libraries.
 # Execution:    source scripts/lib/rocm_install.sh  (not executed directly)
 # Options:      ROCM_INSTALL_UBUNTU_VERSION may override /etc/os-release detection.

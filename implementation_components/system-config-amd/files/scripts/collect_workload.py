@@ -72,8 +72,24 @@ def run_command(command):
 
 # Ubuntu 26.04 TheRock packages replace the older rocm-core / rocm-smi names.
 PACKAGE_ALIASES = {
-    "rocm-core": ("rocm-core", "amdrocm", "amdrocm-core", "amdrocm-base7.14"),
-    "rocm-smi": ("rocm-smi", "amdrocm-base7.14", "amdrocm"),
+    "rocm-core": (
+        "rocm-core",
+        "amdrocm10.1",
+        "amdrocm10.1-gfx942",
+        "amdrocm-core-dev10.1-gfx942",
+        "amdrocm",
+        "amdrocm-core",
+        "amdrocm-base7.14",
+    ),
+    "rocm-smi": (
+        "rocm-smi",
+        "amdrocm-amdsmi10.1",
+        "amdrocm10.1",
+        "amdrocm10.1-gfx942",
+        "amdrocm-base7.14",
+        "amdrocm",
+    ),
+    "amdrocm10.1": ("amdrocm10.1", "amdrocm10.1-gfx942", "rocm-core"),
 }
 
 
@@ -94,9 +110,9 @@ def package_version(name):
     # Ubuntu 24.04's rocm-smi package is 5.7 and replaces /opt/rocm/bin/rocm-smi.
     # The ROCm tree itself is the requested stack when that executable is present.
     root = Path("/opt/rocm")
-    smi = root / "bin" / "rocm-smi"
-    if name in {"rocm-smi", "rocm-core"} and smi.is_file():
-        return "opt-rocm"
+    for relative in ("bin/amd-smi", "bin/rocm-smi", "core-10.1/bin/amd-smi", "core-10.1/bin/hipcc"):
+        if name in {"rocm-smi", "rocm-core", "amdrocm10.1"} and (root / relative).is_file():
+            return "opt-rocm"
     return ""
 
 
@@ -146,13 +162,33 @@ def firmware_revision():
     return ""
 
 
+def driver_package_matches(expected: str) -> bool:
+    """amdgpu 31.60.0 is the product version. The DKMS package encodes it as 31600000."""
+    expected = (expected or "").strip()
+    if not expected:
+        return False
+    completed = subprocess.run(
+        ["dpkg-query", "-W", "-f=${Version}", "amdgpu-dkms"],
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    version = (completed.stdout or "").strip() if completed.returncode == 0 else ""
+    if not version:
+        return False
+    if expected in version:
+        return True
+    compact = expected.replace(".", "")
+    return bool(compact) and compact in version.replace(".", "")
+
+
 def main() -> int:
     args = parse_args()
     sweep = load_params(args.config)
     expected_kernel = str(sweep.get("kernel_version", "6.8.0"))
     expected_driver = str(sweep.get("driver_version", "6"))
     # Read for the record; not compared yet (kernel/runtime checks live elsewhere).
-    _expected_rocm = str(sweep.get("rocm_version", "7.2.1"))
+    _expected_rocm = str(sweep.get("rocm_version", "10.1.0"))
     packages = [item.strip() for item in str(sweep.get("required_packages", "rocm-core,rocm-smi")).split(",") if item.strip()]
     permissions_check = str(sweep.get("permissions_check", "true")).lower() in {"1", "true", "yes"}
     uname = os.uname().release
@@ -163,7 +199,11 @@ def main() -> int:
     # In-tree amdgpu (Ubuntu 26.04 --no-dkms) has no modinfo version: field.
     # That is not a kernel mismatch. Say so instead of leaving compliance blank.
     driver_version = modinfo_field(amdgpu, "version")
-    if not driver_version:
+    if driver_package_matches(expected_driver):
+        driver_mismatch = 0
+        driver_compliance = 100.0
+        driver_available = 1.0
+    elif not driver_version:
         driver_mismatch = 0
         driver_compliance = "na (in-tree amdgpu has no version)"
         driver_available = ""

@@ -31,14 +31,14 @@ Each task exists as AMD/NVIDIA × Ubuntu 24.04/26.04. One generator (`init_gener
 | 1. Complete README + Prerequisites + mermaid | yes | yes | yes | yes |
 | 2. Do not copy `AGENTS.md` / `*TEMPLATE.md` onto the workload root | yes | yes | yes | yes |
 | 3. Clone-safe GitHub Actions (no generation-time `self_check`) | yes | yes | yes | yes |
-| 4a. `scripts/lib/hipcc_host_gcc.sh` sourced from `common.sh` | yes (no-op or GCC 13/14 pin if `hipcc` is used) | harmless (no `hipcc`; flags unused) | **required** for HIP `build.sh` (Clang 23 / GCC 16 misses `<cstdlib>`) | harmless |
+| 4a. `scripts/lib/hipcc_host_gcc.sh` sourced from `common.sh` | yes (GCC 13 pin if `hipcc` is used) | harmless (no `hipcc`; flags unused) | **required** for HIP `build.sh` (Clang 24 still uses the GCC 15 host pin) | harmless |
 | 4b. rocHPL `linpack-rochpl-amd` overlay (`size_t nn` + clamp N>=65536 to 32768, 16 repeats) | yes (120) | no (NVIDIA Linpack is a different tree) | yes (320) | no |
 | 5. CI callers → `shared-workflows@v1` (Dependabot lives in `shared-workflows`) | yes | yes | yes | yes |
 | `prepare_github_publish.sh --dry-run` / `--apply` | yes | yes | yes | yes |
 
 NVIDIA compile uses `nvcc` / CUDA, not `hipcc`. The hipcc helper is still copied into NVIDIA repos because `scripts/lib/` is shared; it does not change CUDA setup.
 
-Ubuntu 26.04 README Prerequisites must name ROCm 7.14 (AMD) or CUDA 13.3 (NVIDIA). Ubuntu 24.04 README Prerequisites must name ROCm 7.2.1 or CUDA 12.8. The README template pulls those from the workbook fields; do not hard-code one OS into all four flavors.
+Ubuntu 26.04 and Ubuntu 24.04 README Prerequisites must name ROCm 10.1.0 for AMD workloads. NVIDIA stays CUDA 13.3 on Ubuntu 26.04 and CUDA 12.8 on Ubuntu 24.04. The README template pulls those from the workbook fields; do not hard-code one OS into all four flavors.
 
 ## The five steps, then dry-run
 

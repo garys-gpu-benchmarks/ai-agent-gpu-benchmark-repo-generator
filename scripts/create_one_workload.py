@@ -362,10 +362,26 @@ def _drop_stale_remote_env(ssh: str, name: str) -> None:
 
 
 def _sync_remote_env_stamp(ssh: str, repo_dir: Path) -> None:
+    """Rewrite the reuse stamp. A timeout here is bookkeeping, not a failed benchmark."""
     stamp = env_reuse_stamp(repo_dir)
     name = repo_dir.name
     script = f"printf '%s\\n' {shlex.quote(stamp)} > {REMOTE_ROOT}/{name}/.env_reuse_stamp"
-    ssh_run(ssh, script, timeout=60)
+    delays = (0, 5, 15)
+    for attempt, delay in enumerate(delays, start=1):
+        if delay:
+            time.sleep(delay)
+        try:
+            result = ssh_run(ssh, script, timeout=60)
+        except (subprocess.TimeoutExpired, OSError) as exc:
+            print(f"[WARN] .env_reuse_stamp write attempt {attempt} failed: {exc}", flush=True)
+            continue
+        if result.returncode == 0:
+            return
+        print(
+            f"[WARN] .env_reuse_stamp write attempt {attempt} exited {result.returncode}",
+            flush=True,
+        )
+    print("[WARN] could not write .env_reuse_stamp after retries", flush=True)
 
 
 def remote_validate(ssh: str, repo_dir: Path, *, reuse: bool) -> int:

@@ -155,9 +155,9 @@ for item in data:
         break
 PY
 )"
-    pin_patterns=("ROCM_VERSION=.*7.2.1" "UBUNTU_CODENAME=.*noble")
+    pin_patterns=("ROCM_VERSION=.*10.1.0" "UBUNTU_CODENAME=.*noble")
     if [[ "${os_version}" == *"26.04"* ]]; then
-        pin_patterns=("ROCM_VERSION=.*7.14" "UBUNTU_CODENAME=.*resolute")
+        pin_patterns=("ROCM_VERSION=.*10.1.0" "UBUNTU_CODENAME=.*resolute")
     fi
     for pattern in "install_resume_service" "systemctl enable" "resume-from-service" "rocm_runtime_stage" "install_status_log_phase" "install_status_log_step" "flock" "cleanup_resume_service" "${pin_patterns[@]}" "GFX_TARGET=.*gfx942"; do
         if ! rg -n "${pattern}" "${TARGET_REPO}/setup.sh" >/dev/null; then

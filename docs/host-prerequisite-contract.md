@@ -18,7 +18,7 @@ The resulting prerequisite set must include every package and command actually r
 |---|---|
 | Python virtual environment | `python3-venv` and matching `python3.x-venv` |
 | C/C++ compilation | `build-essential`, `gcc`, `make` |
-| HIP / `hipcc` on Ubuntu 26.04 | `g++-15`, `gcc-15`; generated `scripts/build.sh` must `source scripts/lib/hipcc_host_gcc.sh` or pass `--gcc-install-dir=/usr/lib/gcc/x86_64-linux-gnu/15`. hipcc (Clang 23) prefers GCC 16, which does not expose `<cstdlib>` to `__clang_hip_runtime_wrapper.h`. Also export `LD_LIBRARY_PATH=/opt/rocm/lib:/opt/rocm/lib64`. |
+| HIP / `hipcc` on Ubuntu 26.04 | `g++-15`, `gcc-15`; generated `scripts/build.sh` must `source scripts/lib/hipcc_host_gcc.sh` or pass `--gcc-install-dir=/usr/lib/gcc/x86_64-linux-gnu/15`. ROCm 10.1.0 hipcc is Clang 24; the GCC 15 pin still supplies `<cstdlib>` to `__clang_hip_runtime_wrapper.h`. Also export `LD_LIBRARY_PATH=/opt/rocm/lib:/opt/rocm/lib64`. |
 | Autotools/source build | `autoconf`, `automake`, `libtool`, `libtool-bin`, `m4`, `pkg-config`, `flex`, `bison`, `cmake` |
 | Source checkout | `git` |
 | NUMA development/runtime | `libnuma-dev`, `numactl` |

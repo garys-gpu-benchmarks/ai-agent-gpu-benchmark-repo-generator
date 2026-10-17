@@ -90,9 +90,16 @@ def main() -> int:
     dmesg_faults = float(len([line for line in dmesg_text.splitlines() if fatal_re.search(line)]))
     rocm_text = run_command(["/opt/rocm/bin/rocm-smi", "--showtemp", "--showbus", "--showclocks", "--showpower"])[1]
     amd_text = run_command(["amd-smi", "metric"])[1]
+    if amd_text.startswith("missing:"):
+        amd_text = run_command(["/opt/rocm/bin/amd-smi", "metric"])[1]
     info_text = run_command(["rocminfo"])[1]
     combined = "\n".join([rocm_text, amd_text, info_text])
-    temp = first_float(r"(?:edge|Temperature).*?([0-9]+(?:\.[0-9]+)?)", combined, "")
+    # amd-smi 27 reports EDGE: N/A on this MI300X VF and the live temperature on HOTSPOT.
+    temp = first_float(r"HOTSPOT\s*:\s*([0-9]+(?:\.[0-9]+)?)", combined, "")
+    if temp == "":
+        temp = first_float(r"(?:EDGE|JUNCTION)\s*:\s*([0-9]+(?:\.[0-9]+)?)", combined, "")
+    if temp == "":
+        temp = first_float(r"(?:edge|Temperature).*?([0-9]+(?:\.[0-9]+)?)", combined, "")
     agents = float(len(re.findall(r"Device Type:\s*GPU", info_text)))
     width = ""
     for path in sorted(Path("/sys/class/drm").glob("card*/device/current_link_width")):

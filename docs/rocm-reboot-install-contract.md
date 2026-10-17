@@ -23,7 +23,7 @@ The generated repository is local-only. Do not implement SSH orchestration, remo
 
 ## Canonical Controller
 
-The template file `scripts/templates/setup_rocm_reboot_skeleton.sh` is the single canonical controller for this contract. ROCm workload generation must materialize that file as the generated repository's `setup.sh`; agents must not create a new reboot controller. It detects Ubuntu and pins ROCm `7.2.1` / `noble` on 24.04 or ROCm `7.14` / `resolute` on 26.04, with GPU target `gfx942`. A workload may change dependency variables or explicitly set `BENCHMARK_SKIP_RVS`, but may not change stage ordering, resume handling, locking, status hooks, or cleanup.
+The template file `scripts/templates/setup_rocm_reboot_skeleton.sh` is the single canonical controller for this contract. ROCm workload generation must materialize that file as the generated repository's `setup.sh`; agents must not create a new reboot controller. It detects Ubuntu and pins ROCm `10.1.0` with amdgpu driver `31.60` on both Ubuntu 24.04 (`noble`) and Ubuntu 26.04 (`resolute`), with GPU target `gfx942`. Benchmark virtualenvs use a uv-managed CPython 3.14. A workload may change dependency variables or explicitly set `BENCHMARK_SKIP_RVS`, but may not change stage ordering, resume handling, locking, status hooks, or cleanup.
 
 The protected installer owns the numbered operations. The controller owns transaction sequencing: it installs the resume service before calling the installer, processes `.rocm_runtime_stage.env` before any installed-ROCm shortcut, exits while a reboot stage remains, and removes the service only after the final setup verification succeeds.
 
@@ -37,7 +37,7 @@ Required calls:
 
 | Function | Required when |
 |---|---|
-| `rocm_install_runtime` | ROCm runtime is needed and `/opt/rocm/bin/rocm-smi` is absent. |
+| `rocm_install_runtime` | ROCm runtime is needed and `/opt/rocm` has neither `amd-smi` nor `hipcc` (ROCm 10.1) nor `rocm-smi`. |
 | `rocm_add_repository` | ROCm apt repository is needed and `/etc/apt/sources.list.d/rocm.list` is absent. |
 | `rocm_install_rvs` | Workload command/framework references `rvs` or `rocm-validation-suite`. |
 | `rocm_compile_rocblas_bench` | Workload explicitly requires compiling `rocblas-bench`. |
