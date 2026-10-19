@@ -108,14 +108,14 @@ def main() -> int:
     bytes_moved = param_bytes * 4 + activation_bytes * 2
     bandwidth = bytes_moved / elapsed / 1e9
     write_csv(args.raw_file, [
-        "step", "loss", "images_per_sec", "step_time_ms", "achieved_TFLOPS",
-        "memory_bandwidth_GBps", "modeled_param_input_traffic_gb_s", "peak_gpu_memory_GB",
+        "step", "loss", "images_per_sec", "step_time_ms", "modeled_tflops",
+        "min_operand_traffic_gb_s", "modeled_param_input_traffic_gb_s", "peak_gpu_memory_GB",
     ], [
         {"step": 0, "loss": 1.0, "images_per_sec": images, "step_time_ms": elapsed * 1000.0,
-         "achieved_TFLOPS": tflops, "memory_bandwidth_GBps": bandwidth,
+         "modeled_tflops": tflops, "min_operand_traffic_gb_s": bandwidth,
          "modeled_param_input_traffic_gb_s": bandwidth, "peak_gpu_memory_GB": mem},
         {"step": 1, "loss": 1.0, "images_per_sec": images, "step_time_ms": elapsed * 1000.0,
-         "achieved_TFLOPS": tflops, "memory_bandwidth_GBps": bandwidth,
+         "modeled_tflops": tflops, "min_operand_traffic_gb_s": bandwidth,
          "modeled_param_input_traffic_gb_s": bandwidth, "peak_gpu_memory_GB": mem},
     ])
     return 0

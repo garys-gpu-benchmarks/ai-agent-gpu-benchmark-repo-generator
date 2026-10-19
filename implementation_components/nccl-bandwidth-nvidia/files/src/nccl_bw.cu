@@ -94,9 +94,19 @@ int main(int argc, char **argv) {
     double sec = ms / 1000.0;
     if (sec <= 0) sec = 1e-9;
     double algbw = (double)bytes * (double)iters / (sec * 1e9);
+    // Bus bandwidth factors follow the nccl-tests convention, with bytes the
+    // full buffer size: all_gather and reduce_scatter (n-1)/n, broadcast and
+    // reduce 1, all_reduce (the dispatch default above) 2(n-1)/n. The
+    // collector publishes all_reduce only, so its headline is unchanged.
     double busbw = algbw;
-    if (ndev > 1 && (std::strcmp(name, "all_reduce") == 0 || std::strcmp(name, "") == 0)) {
-        busbw = algbw * 2.0 * (ndev - 1) / (double)ndev;
+    if (ndev > 1) {
+        if (std::strcmp(name, "all_gather") == 0 || std::strcmp(name, "reduce_scatter") == 0) {
+            busbw = algbw * (double)(ndev - 1) / (double)ndev;
+        } else if (std::strcmp(name, "broadcast") == 0 || std::strcmp(name, "reduce") == 0) {
+            busbw = algbw;
+        } else {
+            busbw = algbw * 2.0 * (ndev - 1) / (double)ndev;
+        }
     }
     double latency_us = (sec / (double)iters) * 1e6;
     std::printf("collective=%s num_gpus=%d bytes=%zu algbw_gb_s=%.6f busbw_gb_s=%.6f latency_us=%.6f\n",

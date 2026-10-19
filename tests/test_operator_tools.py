@@ -101,7 +101,8 @@ class RemoteShowMetricsInstallTests(unittest.TestCase):
         self.assertIn("templates/suite-tools/scripts/show_metrics.sh", install.replace("\\", "/"))
         publish = (ROOT / "scripts" / "publish_benchmarks_to_github.sh").read_text(encoding="utf-8")
         self.assertIn('tr -d \'\\r\' <"${METRICS_SCRIPT}" >show_metrics.sh', publish)
-        self.assertIn("for f in run.sh run_benchmark_suite.sh show_metrics.sh", publish)
+        self.assertIn("for f in run_benchmark_suite.sh show_metrics.sh", publish)
+        self.assertNotIn("write_bundle_run_sh", publish)
 
 
 if __name__ == "__main__":

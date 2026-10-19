@@ -11,11 +11,12 @@
 # are discovered from the directory, not hard-coded.
 #
 # Usage:   ./run_benchmark_suite.sh [options]
+#          ./run_benchmark_suite.sh --list         (which workloads are ready)
 # Help:    ./run_benchmark_suite.sh --help
 #
 # Exit codes:
-#   0  every run passed
-#   1  one or more runs failed
+#   0  every run passed (--list: every listed workload is ready)
+#   1  one or more runs failed (--list: a workload is not fetched)
 #   2  usage error (bad option, unknown workload, no workloads found)
 #   130 interrupted (Ctrl+C); the summary is still printed
 # ==============================================================================
@@ -41,6 +42,8 @@ repeat_count=1
 log_file=""
 fail_fast=false
 dry_run=false
+list_only=false
+show_output=false
 
 # ------------------------------------------------------------------------------
 # Run state
@@ -78,6 +81,10 @@ Options:
                          Default: <root>/benchmark_suite_log/
                                   run_benchmark_suite_<host>_<time>.log
       --fail-fast        Stop at the first failed run.
+      --show-output      Also show each run's full output on screen (it is
+                         always written to the log file).
+  -l, --list             List the workloads with their state, ready or
+                         not fetched, and exit. Takes -w and -d.
   -n, --dry-run          Show what would run, without running anything.
   -h, --help             Show this help.
 
@@ -88,7 +95,9 @@ Examples:
   ./${SCRIPT_NAME}                                  # all workloads, all 3 profiles
   ./${SCRIPT_NAME} -p smoke                         # quick check of everything
   ./${SCRIPT_NAME} -w 101,107,121 -p baseline       # three workloads, baseline only
+  ./${SCRIPT_NAME} -w 105 -p smoke --show-output    # one workload, output on screen
   ./${SCRIPT_NAME} -r 20                            # soak test: everything, 20 times
+  ./${SCRIPT_NAME} --list                           # every workload should be ready
 EOF
 }
 
@@ -122,6 +131,12 @@ has_workloads() {
   compgen -G "$1/[1-4][0-9][0-9]-*/run_benchmark.sh" >/dev/null
 }
 
+# A bundle clone without --recurse-submodules has its workload folders (or
+# only .gitmodules) but no run_benchmark.sh in them yet.
+has_workload_folders() {
+  compgen -G "$1/[1-4][0-9][0-9]-*/" >/dev/null || [[ -f "$1/.gitmodules" ]]
+}
+
 parse_args() {
   while (($# > 0)); do
     case "$1" in
@@ -131,6 +146,8 @@ parse_args() {
       -d | --root)      [[ $# -ge 2 ]] || die_usage "$1 needs a value"; root_dir=$2; shift 2 ;;
       -o | --log)       [[ $# -ge 2 ]] || die_usage "$1 needs a value"; log_file=$2; shift 2 ;;
       --fail-fast)      fail_fast=true; shift ;;
+      --show-output)    show_output=true; shift ;;
+      -l | --list)      list_only=true; shift ;;
       -n | --dry-run)   dry_run=true; shift ;;
       -h | --help)      usage; exit 0 ;;
       *)                die_usage "unknown option: $1" ;;
@@ -151,6 +168,14 @@ resolve_root() {
         break
       fi
     done
+    if [[ -z "${root_dir}" && "${list_only}" == true ]]; then
+      for candidate in "${SCRIPT_DIR}/benchmarks" "${SCRIPT_DIR}" /opt/benchmarks; do
+        if has_workload_folders "${candidate}"; then
+          root_dir=${candidate}
+          break
+        fi
+      done
+    fi
     [[ -n "${root_dir}" ]] || die_usage "no workloads found; give the folder that holds them with --root DIR"
   fi
   root_dir=$(cd "${root_dir}" && pwd)
@@ -167,21 +192,14 @@ resolve_profiles() {
   done
 }
 
-# Fills $workloads with folder names, in numeric order.
-resolve_workloads() {
-  local -a found=() wanted=()
-  local dir item first last n match
-
-  for dir in "${root_dir}"/[1-4][0-9][0-9]-*/; do
-    [[ -f "${dir}run_benchmark.sh" ]] && found+=("$(basename "${dir}")")
-  done
-  ((${#found[@]} > 0)) || die_usage "no workloads (NNN-*/run_benchmark.sh) in ${root_dir}"
-
-  if [[ -z "${workloads_arg}" ]]; then
-    workloads=("${found[@]}")
-    return
-  fi
-
+# Fills $wl_numbers with the workload numbers named by -w (numbers and
+# ranges), and $wl_single with "1" where the number was given on its own.
+# Runs in the main shell, so its usage errors stop the script.
+declare -a wl_numbers=() wl_single=()
+expand_workload_numbers() {
+  local -a wanted=()
+  local item first last n
+  wl_numbers=(); wl_single=()
   IFS=',' read -r -a wanted <<<"${workloads_arg}"
   for item in "${wanted[@]}"; do
     if [[ "${item}" =~ ^([0-9]{3})-([0-9]{3})$ ]]; then
@@ -193,14 +211,86 @@ resolve_workloads() {
       die_usage "bad workload '${item}' (use numbers like 101, or ranges like 101-110)"
     fi
     for ((n = first; n <= last; n++)); do
-      match=""
-      for dir in "${found[@]}"; do [[ "${dir}" == "${n}-"* ]] && match=${dir}; done
-      if [[ -n "${match}" ]]; then
-        [[ " ${workloads[*]} " == *" ${match} "* ]] || workloads+=("${match}")
-      elif [[ "${first}" == "${last}" ]]; then
-        die_usage "workload ${n} is not installed in ${root_dir}"
-      fi
+      wl_numbers+=("${n}")
+      if ((first == last)); then wl_single+=(1); else wl_single+=(0); fi
     done
+  done
+  ((${#wl_numbers[@]} > 0)) || die_usage "--workloads is empty"
+}
+
+# --list: one line per workload folder (from the folder and .gitmodules), with
+# its state. "ready" means the folder holds run_benchmark.sh.
+list_workloads() {
+  local -a names=()
+  local dir name path state ready=0 missing=0
+  for dir in "${root_dir}"/[1-4][0-9][0-9]-*/; do
+    [[ -d "${dir}" ]] && names+=("$(basename "${dir}")")
+  done
+  if [[ -f "${root_dir}/.gitmodules" ]] && command -v git >/dev/null 2>&1; then
+    while read -r _key path; do
+      name=$(basename "${path}")
+      [[ "${name}" =~ ^[1-4][0-9][0-9]- ]] || continue
+      [[ " ${names[*]} " == *" ${name} "* ]] || names+=("${name}")
+    done < <(git config -f "${root_dir}/.gitmodules" --get-regexp '^submodule\..*\.path$' 2>/dev/null)
+  fi
+  ((${#names[@]} > 0)) || die_usage "no workloads (NNN-*) in ${root_dir}"
+  mapfile -t names < <(printf '%s\n' "${names[@]}" | sort)
+  if [[ -n "${workloads_arg}" ]]; then
+    expand_workload_numbers
+    local -a kept=()
+    for name in "${names[@]}"; do
+      [[ " ${wl_numbers[*]} " == *" $((10#${name:0:3})) "* ]] && kept+=("${name}")
+    done
+    ((${#kept[@]} > 0)) || die_usage "none of the requested workloads are in ${root_dir}"
+    names=("${kept[@]}")
+  fi
+  for name in "${names[@]}"; do
+    if [[ -f "${root_dir}/${name}/run_benchmark.sh" ]]; then
+      state="ready"; ready=$((ready + 1))
+    else
+      state="not fetched"; missing=$((missing + 1))
+    fi
+    printf '%-4s %-60s %s\n' "${name:0:3}" "${name}" "${state}"
+  done
+  echo "${#names[@]} workloads in ${root_dir}: ${ready} ready, ${missing} not fetched"
+  if ((missing > 0)); then
+    echo "Fetch the rest with:  git -C ${root_dir} submodule update --init --recursive"
+    return 1
+  fi
+  return 0
+}
+
+# Fills $workloads with folder names, in numeric order.
+resolve_workloads() {
+  local -a found=()
+  local dir n match
+
+  for dir in "${root_dir}"/[1-4][0-9][0-9]-*/; do
+    [[ -f "${dir}run_benchmark.sh" ]] && found+=("$(basename "${dir}")")
+  done
+  ((${#found[@]} > 0)) || die_usage "no workloads (NNN-*/run_benchmark.sh) in ${root_dir}"
+
+  if [[ -z "${workloads_arg}" ]]; then
+    workloads=("${found[@]}")
+    return
+  fi
+
+  expand_workload_numbers
+  # A number given on its own that is not installed is an error; a range
+  # keeps the workloads that exist.
+  local i
+  for ((i = 0; i < ${#wl_numbers[@]}; i++)); do
+    n=${wl_numbers[i]}
+    match=""
+    for dir in "${found[@]}"; do [[ "${dir}" == "${n}-"* ]] && match=${dir}; done
+    if [[ -n "${match}" ]]; then
+      [[ " ${workloads[*]} " == *" ${match} "* ]] || workloads+=("${match}")
+    elif [[ "${wl_single[i]}" == 1 ]]; then
+      if compgen -G "${root_dir}/${n}-*/" >/dev/null; then
+        die_usage "workload ${n} is not fetched yet; run: git -C ${root_dir} submodule update --init --recursive"
+      fi
+      die_usage "workload ${n} is not installed in ${root_dir}"
+    fi
   done
   ((${#workloads[@]} > 0)) || die_usage "none of the requested workloads are installed in ${root_dir}"
   mapfile -t workloads < <(printf '%s\n' "${workloads[@]}" | sort)
@@ -245,8 +335,13 @@ run_one() {
   printf '\n%s\n%s: bash run_benchmark.sh --%s\n' "${RULE_RUN}" "${workload}" "${profile}" >>"${log_file}"
 
   start=$(date +%s)
-  (cd "${root_dir}/${workload}" && bash run_benchmark.sh "--${profile}") </dev/null >>"${log_file}" 2>&1
-  exit_code=$?
+  if [[ "${show_output}" == true ]]; then
+    (cd "${root_dir}/${workload}" && bash run_benchmark.sh "--${profile}") </dev/null 2>&1 | tee -a "${log_file}"
+    exit_code=${PIPESTATUS[0]}
+  else
+    (cd "${root_dir}/${workload}" && bash run_benchmark.sh "--${profile}") </dev/null >>"${log_file}" 2>&1
+    exit_code=$?
+  fi
   end=$(date +%s)
   runs_done=${run_number}
 
@@ -270,6 +365,10 @@ run_one() {
 main() {
   parse_args "$@"
   resolve_root
+  if [[ "${list_only}" == true ]]; then
+    list_workloads
+    exit $?
+  fi
   resolve_profiles
   resolve_workloads
 

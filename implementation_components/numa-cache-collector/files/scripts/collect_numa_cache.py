@@ -34,6 +34,8 @@ METRIC_FIELDS = [
     "local_dram_pointer_chase_bandwidth_gb_s",
     "cache_miss_counters_misses_sec",
 ]
+NA_PERF_COUNTER = "na (expected: perf_event_paranoid blocks cache-misses)"
+NA_REMOTE_NUMA = "na (expected: numactl policy not permitted; second numa node not measurable)"
 PARAM_FIELDS = [
     "check",
     "source_numa_node",
@@ -155,7 +157,7 @@ def parse_cache_misses_per_sec(text: str) -> float | str:
     miss_match = MISS_RE.search(text)
     elapsed_match = ELAPSED_RE.search(text)
     if miss_match is None:
-        return "na (perf cache-misses counter unavailable)"
+        return NA_PERF_COUNTER
     misses = float(miss_match.group(1).replace(",", ""))
     elapsed = float(elapsed_match.group(1)) if elapsed_match is not None else 0.0
     if elapsed <= 0.0:
@@ -448,7 +450,7 @@ def main() -> int:
                 "misses": (
                     parse_cache_misses_per_sec(text)
                     if perf_enabled
-                    else "na (perf cache-misses counter unavailable)"
+                    else NA_PERF_COUNTER
                 ),
                 "membind_ok": membind_ok,
             }
@@ -465,8 +467,8 @@ def main() -> int:
     dram_ns = dram_measurement["latency"]
     dram_bw = dram_measurement["bandwidth"]
     dram_misses = dram_measurement["misses"]
-    remote_ns = None
-    ratio = None
+    remote_ns = NA_REMOTE_NUMA
+    ratio = NA_REMOTE_NUMA
     if remote_key is not None and remote_node != source_node:
         remote_measurement = measured[(dram_size, remote_key)]
         if remote_measurement["membind_ok"]:

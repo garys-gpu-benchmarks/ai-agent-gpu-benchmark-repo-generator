@@ -5,8 +5,9 @@ Version: 1.0.0
 Author: Cursor
 Date: 2026-08-05
 Description: Generate the shared workload-parameter catalog from the benchmark matrix workbook.
-Execution: python scripts/generate_workload_parameters.py [--check]
-Options: --check validates active workbook parameters without writing the catalog.
+Execution: python scripts/generate_workload_parameters.py [--check] [--strict]
+Options: --check fails when config/workload_parameters.yaml differs from the workbook (nothing is written).
+         --strict fails, instead of warning, when an active parameter is not named in its execution description.
 Requirements: Python 3.10+, openpyxl, PyYAML.
 Environment: Local repository workspace.
 Dependencies: BenchmarkSpecDefinitions.xlsx (Parameter_* columns by header name).
@@ -20,6 +21,7 @@ from __future__ import annotations
 from collections import defaultdict
 from pathlib import Path
 import re
+import sys
 
 import yaml
 from openpyxl import load_workbook
@@ -30,11 +32,32 @@ WORKBOOK = ROOT / "BenchmarkSpecDefinitions.xlsx"
 OUTPUT = ROOT / "config" / "workload_parameters.yaml"
 
 
+class _CachedSheet:
+    """The worksheet's values, read once. openpyxl read-only cell() access
+    re-reads the sheet XML on every call, which took over two minutes here."""
+
+    class _Cell:
+        __slots__ = ("value",)
+
+        def __init__(self, value):
+            self.value = value
+
+    def __init__(self, worksheet):
+        self.title = worksheet.title
+        self._rows = [list(row) for row in worksheet.iter_rows(values_only=True)]
+        self.max_row = len(self._rows)
+        self.max_column = max((len(row) for row in self._rows), default=0)
+
+    def cell(self, row: int, column: int):
+        values = self._rows[row - 1] if 0 < row <= self.max_row else []
+        return self._Cell(values[column - 1] if 0 < column <= len(values) else None)
+
+
 def _active_sheet(workbook):
     for name in ("Workload_Definitions", "Sheet4", "Sheet1"):
         if name in workbook.sheetnames:
-            return workbook[name]
-    return workbook[workbook.sheetnames[0]]
+            return _CachedSheet(workbook[name])
+    return _CachedSheet(workbook[workbook.sheetnames[0]])
 
 
 def _header_map(worksheet) -> dict[str, int]:
@@ -132,8 +155,17 @@ def extract_meaning(description: str, parameter: str) -> str:
     return match.group("meaning").strip().rstrip(".")
 
 
-def validate_active_parameters(worksheet) -> None:
-    """Ensure every active parameter is named in its workload description."""
+# Unused Parameter_NN slots hold a dash; the workbook uses "-" (older rows "—").
+EMPTY_SLOT_VALUES = {"", "-", "—", "–"}
+
+
+def _is_empty_slot(value) -> bool:
+    return value is None or str(value).strip() in EMPTY_SLOT_VALUES
+
+
+def undocumented_parameters(worksheet) -> list[str]:
+    """Active parameters (Parameter_NN) that the workload's execution
+    description does not name, as "<workload>:<parameter>"."""
     missing: list[str] = []
     parameter_columns = _parameter_columns(worksheet)
     description_column = _description_column(worksheet)
@@ -149,7 +181,7 @@ def validate_active_parameters(worksheet) -> None:
         description = str(worksheet.cell(row, description_column).value or "")
         for column in parameter_columns:
             parameter = worksheet.cell(row, column).value
-            if parameter in (None, "—"):
+            if _is_empty_slot(parameter):
                 continue
             name = str(parameter).strip()
             if not re.search(
@@ -157,17 +189,33 @@ def validate_active_parameters(worksheet) -> None:
                 description,
             ):
                 missing.append(f"{workload_id}:{name}")
-    if missing:
-        raise SystemExit(
-            "[FAIL] Active workbook parameters missing from their execution descriptions: "
-            + ", ".join(missing)
-        )
+    return missing
 
 
-def build_catalog() -> dict:
+def validate_active_parameters(worksheet, strict: bool = False) -> None:
+    """Report active parameters their execution description does not name.
+
+    Execution descriptions say what each workload's code actually does, and
+    some leave out parameters the code does not use (for example 107: "numactl
+    is not used"). Those are reported as a warning; strict=True (--strict)
+    makes them a failure.
+    """
+    missing = undocumented_parameters(worksheet)
+    if not missing:
+        return
+    message = (
+        f"{len(missing)} active workbook parameters are not named in their execution descriptions: "
+        + ", ".join(missing)
+    )
+    if strict:
+        raise SystemExit("[FAIL] " + message)
+    print("[WARN] " + message, file=sys.stderr)
+
+
+def build_catalog(strict: bool = False) -> dict:
     workbook = load_workbook(WORKBOOK, read_only=True, data_only=False)
     worksheet = _active_sheet(workbook)
-    validate_active_parameters(worksheet)
+    validate_active_parameters(worksheet, strict=strict)
     workload_names: dict[int, str] = {}
     uses: defaultdict[str, list[int]] = defaultdict(list)
     meanings: defaultdict[str, dict[int, str]] = defaultdict(dict)
@@ -188,7 +236,7 @@ def build_catalog() -> dict:
         active_parameters = {
             worksheet.cell(row, column).value
             for column in parameter_columns
-            if worksheet.cell(row, column).value not in (None, "—")
+            if not _is_empty_slot(worksheet.cell(row, column).value)
         }
         for parameter in active_parameters:
             uses[parameter].append(workload_id)
@@ -254,12 +302,20 @@ def main() -> None:
     parser.add_argument(
         "--check",
         action="store_true",
-        help="Validate workbook parameter references without writing the catalog.",
+        help="Check that the catalog matches the workbook, without writing it.",
+    )
+    parser.add_argument(
+        "--strict",
+        action="store_true",
+        help="Fail (instead of warn) when an active parameter is not named in its execution description.",
     )
     args = parser.parse_args()
-    catalog = build_catalog()
+    catalog = build_catalog(strict=args.strict)
     if args.check:
-        print(f"[PASS] Validated {len(catalog['parameters'])} shared parameters.")
+        stored = yaml.safe_load(OUTPUT.read_text(encoding="utf-8")) if OUTPUT.is_file() else None
+        if stored != catalog:
+            raise SystemExit(f"[FAIL] {OUTPUT.name} is out of date; run python3 scripts/generate_workload_parameters.py")
+        print(f"[PASS] {OUTPUT.name} is up to date ({len(catalog['parameters'])} shared parameters).")
         return
     with OUTPUT.open("w", encoding="utf-8", newline="\n") as stream:
         yaml.safe_dump(catalog, stream, sort_keys=False, allow_unicode=True, width=120)

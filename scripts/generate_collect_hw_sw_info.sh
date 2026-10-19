@@ -231,9 +231,9 @@ detect_vendor() {
     if command -v nvidia-smi >/dev/null 2>&1; then
         DETECTED_VENDOR="nVidia"
         VENDOR_LABEL="nVidia (nvidia-smi detected)"
-    elif command -v rocm-smi >/dev/null 2>&1 || command -v amd-smi >/dev/null 2>&1; then
+    elif command -v amd-smi >/dev/null 2>&1 || command -v rocminfo >/dev/null 2>&1; then
         DETECTED_VENDOR="AMD"
-        VENDOR_LABEL="AMD (ROCm/AMD SMI detected)"
+        VENDOR_LABEL="AMD (AMD SMI / rocminfo detected)"
     else
         DETECTED_VENDOR="Unknown"
         VENDOR_LABEL="Unknown (no AMD/nVidia GPU detected)"

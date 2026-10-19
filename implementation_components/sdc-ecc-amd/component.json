@@ -1,6 +1,6 @@
 {
   "component_id": "sdc-ecc-amd",
-  "description": "AMD 104/304 even-index int32 check. RAS columns are rocm-smi counter deltas. CPU fallback leaves hbm3_coverage_gb blank.",
+  "description": "AMD 104/304 even-index int32 check. RAS columns are amd-smi metric counter deltas. CPU fallback leaves hbm3_coverage_gb blank.",
   "overlay": [
     "scripts/collect_workload.py"
   ],

@@ -54,9 +54,9 @@ detect_vendor() {
     if command -v nvidia-smi >/dev/null 2>&1; then
         DETECTED_VENDOR="nVidia"
         VENDOR_LABEL="nVidia (nvidia-smi detected)"
-    elif command -v rocm-smi >/dev/null 2>&1 || command -v amd-smi >/dev/null 2>&1; then
+    elif command -v amd-smi >/dev/null 2>&1 || command -v rocminfo >/dev/null 2>&1; then
         DETECTED_VENDOR="AMD"
-        VENDOR_LABEL="AMD (ROCm/AMD SMI detected)"
+        VENDOR_LABEL="AMD (AMD SMI / rocminfo detected)"
     else
         DETECTED_VENDOR="Unknown"
         VENDOR_LABEL="Unknown (no AMD/nVidia GPU detected)"
@@ -195,10 +195,10 @@ COMMAND_DATA=$(cat <<'__COMMAND_DATA__'
 115	AMD, nVidia	hardware	Y2F0IC9wcm9jL2NwdWluZm8gfCBoZWFkIC0xOQ==	Q1BVIERldGFpbHMgKGxvbmcp
 116	AMD-only	hardware	bHNwY2kgfCBncmVwIC1pIGFjY2VsZXJhdG9y	QU1EIEdQVSBCdXMgQWRkcmVzcyBhbmQgRGV2aWNlIElE
 117	AMD-only	hardware	cm9jbWluZm8gfCBncmVwIGdmeA==	QU1EIEdQVSBBcmNoaXRlY3R1cmUgSURzIChnZngp
-118	AMD-only	hardware	cm9jbS1zbWkgLS1zaG93bWVtaW5mbyB2cmFt	QU1EIEdQVSBEZXRhaWxzIChNb2RlbCwgVlJBTSk=
-119	AMD-only	hardware	cm9jbS1zbWkgLS1zaG93cHJvZHVjdG5hbWU=	QU1EIEdQVSBQcm9kdWN0IFNLVSBhbmQgSWRlbnRpZmljYXRpb24=
+118	AMD-only	hardware	YW1kLXNtaSBzdGF0aWMgLS12cmFt	QU1EIEdQVSBEZXRhaWxzIChNb2RlbCwgVlJBTSk=
+119	AMD-only	hardware	YW1kLXNtaSBzdGF0aWMgLS1hc2lj	QU1EIEdQVSBQcm9kdWN0IFNLVSBhbmQgSWRlbnRpZmljYXRpb24=
 120	AMD-only	hardware	bHNwY2kgLXZ2IC1kIDEwMDI6IHwgZ3JlcCAtRSAnQU1EfExua0NhcDp8TG5rU3RhOnxSZWdpb24n	QU1EIEdQVSBQQ0llIExpbmsgJiBNZW1vcnkgUmVnaW9ucw==
-121	AMD-only	hardware	cm9jbS1zbWk=	QU1EIEdQVSBMaXZlIFRlbGVtZXRyeSAoVGVtcCwgUG93ZXIsIENsb2Nrcyk=
+121	AMD-only	hardware	YW1kLXNtaSBtZXRyaWM=	QU1EIEdQVSBMaXZlIFRlbGVtZXRyeSAoVGVtcCwgUG93ZXIsIENsb2Nrcyk=
 122	AMD-only	hardware	bHNwY2kgLXZ2IC1kIDEwMDI6	QU1EIEZ1bGwgR1BVIFBDSSBEZXRhaWxz
 123	AMD-only	hardware	YW1kLXNtaSBzdGF0aWMgfCBoZWFkIC0zMA==	QU1EIEdQVSBIYXJkd2FyZSBJZGVudGl0eQ==
 124	AMD-only	hardware	cm9jbWluZm8gfCBncmVwIE5hbWU=	QU1EIEdQVS9DUFUgQWdlbnQgTmFtZXMgKFJPQ20gSW5mbyk=
@@ -255,18 +255,18 @@ COMMAND_DATA=$(cat <<'__COMMAND_DATA__'
 175	AMD, nVidia	software	c3RyZXNzLW5nIC0tdmVyc2lvbg==	c3RyZXNzLW5nIHZlcnNpb24=
 176	AMD, nVidia	software	YmMgLS12ZXJzaW9uIHwgaGVhZCAtMQ==	QkMgY2FsY3VsYXRvciAoYmMpIFZlcnNpb24=
 177	AMD, nVidia	software	anEgLS12ZXJzaW9u	SlEgKGpxKSBWZXJzaW9u
-178	AMD-only	software	ZHBrZy1xdWVyeSAtVyByb2NtLWNvcmU=	QU1EIEluc3RhbGxlZCBST0NtIHZlcnNpb24=
+178	AMD-only	software	ZHBrZy1xdWVyeSAtVyBhbWRyb2NtLWJhc2UxMC4x	QU1EIEluc3RhbGxlZCBST0NtIHZlcnNpb24gKGFtZHJvY20tYmFzZTEwLjEp
 179	AMD-only	software	YW1kLXNtaSB2ZXJzaW9u	QU1EIFNNSSBUb29sICYgTGlicmFyeSBWZXJzaW9ucw==
 180	AMD-only	software	aGlwY2MgLS12ZXJzaW9u	QU1EIEhJUCBDb21waWxlciBWZXJzaW9u
 181	AMD-only	software	cHl0aG9uMyAtYyAiaW1wb3J0IHRvcmNoOyBwcmludCh0b3JjaC52ZXJzaW9uLmhpcCki	QU1EIFB5VG9yY2ggSElQIFZlcnNpb24gKEFNRCBHUFUp
-182	AMD-only	software	ZHBrZy1xdWVyeSAtVyBtaW9wZW4taGlw	QU1EIE1JT3BlbiBISVAgdmVyc2lvbg==
-183	AMD-only	software	cm9jbS1zbWkgLS12ZXJzaW9u	QU1EIFJPQ20gU01JIHZlcnNpb24=
-184	AMD-only	software	ZHBrZy1xdWVyeSAtVyByY2Ns	QU1EIFJDQ0wgdmVyc2lvbg==
-185	AMD-only	software	ZHBrZy1xdWVyeSAtVyByb2NibGFz	QU1EIEluc3RhbGxlZCByb2NCTEFTIHZlcnNpb24=
-186	AMD-only	software	ZHBrZy1xdWVyeSAtVyByb2Nzb2x2ZXI=	QU1EIHJvY1NPTFZFUiB2ZXJzaW9u
+182	AMD-only	software	ZHBrZy1xdWVyeSAtVyBhbWRyb2NtLWRubi1ob3N0MTAuMQ==	QU1EIE1JT3BlbiB2ZXJzaW9uIChhbWRyb2NtLWRubi1ob3N0MTAuMSk=
+183	AMD-only	software	YW1kLXNtaSBmaXJtd2FyZQ==	QU1EIEdQVSBGaXJtd2FyZSBWZXJzaW9ucyAoQU1EIFNNSSk=
+184	AMD-only	software	ZHBrZy1xdWVyeSAtVyBhbWRyb2NtLXJjY2wtaG9zdDEwLjE=	QU1EIFJDQ0wgdmVyc2lvbiAoYW1kcm9jbS1yY2NsLWhvc3QxMC4xKQ==
+185	AMD-only	software	ZHBrZy1xdWVyeSAtVyBhbWRyb2NtLWJsYXMxMC4x	QU1EIEluc3RhbGxlZCByb2NCTEFTIHZlcnNpb24gKGFtZHJvY20tYmxhczEwLjEp
+186	AMD-only	software	ZHBrZy1xdWVyeSAtVyBhbWRyb2NtLXNvbHZlci1ob3N0MTAuMQ==	QU1EIHJvY1NPTFZFUiB2ZXJzaW9uIChhbWRyb2NtLXNvbHZlci1ob3N0MTAuMSk=
 187	AMD-only	software	cm9jaHBsIC0tdmVyc2lvbg==	QU1EIHJvY0hQTCB2ZXJzaW9u
-188	AMD-only	software	ZWNobyAiUlZTIFZlcnNpb246ICQoL29wdC9yb2NtL2Jpbi9ydnMgLS12ZXJzaW9uKSI=	QU1EIFJPQ20gVmFsaWRhdGlvbiBTdWl0ZSB2ZXJzaW9u
-189	AMD-only	software	ZHBrZyAtbCB8IGVncmVwIC1pICdeKGlpKVxzKyhhbWRncHUtaW5zdGFsbCB8YW1kLXNtaS1saWIgfGhpcGJsYXMgfGhpcGJsYXNsdCB8aGlwY2MgfGhpcGZmdCB8aGlwcmFuZCB8aGlwLXJ1bnRpbWUtYW1kIHxoaXBzb2x2ZXIgfGhpcHNwYXJzZSB8aGlwdGVuc29yIHxoc2Etcm9jciB8bGliZ2wxLWFtZGdwdS1tZXNhLWRyaTphbWQ2NCB8bGx2bS1hbWRncHUgfG1pb3Blbi1oaXAgfG9wZW5jbC1yb2NtIHxyY2NsIHxyb2NibGFzIHxyb2NibGFzbHQgfHJvY2ZmdCB8cm9jbS1jb3JlIHxyb2NtLWxsdm0gfHJvY20tdmFsaWRhdGlvbi1zdWl0ZSB8cm9jcHJpbS1kZXYgfHJvY3Byb2ZpbGVyIHxyb2NyYW5kIHxyb2Nzb2x2ZXIgfHJvY3NwYXJzZSB8cm9jdGhydXN0LWRldiB8cm9jd21tYS1kZXYgKSc=	QU1EIEluc3RhbGxlZCBST0NtICYgQU1EIFBhY2thZ2VzIExpc3Q=
+188	AMD-only	software	ZWNobyAiUlZTIFZlcnNpb246ICQocnZzIC0tdmVyc2lvbiki	QU1EIFJPQ20gVmFsaWRhdGlvbiBTdWl0ZSB2ZXJzaW9u
+189	AMD-only	software	ZHBrZyAtbCB8IGVncmVwIC1pICdeaWlccysoYW1kcm9jbXxhbWRncHUpJw==	QU1EIEluc3RhbGxlZCBST0NtICYgQU1EIFBhY2thZ2VzIExpc3Q=
 190	AMD-only	software	aGlwY29uZmlnICAtLWZ1bGw=	QU1EIEhJUCAvIFJPQ20gQ29uZmlndXJhdGlvbiBEZXRhaWxz
 191	AMD-only	software	YXB0IGxpc3QgLS1pbnN0YWxsZWQgfCBncmVwIHJvY20=	QU1EIEluc3RhbGxlZCBST0NtIFBhY2thZ2Vz
 192	AMD-only	software	cm9jbWluZm8=	QU1EIFJPQ20gSFNBIFJ1bnRpbWUgRGV0YWlscw==

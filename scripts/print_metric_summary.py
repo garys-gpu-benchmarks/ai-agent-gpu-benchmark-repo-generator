@@ -57,7 +57,15 @@ import json
 import re
 from pathlib import Path
 
-from metric_contract import is_blank, split_percentile_keys, unmash_p50_key
+from metric_contract import (
+    annotate_metrics,
+    apply_storage_aliases,
+    is_blank,
+    is_explicit_na,
+    split_percentile_keys,
+    units_compatible,
+    unmash_p50_key,
+)
 
 
 def _mask_parens(text: str) -> str:
@@ -208,7 +216,10 @@ def _unique_prefix_match(slug: str, remaining_keys: list[str]) -> str | None:
     if not slug:
         return None
     prefix = slug + "_"
-    matches = [k for k in remaining_keys if normalize_key(k).startswith(prefix)]
+    matches = [
+        k for k in remaining_keys
+        if normalize_key(k).startswith(prefix) and units_compatible(slug, k)
+    ]
     if len(matches) == 1:
         return matches[0]
     return None
@@ -253,6 +264,7 @@ def resolve_metrics(items: list[tuple[str, str]], metrics: dict) -> list[tuple[s
     """Return, for each (number, description) in items, a (label, value)
     resolved as honestly as possible. Never reuses the same dict key for two
     different metrics, and never guesses a value across a position mismatch."""
+    metrics = apply_storage_aliases(metrics)
     norm_lookup: dict[str, str] = {}
     for key in metrics:
         norm_lookup.setdefault(normalize_key(key), key)
@@ -361,15 +373,36 @@ def main() -> int:
     metrics = summary.get("metrics", {})
     if not isinstance(metrics, dict):
         metrics = {}
+    gpu_name = str(summary.get("gpu_name") or metrics.get("gpu_name") or "")
+    metrics = annotate_metrics(metrics, gpu_name)
+    status = str(summary.get("status") or metrics.get("workload_kind") or "")
+    if status.lower() in {"stub", "smoke-standin", "standin"} or any(
+        is_explicit_na(value) and "stub server" in str(value).lower() for value in metrics.values()
+    ):
+        print("STUB stand-in server; numbered serving metrics are na (stub server, smoke only).")
 
     items = metric_items(args.definition)
+    unresolved = 0
+    point = str(metrics.get("headline_point") or "").strip()
     for number, description, label, value in resolve_metrics(items, metrics):
-        fields = metric_print_fields(description, label, value, metrics)
+        shown = description
+        if point and point not in shown:
+            shown = f"{shown} [{point}]"
+        if str(value) == "NOT FOUND":
+            unresolved += 1
+            print(f"[INFO] #{number}: {shown}; na (unresolved metric)")
+            continue
+        fields = metric_print_fields(shown, label, value, metrics)
         if not fields:
+            if is_explicit_na(value):
+                print(f"[INFO] #{number}: {shown}; {value}")
+                continue
+            unresolved += 1
+            print(f"[INFO] #{number}: {shown}; na (unresolved metric)")
             continue
         rendered = "; ".join(f"{name}={format_value(item)}" for name, item in fields)
-        print(f"[INFO] #{number}: {description}; {rendered}")
-    return 0
+        print(f"[INFO] #{number}: {shown}; {rendered}")
+    return 1 if unresolved else 0
 
 
 if __name__ == "__main__":

@@ -361,8 +361,29 @@ def main() -> int:
         measured += 1
 
     measured = max(measured, 1)
+    e2e_values = [
+        float(row["end_to_end_query_latency_retrieval_generation_ms"])
+        for row in query_rows
+        if int(row["query_index"]) >= warmup_n
+    ] or [float(row["end_to_end_query_latency_retrieval_generation_ms"]) for row in query_rows]
+    ordered_e2e = sorted(e2e_values)
+
+    def _pct(q: float) -> float:
+        pos = (len(ordered_e2e) - 1) * q
+        low = int(pos)
+        high = min(low + 1, len(ordered_e2e) - 1)
+        return ordered_e2e[low] + (ordered_e2e[high] - ordered_e2e[low]) * (pos - low)
+
     latest = {
         "end_to_end_query_latency_retrieval_generation_ms": e2e_acc / measured,
+        "end_to_end_query_latency_p50_ms": _pct(0.50),
+        "end_to_end_query_latency_p95_ms": (
+            _pct(0.95) if len(e2e_values) >= 20
+            else f"na (p95 requires at least 20 samples; n={len(e2e_values)})"
+        ),
+        "query_sample_count": float(len(e2e_values)),
+        "headline_rule": "mean_over_queries",
+        "headline_point": f"mean_over_queries n={len(e2e_values)}",
         "generation_phase_time_to_first_token_ms": ttft_acc / measured,
         "retrieval_latency_vector_search_ms": retrieve_acc / measured,
         "faiss_index_ntotal": float(index_ntotal),

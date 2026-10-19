@@ -12,7 +12,7 @@ Operator tools for the GPU benchmark suite under
 | [`scripts/show_metrics.sh`](scripts/show_metrics.sh) | your laptop or the GPU host | Prints one workload's runs from the runtime ledger (local file, or over SSH with `--host`) in fixed 7-character metric columns plus an Exit column, with per-profile means. Column headings and the 12-character workload names are generated from the `Metric_Short_Labels` and `Workload_Short_Names` sheets in the generator. |
 
 `run_benchmark_suite.sh` and `show_metrics.sh` are also published at the top of
-every bundle repository, next to `run.sh`. Cloning a bundle into
+every bundle repository. Cloning a bundle into
 `__SUITE_INSTALL_ROOT__` leaves `show_metrics.sh` there. The generator's remote
 copy does the same when it loads a workload onto the VM.
 
@@ -34,12 +34,13 @@ pinned to a release, at the top level of the bundle:
 # Put every workload for this machine (AMD + Ubuntu 24.04 shown) in __SUITE_INSTALL_ROOT__
 git clone --recurse-submodules https://github.com/__CI_OWNER__/bundle-amd-ubuntu-2404 __SUITE_INSTALL_ROOT__
 cd __SUITE_INSTALL_ROOT__
-./run.sh list                                     # every workload should show "ready"
+./run_benchmark_suite.sh --list                   # every workload should show "ready"
 
 ./run_benchmark_suite.sh --dry-run                # what would run
 ./run_benchmark_suite.sh -p smoke                 # quick check of everything
 ./run_benchmark_suite.sh -w 101,107,121 -p baseline
 ./run_benchmark_suite.sh -w 101-110 -p smoke,baseline
+./run_benchmark_suite.sh -w 105 -p smoke --show-output   # one workload, output on screen
 ./run_benchmark_suite.sh -r 20                    # soak test: everything, 20 times
 
 # Later: move to the newest published release
@@ -53,9 +54,10 @@ may ask for your `sudo` password and, for ROCm, may need one reboot. Logs go to
 ## On your laptop
 
 ```bash
-./scripts/get_remote_info.sh 203.0.113.10                        # root@host, port 22
-./scripts/get_remote_info.sh ubuntu@203.0.113.10 2222            # another user and port
-./scripts/get_remote_info.sh -i ~/.ssh/id_ed25519 -o ~/results 203.0.113.10
+./scripts/get_remote_info.sh --host 203.0.113.10                 # root@host, port 22
+./scripts/get_remote_info.sh --host 203.0.113.10 --port 2222      # another ssh port
+./scripts/get_remote_info.sh --host ubuntu@203.0.113.10 -i ~/.ssh/id_ed25519 -o ~/results
+./scripts/get_remote_info.sh 203.0.113.10 2222                    # positional form, same as --host/--port
 ./scripts/get_remote_info.sh --help
 
 ./scripts/show_metrics.sh 332 --host 203.0.113.10                 # workload 332, all profiles

@@ -19,6 +19,6 @@ machines:
     gpu_gfx: gfx942
     os: Ubuntu 24.04
     kernel: 6.8.0
-    rocm_version: 7.2.4
+    rocm_version: 10.1.0
     python_version: "3.12.3"
     description: Default DigitalOcean MI300X VF test platform for generated workloads

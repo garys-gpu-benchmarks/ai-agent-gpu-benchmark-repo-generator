@@ -1,15 +1,15 @@
 #!/usr/bin/env python3
 # File: scripts/create_generated_repo.py
-# Version: 1.4.0
+# Version: 1.5.0
 # Maintainer: AI Agent GPU Benchmark Repo Generator
-# Date: 2026-07-25
+# Date: 2026-10-18
 # Description: Creates an independently publishable workload repository with a gitignored nested template copy used during generation
 #              (removed by create_one_workload.py once the workload passes, or by scripts/remove_template_copy.py).
 # Execution: python3 scripts/create_generated_repo.py --prompt-file <SUBMITTED_PROMPT_FILE>
 # Options: --workload, --prompt-file, --template-root, --project-root, --repo-name, --force, --skip-remote-refresh, --refresh-remote, --confirm-remote-refresh
 # Requirements: Python 3.10+; template workbook and schema files
 # Environment: Run from the template directory or provide --template-root explicitly.
-# Dependencies: argparse, json, pathlib, shutil, subprocess, sys, tempfile
+# Dependencies: argparse, json, pathlib, shutil, subprocess, sys, remove_template_copy
 # Variables: TEMPLATE_COPY_SUFFIX controls the active nested template directory name.
 # Repository: gpu-bench/sys-bench template
 # License: Apache-2.0
@@ -22,10 +22,10 @@ import re
 import shutil
 import subprocess
 import sys
-import tempfile
 from pathlib import Path
 
 from generated_repo_directory import generated_repo_directory_name
+from remove_template_copy import reliable_temp_dir, rmtree_reliable
 from prompt_workflow import (
     available_workloads,
     parse_workloads,
@@ -200,7 +200,8 @@ def _ignore_template_copy(path: str, names: list[str]) -> set[str]:
 
 def _copy_template(source: Path, destination: Path) -> None:
     if destination.exists():
-        shutil.rmtree(destination)
+        if not rmtree_reliable(destination):
+            raise SystemExit(f"[FAIL] Could not remove the old template copy at {destination}.")
     shutil.copytree(source, destination, ignore=_ignore_template_copy)
 
 
@@ -310,10 +311,9 @@ def main() -> int:
         else source_root.name + TEMPLATE_COPY_SUFFIX
     )
 
-    with tempfile.TemporaryDirectory(
+    with reliable_temp_dir(
         prefix=f".{source_root.name}_{workload}_",
         dir=project_root,
-        ignore_cleanup_errors=True,
     ) as discovery_dir:
         discovery_root = Path(discovery_dir) / copy_name
         _copy_template(source_root, discovery_root)
@@ -363,8 +363,11 @@ def main() -> int:
             raise SystemExit(
                 f"[FAIL] Target already exists and is non-empty: {repo_root}. Use --force to replace it."
             )
-        if repo_root.exists() and args.force:
-            shutil.rmtree(repo_root)
+        if repo_root.exists() and args.force and not rmtree_reliable(repo_root):
+            raise SystemExit(
+                f"[FAIL] --force could not remove the existing {repo_root}. "
+                "Close any editor, terminal or file browser open inside it, then re-run."
+            )
         repo_root.mkdir(parents=True, exist_ok=True)
         _copy_template(source_root, active_copy)
 

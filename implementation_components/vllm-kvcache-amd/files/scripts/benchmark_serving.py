@@ -212,8 +212,6 @@ def read_kv_log(log_path: Path, char_offset: int) -> tuple[float | None, list[fl
 
 def _device_vram_gb() -> float:
     for cmd in (
-        ["rocm-smi", "--showmeminfo", "vram"],
-        ["/opt/rocm/bin/rocm-smi", "--showmeminfo", "vram"],
         ["amd-smi", "metric"],
         ["/opt/rocm/bin/amd-smi", "metric"],
         ["amd-smi", "static"],

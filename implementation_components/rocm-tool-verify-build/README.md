@@ -4,6 +4,6 @@ Mixin applied when a primary component sets `contracts.build_policy=verify_tools
 
 ## Provides
 
-- verify-only `scripts/build.sh` for `rocminfo`, `amd-smi`, `hipcc` (`rocm-smi` optional on ROCm 10.1)
+- verify-only `scripts/build.sh` for `rocminfo`, `amd-smi`, `hipcc` (ROCm 10.x has no `rocm-smi`)
 
 Used by 101 / 102 style inventory workloads.

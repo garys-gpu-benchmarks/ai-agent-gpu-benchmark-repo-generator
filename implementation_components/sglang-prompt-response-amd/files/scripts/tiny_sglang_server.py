@@ -33,6 +33,7 @@ def main() -> int:
             body = json.dumps(payload).encode("utf-8")
             self.send_response(code)
             self.send_header("Content-Type", "application/json")
+            self.send_header("X-Benchmark-Server", "tiny-sglang-stub")
             self.send_header("Content-Length", str(len(body)))
             self.end_headers()
             self.wfile.write(body)
@@ -52,6 +53,7 @@ def main() -> int:
                     200,
                     {
                         "object": "list",
+                        "server_identity": "stub",
                         "data": [{"id": model_name, "object": "model", "owned_by": "tiny-sglang"}],
                     },
                 )
@@ -78,12 +80,14 @@ def main() -> int:
             if req.get("stream"):
                 self.send_response(200)
                 self.send_header("Content-Type", "text/event-stream")
+                self.send_header("X-Benchmark-Server", "tiny-sglang-stub")
                 self.send_header("Cache-Control", "no-cache")
                 self.end_headers()
                 words = text.split()
                 for index, word in enumerate(words):
                     chunk = {
                         "id": "tiny-sglang-cmpl",
+                        "server_identity": "stub",
                         "object": "text_completion",
                         "created": created,
                         "model": str(req.get("model") or model_name),
@@ -94,6 +98,7 @@ def main() -> int:
                     time.sleep(0.001)
                 done = {
                     "id": "tiny-sglang-cmpl",
+                    "server_identity": "stub",
                     "object": "text_completion",
                     "created": created,
                     "model": str(req.get("model") or model_name),
@@ -108,6 +113,7 @@ def main() -> int:
                 200,
                 {
                     "id": "tiny-sglang-cmpl",
+                    "server_identity": "stub",
                     "object": "text_completion",
                     "created": created,
                     "model": str(req.get("model") or model_name),
@@ -117,6 +123,10 @@ def main() -> int:
             )
 
     server = ThreadingHTTPServer((args.host, int(args.port)), Handler)
+    print(
+        "STUB stand-in server (not SGLang); numbered serving metrics must not be published as SGLang results.",
+        flush=True,
+    )
     print(f"[tiny-sglang] listening on http://{args.host}:{args.port} model={model_name}", flush=True)
     server.serve_forever()
     return 0

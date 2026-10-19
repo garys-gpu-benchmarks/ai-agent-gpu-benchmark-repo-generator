@@ -15,6 +15,7 @@ import yaml
 METRIC_FIELDS = [
     "images_per_sec",
     "per_image_latency_msec",
+    "batch_latency_max_msec",
     "batch_p99_latency_msec",
     "gpu_utilization_percent",
     "peak_gpu_memory_gb",
@@ -24,13 +25,16 @@ RESULT_RE = re.compile(
     r"RESULT dtype=(?P<dtype>\S+) precision=(?P<precision>\S+) image_size=(?P<image_size>\S+) "
     r"batch_size=(?P<batch_size>\S+) images_per_sec=(?P<images_per_sec>[0-9.eE+-]+) "
     r"per_image_latency_msec=(?P<per_image_latency_msec>[0-9.eE+-]+) "
-    r"batch_p99_latency_msec=(?P<batch_p99_latency_msec>[0-9.eE+-]+) "
+    r"batch_latency_max_msec=(?P<batch_latency_max_msec>[0-9.eE+-]+) "
+    r"latency_sample_count=(?P<latency_sample_count>[0-9]+) "
+    r"batch_p99_latency_msec=(?P<batch_p99_latency_msec>[0-9.eE+-]+|na) "
     r"gpu_utilization_percent=(?P<gpu_utilization_percent>[0-9.eE+-]+|na) "
     r"peak_gpu_memory_gb=(?P<peak_gpu_memory_gb>[0-9.eE+-]+) status=(?P<status>\w+)"
 )
 
 # Printed when no utilization reading was taken during the timed loop.
 UTIL_NA_RE = re.compile(r"^UTIL_NA batch_size=(\S+) reason=(na \(.*\))\s*$", re.MULTILINE)
+PERCENTILE_NA_RE = re.compile(r"^PERCENTILE_NA batch_size=(\S+) reason=(na \(.*\))\s*$", re.MULTILINE)
 
 
 def fmt(value: str) -> str:
@@ -109,9 +113,18 @@ def main() -> int:
         raise SystemExit("[FAIL] inference script failed.")
     parsed = [m.groupdict() for m in RESULT_RE.finditer(text)]
     na_reasons = {m.group(1): m.group(2) for m in UTIL_NA_RE.finditer(text)}
+    p99_reasons = {m.group(1): m.group(2) for m in PERCENTILE_NA_RE.finditer(text)}
     for item in parsed:
         if item["gpu_utilization_percent"] == "na":
-            item["gpu_utilization_percent"] = na_reasons.get(item["batch_size"], "na (no utilization reading)")
+            reason = na_reasons.get(item["batch_size"], "na (no utilization reading)")
+            if profile == "smoke" and "too short" in reason:
+                reason = "na (expected: timed loop shorter than 1s on smoke)"
+            item["gpu_utilization_percent"] = reason
+        if item["batch_p99_latency_msec"] == "na":
+            item["batch_p99_latency_msec"] = p99_reasons.get(
+                item["batch_size"],
+                "na (p99 requires at least 100 samples)",
+            )
     if len(parsed) < 2:
         raise SystemExit("[FAIL] expected at least two RESULT rows from the batch sweep.")
     rows = []

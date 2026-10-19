@@ -14,7 +14,7 @@
   "verifies": [
     "rvs --version",
     "rocminfo",
-    "rocm-smi",
+    "amd-smi version",
     "amd-smi",
     "hipcc"
   ],

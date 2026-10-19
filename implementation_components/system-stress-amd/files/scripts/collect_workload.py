@@ -93,8 +93,8 @@ def is_gpu_power_line(low: str) -> bool:
 def ecc_from_ras_text(chunk: str):
     """Uncorrectable count, or na when the RAS table is not key:value text.
 
-    amd-smi metric prints TOTAL_UNCORRECTABLE_COUNT. rocm-smi prints
-    "Uncorrectable Error". amd-smi metric -e is not used; it crashes on some guests.
+    amd-smi metric prints TOTAL_UNCORRECTABLE_COUNT. The "Uncorrectable Error"
+    form is kept for older tables. amd-smi metric -e is not used; it crashes on some guests.
     """
     labeled = [
         int(item)
@@ -138,13 +138,14 @@ def ecc_interval_delta(samples: list):
     return numbers[-1] - numbers[0]
 
 
+THROTTLE_NOT_EXPOSED = "na (expected: throttle counter not exposed)"
+
+
 def gpu_metrics():
     util = temp = power = 0.0
     text = ""
     outputs = []
     for cmd in (
-        ["/opt/rocm/bin/rocm-smi", "--showuse", "--showtemp", "--showpower"],
-        ["rocm-smi", "--showuse", "--showtemp", "--showpower"],
         ["/opt/rocm/bin/amd-smi", "metric"],
         ["amd-smi", "metric"],
     ):
@@ -172,8 +173,7 @@ def gpu_metrics():
             power = max(power, nums[-1])
     if power <= 0:
         power = read_sysfs_power_w()
-    # rocm-smi --showrasinfo prints "Uncorrectable Error". amd-smi metric prints
-    # TOTAL_UNCORRECTABLE_COUNT. amd-smi metric -e crashes on some guests.
+    # amd-smi metric prints TOTAL_UNCORRECTABLE_COUNT. amd-smi metric -e crashes on some guests.
     ecc = ""
     for chunk in outputs:
         parsed = ecc_from_ras_text(chunk)
@@ -182,8 +182,6 @@ def gpu_metrics():
             break
     if ecc == "":
         for cmd in (
-            ["rocm-smi", "--showrasinfo"],
-            ["/opt/rocm/bin/rocm-smi", "--showrasinfo"],
             ["amd-smi", "metric"],
             ["/opt/rocm/bin/amd-smi", "metric"],
         ):
@@ -204,6 +202,11 @@ def gpu_metrics():
         if re.search(r"unthrottl|not throttl", chunk, re.I):
             throttle = 0.0
             break
+    if throttle == "":
+        # amd-smi printed no throttle/violation counter (status N/A). Say so,
+        # in the "expected:" form classify_na() accepts, instead of a blank
+        # that publishes the whole run as INCOMPLETE.
+        throttle = THROTTLE_NOT_EXPOSED
     return util, (temp if temp > 0 else ""), (power if power > 0 else ""), ecc, throttle
 
 
@@ -248,7 +251,7 @@ def sample_row(second):
         "peak_gpu_junction_temp_c": gpu_temp,
         "sustained_gpu_power_w": gpu_power,
         "thermal_throttle_event_count": throttle,
-        "gpu_system_ecc_error_count": gpu_ecc,
+        "ras_uncorrectable_ecc_delta_count": gpu_ecc,
         "error_message": "",
     }
 
@@ -283,7 +286,7 @@ def main() -> int:
     header = [
         "sample_index", "second", "gpu_util_pct", "gpu_temp_c", "gpu_power_w",
         "ecc_uncorrected", "peak_gpu_junction_temp_c", "sustained_gpu_power_w",
-        "thermal_throttle_event_count", "gpu_system_ecc_error_count",
+        "thermal_throttle_event_count", "ras_uncorrectable_ecc_delta_count",
     ]
     rows = []
     start = time.time()
@@ -296,9 +299,9 @@ def main() -> int:
         gpu_proc.wait(timeout=max(5, seconds))
     if not rows:
         rows.append(sample_row(0))
-    delta = ecc_interval_delta([row["gpu_system_ecc_error_count"] for row in rows])
+    delta = ecc_interval_delta([row["ras_uncorrectable_ecc_delta_count"] for row in rows])
     for row in rows:
-        row["gpu_system_ecc_error_count"] = delta
+        row["ras_uncorrectable_ecc_delta_count"] = delta
     write_csv(args.raw_file, header, rows)
     return 0
 

@@ -6,3 +6,7 @@ peak_fp64_tflops: 81.7
 peak_hbm_bandwidth_gbps: 5300
 peak_pcie_bandwidth_gbps: 128
 hbm_capacity_gb: 192
+memory_type: HBM3
+# Last-level cache sizes used to label smoke buffers that do not reach memory.
+llc_bytes: 33554432
+gpu_cache_bytes: 268435456

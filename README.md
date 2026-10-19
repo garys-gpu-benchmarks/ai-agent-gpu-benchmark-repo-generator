@@ -257,12 +257,12 @@ Use `nvidia` instead of `amd` and `ubu2604` instead of `ubu2404` as appropriate.
 
 ### On a GPU host
 
-Each bundle repository holds one platform's 32 workloads as git submodules, with `run.sh` and `run_benchmark_suite.sh` at the top:
+Each bundle repository holds one platform's 32 workloads as git submodules, with `run_benchmark_suite.sh` at the top:
 
 ```bash
 git clone --recurse-submodules https://github.com/garys-gpu-benchmarks/bundle-amd-ubuntu-2404 /opt/benchmarks
 cd /opt/benchmarks
-./run.sh list                                     # all 32 should show "ready"
+./run_benchmark_suite.sh --list                   # all 32 should show "ready"
 ./run_benchmark_suite.sh -p smoke                 # every workload, smoke profile
 ./run_benchmark_suite.sh -w 101,107,121 -p baseline
 ```
@@ -272,8 +272,8 @@ The other bundles are `bundle-nvidia-ubuntu-2404`, `bundle-amd-ubuntu-2604` and 
 ### From your laptop
 
 ```bash
-./get_remote_info.sh 203.0.113.10                 # ledger + results/raw + results/parsed + suite logs
-./get_remote_info.sh -i ~/.ssh/id_ed25519 -o ~/results ubuntu@203.0.113.10 2222
+./get_remote_info.sh --host 203.0.113.10         # ledger + results/raw + results/parsed + suite logs
+./get_remote_info.sh --host ubuntu@203.0.113.10 --port 2222 -i ~/.ssh/id_ed25519 -o ~/results
 ./show_metrics.sh 332 --host 203.0.113.10         # one workload's metrics from the remote ledger
 ./show_metrics.sh 332 --baseline --file RUNTIME_LEDGERS/runtime_ledger_301_332_<time>.csv
 ```

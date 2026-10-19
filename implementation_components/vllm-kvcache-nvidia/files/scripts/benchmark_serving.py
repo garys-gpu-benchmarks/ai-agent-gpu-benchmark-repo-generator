@@ -32,7 +32,7 @@ def _f6(value) -> str:
 
 
 METRIC_KEYS = (
-    "sustained_decode_throughput_under_cache_pressure_tokens_sec",
+    "decode_throughput_tokens_sec",
     "ttft_msec",
     # Was time_per_output_token_tpot_under_high_kv_pressure_msec: nothing makes
     # the KV cache full, so the name promised a condition the run never creates.
@@ -316,7 +316,7 @@ def run_sweep(args, sweep_name: str) -> dict:
         "TPOT": tpot,
         "kv_cache_usage_peak_pct": kv_pct,
         "gpu_mem_used_peak_gb": "",
-        "sustained_decode_throughput_under_cache_pressure_tokens_sec": tokens_per_sec,
+        "decode_throughput_tokens_sec": tokens_per_sec,
         "ttft_msec": ttft,
         "tpot_msec": tpot,
         "kv_cache_hbm_utilization_gb_and_percentage_of_capacity": kv_gb,

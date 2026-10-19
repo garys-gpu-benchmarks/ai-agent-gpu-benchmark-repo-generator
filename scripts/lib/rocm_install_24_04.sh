@@ -561,7 +561,7 @@ rocm_compile_rocblas_bench() {
 
     # Step 34 — Change the current working directory to the newly created rocBLAS project folder.
     _rocm_log "Change the current working directory to the newly created rocBLAS project folder."
-    cd "${ROCBLAS_SOURCE_DIR}"  # Change to the repository-local rocBLAS project folder.
+    cd "${ROCBLAS_SOURCE_DIR}" || _rocm_die "Cannot cd to ${ROCBLAS_SOURCE_DIR}"  # Change to the repository-local rocBLAS project folder.
 
     _rocm_log "Select the rocBLAS tag that matches ROCm ${ROCM_VERSION} (rocBLAS 5.7.0)."
     _rocm_checkout_rocblas_tag

@@ -230,6 +230,21 @@ if rg -n "\{\{.+\}\}|\[\[GENERATE:" "${TARGET_REPO}/PRD.md" "${TARGET_REPO}/SPEC
     exit 1
 fi
 
+# Same shell lint the shared CI runs on push: warnings and errors fail.
+if command -v shellcheck >/dev/null 2>&1; then
+    if ! (
+        cd "${TARGET_REPO}" || exit 1
+        find scripts -name '*.sh' -type f -not -path 'scripts/templates/*' -print0 \
+          | xargs -0 -r shellcheck --severity=warning
+    ); then
+        echo "[FAIL] shellcheck --severity=warning failed; the shared CI would fail on push." >&2
+        exit 1
+    fi
+    echo "[PASS] shellcheck --severity=warning"
+else
+    echo "[WARN] shellcheck not installed; skipped the shell lint the shared CI runs on push." >&2
+fi
+
 (
     cd "${TARGET_REPO}"
     bash scripts/self_check_generated_repo.sh

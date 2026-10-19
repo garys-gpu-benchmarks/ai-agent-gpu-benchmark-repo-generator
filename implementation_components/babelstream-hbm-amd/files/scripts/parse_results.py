@@ -25,7 +25,8 @@ from pathlib import Path
 ANSI_RE = re.compile(r"\x1b\[[0-9;]*[A-Za-z]|\x00")
 _COL_ALIASES = {
     "rocm-package-mismatch-count": "rocm_package_mismatch_count",
-    "kernel-driver-mismatch-count": "kernel_driver_mismatch_count",
+    "kernel-driver-mismatch-count": "kernel_release_mismatch_count",
+    "kernel-release-mismatch-count": "kernel_release_mismatch_count",
     "firmware-compliance-percent": "firmware_compliance_percent",
     "driver-compliance-percent": "driver_compliance_percent",
     "permission-error-count": "permission_error_count",

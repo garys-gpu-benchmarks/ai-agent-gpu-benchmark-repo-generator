@@ -5,9 +5,12 @@ from __future__ import annotations
 import argparse
 import csv
 import json
+import os
 import sqlite3
 from datetime import datetime, timezone
 from pathlib import Path
+
+from metric_contract import finalize_serving_publication, is_explicit_na
 
 
 METRIC_COLUMNS = [
@@ -156,14 +159,25 @@ def main() -> int:
     conn.close()
     summary_path = Path(args.summary) if args.summary else Path("results/summary.json")
     summary_path.parent.mkdir(parents=True, exist_ok=True)
+    published = {}
+    for name in METRIC_COLUMNS:
+        raw = summary.get(name, "")
+        if str(raw).strip() == "":
+            continue
+        if is_explicit_na(raw):
+            published[name] = str(raw).strip()
+            continue
+        number = to_float(raw)
+        if number is not None:
+            published[name] = number
+    identity = os.environ.get("BENCHMARK_SERVER_KIND", "") + " " + json.dumps(summary)
+    if raw_file.is_file():
+        identity += "\n" + raw_file.read_text(encoding="utf-8", errors="replace")[:4000]
+    published, serve_status = finalize_serving_publication(published, identity)
     payload = {
         "sample_count": len(rows),
-        "status": "ok",
-        "metrics": {
-            name: to_float(summary.get(name))
-            for name in METRIC_COLUMNS
-            if str(summary.get(name, "") or "").strip() != ""
-        },
+        "status": serve_status,
+        "metrics": published,
     }
     summary_path.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
     print(f"[PASS] Parsed {len(rows)} samples into {db_path}")

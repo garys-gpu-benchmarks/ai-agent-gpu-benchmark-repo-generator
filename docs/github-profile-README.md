@@ -22,7 +22,7 @@ lspci | grep -iE 'vga|3d|display'               # AMD (Instinct MI-series) or NV
 ```bash
 apt-get update && apt-get install -y git tmux
 git clone --recurse-submodules https://github.com/garys-gpu-benchmarks/bundle-amd-ubuntu-2404 /opt/benchmarks
-cd /opt/benchmarks && ./run.sh list
+cd /opt/benchmarks && ./run_benchmark_suite.sh --list
 ./run_benchmark_suite.sh -w 101,102,115 -p smoke
 ```
 
@@ -31,7 +31,7 @@ cd /opt/benchmarks && ./run.sh list
 ```bash
 apt-get update && apt-get install -y git tmux
 git clone --recurse-submodules https://github.com/garys-gpu-benchmarks/bundle-nvidia-ubuntu-2404 /opt/benchmarks
-cd /opt/benchmarks && ./run.sh list
+cd /opt/benchmarks && ./run_benchmark_suite.sh --list
 ./run_benchmark_suite.sh -w 201,202,215 -p smoke
 ```
 
@@ -40,7 +40,7 @@ cd /opt/benchmarks && ./run.sh list
 ```bash
 apt-get update && apt-get install -y git tmux
 git clone --recurse-submodules https://github.com/garys-gpu-benchmarks/bundle-amd-ubuntu-2604 /opt/benchmarks
-cd /opt/benchmarks && ./run.sh list
+cd /opt/benchmarks && ./run_benchmark_suite.sh --list
 ./run_benchmark_suite.sh -w 301,302,315 -p smoke
 ```
 
@@ -49,7 +49,7 @@ cd /opt/benchmarks && ./run.sh list
 ```bash
 apt-get update && apt-get install -y git tmux
 git clone --recurse-submodules https://github.com/garys-gpu-benchmarks/bundle-nvidia-ubuntu-2604 /opt/benchmarks
-cd /opt/benchmarks && ./run.sh list
+cd /opt/benchmarks && ./run_benchmark_suite.sh --list
 ./run_benchmark_suite.sh -w 401,402,415 -p smoke
 ```
 
@@ -68,7 +68,8 @@ All commands run from `/opt/benchmarks`. Each command prints full usage with `--
 | Smoke test every workload (installs each on first use) | `./run_benchmark_suite.sh -p smoke` |
 | One workload, baseline profile (example: 107) | `./run_benchmark_suite.sh -w 107 -p baseline` |
 | A range of workloads | `./run_benchmark_suite.sh -w 101-110 -p smoke` |
-| One workload with its output on screen | `./run.sh 105` · `./run.sh 105 --baseline` |
+| One workload with its output on screen | `./run_benchmark_suite.sh -w 105 -p smoke --show-output` |
+| Check that every workload is installed | `./run_benchmark_suite.sh --list` |
 | Everything, all three profiles (many hours) | `tmux new -s bench` then `./run_benchmark_suite.sh` |
 | Soak test: everything, 20 times | `./run_benchmark_suite.sh -r 20` |
 | Preview what would run | `./run_benchmark_suite.sh --dry-run` |
@@ -83,7 +84,7 @@ Swap the workload numbers for your platform (107 → 207, 307 or 407). Logs go t
 ```bash
 git clone https://github.com/garys-gpu-benchmarks/gpu-bench-suite && cd gpu-bench-suite
 GPU_HOST=203.0.113.10                              # replace with your GPU host's IP
-./scripts/get_remote_info.sh root@$GPU_HOST        # copy ledgers, raw and parsed results, suite logs
+./scripts/get_remote_info.sh --host $GPU_HOST      # copy ledgers, raw and parsed results, suite logs
 ./scripts/show_metrics.sh 115 --host $GPU_HOST     # one workload's runs, per-profile means
 ```
 

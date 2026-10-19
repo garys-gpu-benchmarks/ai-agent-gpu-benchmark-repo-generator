@@ -206,7 +206,7 @@ class MetricFeedbackUpdateTests(unittest.TestCase):
         nvidia = source("system-config-nvidia", "scripts/collect_workload.py")
         self.assertIn('"kernel_mismatch_count"', amd)
         self.assertIn('"driver_mismatch_count"', amd)
-        self.assertIn('"kernel_driver_mismatch_count": float(kernel_mismatch)', amd)
+        self.assertIn('"kernel_release_mismatch_count": float(kernel_mismatch)', amd)
         self.assertIn("na (in-tree amdgpu has no version)", amd)
         self.assertNotIn("kernel_mismatch + driver_mismatch", amd)
         self.assertIn("if not node.exists() or not os.access", amd)
@@ -269,7 +269,8 @@ class MetricFeedbackUpdateTests(unittest.TestCase):
 
     def test_numa_unavailable_counter_is_not_zero(self):
         text = source("numa-cache-collector", "scripts/collect_numa_cache.py")
-        self.assertIn("na (perf cache-misses counter unavailable)", text)
+        self.assertIn("na (expected: perf_event_paranoid blocks cache-misses)", text)
+        self.assertIn("na (expected: numactl policy not permitted; second numa node not measurable)", text)
         self.assertNotIn("if miss_match is None:\n        return 0.0", text)
 
     def test_jax_requires_completion_and_reports_modeled_flops(self):

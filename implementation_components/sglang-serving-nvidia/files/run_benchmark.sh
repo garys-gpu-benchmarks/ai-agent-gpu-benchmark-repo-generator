@@ -216,6 +216,7 @@ run_collection() {
   mkdir -p "${HF_HOME}"
   local server_cmd=""
   if [[ "${PROFILE}" == "smoke" ]]; then
+    export BENCHMARK_SERVER_KIND=stub
     server_cmd="${PYTHON_BIN} scripts/tiny_sglang_server.py"
   else
     if ! "${PYTHON_BIN}" -c "import sglang" >/dev/null 2>&1; then

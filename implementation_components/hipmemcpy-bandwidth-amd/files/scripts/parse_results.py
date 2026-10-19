@@ -27,7 +27,8 @@ from pathlib import Path
 ANSI_RE = re.compile(r"\x1b\[[0-9;]*[A-Za-z]|\x00")
 _COL_ALIASES = {
     "rocm-package-mismatch-count": "rocm_package_mismatch_count",
-    "kernel-driver-mismatch-count": "kernel_driver_mismatch_count",
+    "kernel-driver-mismatch-count": "kernel_release_mismatch_count",
+    "kernel-release-mismatch-count": "kernel_release_mismatch_count",
     "firmware-compliance-percent": "firmware_compliance_percent",
     "driver-compliance-percent": "driver_compliance_percent",
     "permission-error-count": "permission_error_count",
@@ -302,6 +303,30 @@ def add_min_size_direction_latency(rows, metrics_summary):
             metrics_summary[f"latency_{slug}_us"] = statistics.mean(values)
 
 
+def apply_h2d_headlines(rows, metrics_summary):
+    """Numbered hipMemcpy metrics are the H2D point, not a blend of every size.
+
+    bandwidth_GBps is H2D at the largest transfer. latency_us is H2D at the
+    smallest transfer. headline_transfer_bytes is that largest size.
+    """
+    sizes = []
+    for row in rows:
+        size = to_number(row.get("transfer_size_bytes", ""))
+        if isinstance(size, (int, float)):
+            sizes.append(float(size))
+    if not sizes:
+        return
+    max_size = max(sizes)
+    metrics_summary["headline_transfer_bytes"] = int(max_size)
+    if "bandwidth_h2d_gbps" in metrics_summary:
+        metrics_summary["bandwidth_gbps"] = metrics_summary["bandwidth_h2d_gbps"]
+    if "latency_h2d_us" in metrics_summary:
+        metrics_summary["latency_us"] = metrics_summary["latency_h2d_us"]
+    mib = max_size / (1024.0 * 1024.0)
+    mib_text = str(int(mib)) if float(mib).is_integer() else f"{mib:.3g}"
+    metrics_summary["headline_point"] = f"at {mib_text} MiB H2D"
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--raw-file", required=True)
@@ -462,6 +487,7 @@ def main() -> int:
     metrics_summary = build_metrics_summary(metric_cols, rows, aggregates)
     add_peak_direction_bandwidth(rows, metrics_summary)
     add_min_size_direction_latency(rows, metrics_summary)
+    apply_h2d_headlines(rows, metrics_summary)
     summary = {"sample_count": len(rows), "status": status, "metrics": metrics_summary, "run_id": run_id}
     Path(args.summary).parent.mkdir(parents=True, exist_ok=True)
     Path(args.summary).write_text(json.dumps(summary, indent=2) + "\n", encoding="utf-8")

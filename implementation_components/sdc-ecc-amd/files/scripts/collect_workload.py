@@ -114,8 +114,6 @@ def ras_counter_totals(text: str):
 def ecc_counts() -> tuple[str, str]:
     """Read cumulative RAS counters without treating parse failure as zero."""
     for cmd in (
-        ["rocm-smi", "--showrasinfo"],
-        ["/opt/rocm/bin/rocm-smi", "--showrasinfo"],
         ["amd-smi", "metric"],
         ["/opt/rocm/bin/amd-smi", "metric"],
     ):
@@ -179,14 +177,14 @@ def main() -> int:
     pass_rate = 100.0 * (loops - failed_checks) / loops if loops else 0.0
     write_csv(args.raw_file, [
         "sample_index", "status", "uncorrected_ecc_errors_count", "corrected_ecc_errors_count",
-        "hbm3_coverage_gb", "even_word_store_pass_rate",
+        "hbm3_coverage_gb", "loop_verification_pass_pct",
         "test_wall_clock_completion_time_s", "error_message",
     ], [{
         "status": "ok" if failed_checks == 0 else "error",
         "uncorrected_ecc_errors_count": uncorrected,
         "corrected_ecc_errors_count": corrected,
         "hbm3_coverage_gb": coverage_gb,
-        "even_word_store_pass_rate": pass_rate,
+        "loop_verification_pass_pct": pass_rate,
         "test_wall_clock_completion_time_s": wall,
         "error_message": "" if failed_checks == 0 else f"{failed_checks} failed checks in {loops} loops",
     }])

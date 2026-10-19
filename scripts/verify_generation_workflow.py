@@ -16,6 +16,19 @@ from prompt_workflow import available_workloads, parse_workloads, workload_token
 ROOT = Path(__file__).resolve().parents[1]
 MARKDOWN_ROOTS = [ROOT, ROOT / "docs", ROOT / "templates", ROOT / ".github"]
 LINK = re.compile(r"\]\(([^)#]+)(?:#[^)]+)?\)")
+# templates/*_TEMPLATE.md become the README/PRD/SPEC at the root of a
+# generated workload repository, so their relative links resolve there: files
+# the workload copies from the generator root (LICENSE, legal/NOTICE, ...) and
+# from templates/workload/ (.github/workflows/ci.yml, gpu-smoke.yml).
+GENERATED_REPO_ROOTS = [ROOT, ROOT / "templates" / "workload"]
+
+
+def link_resolves(path: Path, target: str) -> bool:
+    if (path.parent / target).resolve().exists():
+        return True
+    if path.parent == ROOT / "templates" and path.name.endswith("_TEMPLATE.md"):
+        return any((base / target).resolve().exists() for base in GENERATED_REPO_ROOTS)
+    return False
 
 
 def check_prompt_parser() -> None:
@@ -71,8 +84,7 @@ def check_markdown_links() -> None:
             for target in LINK.findall(text):
                 if target.startswith(("http://", "https://", "mailto:")):
                     continue
-                resolved = (path.parent / target).resolve()
-                if not resolved.exists():
+                if not link_resolves(path, target):
                     raise AssertionError(f"Broken Markdown link in {path}: {target}")
 
 

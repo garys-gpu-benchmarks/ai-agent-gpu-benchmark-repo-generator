@@ -430,54 +430,6 @@ wait_self_test() {
   gh run watch "${id}" -R "${ORG}/${SHARED_REPO}" --exit-status --interval 15 >/dev/null
 }
 
-# Writes run.sh for a bundle to $1.
-write_bundle_run_sh() {
-  cat >"$1" <<'RUNSH'
-#!/usr/bin/env bash
-# run.sh - list, fetch and run the benchmarks in this bundle.
-#   ./run.sh list | ./run.sh <NNN> [--baseline|--extended] | ./run.sh all
-set -uo pipefail
-cd "$(dirname "$0")"
-find_dir() { local d; for d in "$1"-*/; do [ -d "$d" ] && { echo "${d%/}"; return; }; done; }
-ensure() {
-  if [ ! -e "$1/.git" ]; then
-    echo ">> fetching $(basename "$1")"
-    git submodule update --init -- "$1" || return 1
-  fi
-}
-run_one() {
-  local n=$1; shift
-  local d; d=$(find_dir "$n")
-  [ -n "$d" ] || { echo "No benchmark $n in this bundle (try ./run.sh list)"; return 2; }
-  ensure "$d" || return 1
-  mkdir -p results
-  local logf="results/$(basename "$d")-$(date +%Y%m%d-%H%M%S).log"
-  echo ">> $(basename "$d"): setup"
-  ( cd "$d" && bash ./setup.sh ) 2>&1 | tee "$logf"; [ "${PIPESTATUS[0]}" -eq 0 ] || return 1
-  echo ">> $(basename "$d"): run"
-  ( cd "$d" && bash ./run_benchmark.sh "$@" ) 2>&1 | tee -a "$logf"; [ "${PIPESTATUS[0]}" -eq 0 ] || return 1
-  echo ">> log: $logf"
-}
-case "${1:-}" in
-  list)
-    git config -f .gitmodules --get-regexp '^submodule\..*\.path$' | while read -r key p; do
-      name=$(basename "$p")
-      state="not fetched"; [ -e "$p/.git" ] && state="ready"
-      printf '%-4s %-60s %s\n' "${name%%-*}" "$name" "$state"
-    done ;;
-  all)
-    pass=0; fail=0; failed=()
-    for d in [1-4][0-9][0-9]-*/; do
-      n=$(basename "$d"); n=${n%%-*}
-      if run_one "$n"; then pass=$((pass+1)); else fail=$((fail+1)); failed+=("$n"); fi
-    done
-    echo "== $pass passed, $fail failed ${failed[*]:-}" ;;
-  ''|-h|--help) sed -n '2,3p' "$0" | sed 's/^# //' ;;
-  *) n=$1; shift; run_one "$n" "$@" ;;
-esac
-RUNSH
-}
-
 # Prints a bundle's README.md. $1 = platform digit (1-4), $2 = bundle name,
 # $3 = number of workloads, $4 = list of workload rows (Markdown).
 bundle_readme() {
@@ -515,10 +467,10 @@ Use this bundle only on that platform. The others have their own bundle:
 apt-get update && apt-get install -y git tmux
 git clone --recurse-submodules https://github.com/@ORG@/@BUNDLE@ /opt/benchmarks
 cd /opt/benchmarks
-./run.sh list
+./run_benchmark_suite.sh --list
 ```
 
-`./run.sh list` should show all @WANT@ benchmarks as `ready`.
+`./run_benchmark_suite.sh --list` should show all @WANT@ benchmarks as `ready`.
 Do not use GitHub's **Download ZIP**: it leaves the benchmark folders empty.
 
 ## Getting started: three quick benchmarks
@@ -547,9 +499,23 @@ The full output is in `/opt/benchmarks/benchmark_suite_log/`.
 To run a single benchmark with its output on screen:
 
 ```bash
-./run.sh @S@05                # setup, then the smoke profile of benchmark @S@05
-./run.sh @S@05 --baseline     # the standard profile
+./run_benchmark_suite.sh -w @S@05 -p smoke --show-output      # benchmark @S@05, smoke profile
+./run_benchmark_suite.sh -w @S@05 -p baseline --show-output   # the standard profile
 ```
+
+## See your results
+
+`show_metrics.sh` prints one benchmark's runs from the runtime ledger: one row
+per run with its metrics, then the mean for each profile.
+
+```bash
+cd /opt/benchmarks
+./show_metrics.sh @S@15                # benchmark @S@15, every profile
+./show_metrics.sh @S@15 --baseline     # baseline runs only
+./show_metrics.sh --help             # all options
+```
+
+To copy the results to your laptop, see [Results](#results).
 
 ## Run everything
 
@@ -575,6 +541,8 @@ restart) happens before the long run.
 | `-w @S@01,@S@07,@S@21` | only these benchmarks; ranges work too: `-w @S@01-@S@10` |
 | `-r 20` | repeat the whole set 20 times (soak test) |
 | `--fail-fast` | stop at the first failed run |
+| `--show-output` | show each run's full output on screen too (it always goes to the log) |
+| `--list` | list the benchmarks as `ready` or `not fetched`, then exit |
 | `-n` | show what would run, without running it |
 | `--help` | all options |
 
@@ -586,9 +554,18 @@ restart) happens before the long run.
 | Full output of every run | `/opt/benchmarks/benchmark_suite_log/` |
 | Each benchmark's results | `/opt/benchmarks/<benchmark>/results/` (`raw/` and `parsed/`) |
 | One line per run (time, exit code) | `/var/opt/benchmarks/runtime_ledger.csv` |
+| One benchmark's runs and per-profile means | `./show_metrics.sh <benchmark>` |
 
-To copy everything to a Windows laptop, use `get_remote_info.sh` from
-[gpu-bench-suite](https://github.com/@ORG@/gpu-bench-suite).
+To copy the ledger, every benchmark's `results/` and the suite logs to your
+laptop (Git Bash on Windows), use `get_remote_info.sh` from
+[gpu-bench-suite](https://github.com/@ORG@/gpu-bench-suite). It writes
+`RUNTIME_LEDGERS/` and `DIRECTORIES/` in the folder you run it from:
+
+```bash
+git clone https://github.com/@ORG@/gpu-bench-suite && cd gpu-bench-suite
+./scripts/get_remote_info.sh --host 203.0.113.10       # this machine's address; --port PORT if ssh is not on 22
+./scripts/show_metrics.sh @S@15 --host 203.0.113.10      # the same table, read over ssh
+```
 
 ## Update to a newer release
 
@@ -985,6 +962,10 @@ fi
 # a generator without suite tools, a copy next to this script.
 SUITE_SCRIPT="${TOOLS_DIR:+${TOOLS_DIR}/scripts/run_benchmark_suite.sh}"
 [[ -n "${SUITE_SCRIPT}" && -f "${SUITE_SCRIPT}" ]] || SUITE_SCRIPT="${SCRIPT_DIR}/run_benchmark_suite.sh"
+# show_metrics.sh comes along the same way, so a cloned bundle has it in
+# /opt/benchmarks (the README says so).
+METRICS_SCRIPT="${TOOLS_DIR:+${TOOLS_DIR}/scripts/show_metrics.sh}"
+[[ -n "${METRICS_SCRIPT}" && -f "${METRICS_SCRIPT}" ]] || METRICS_SCRIPT="${SCRIPT_DIR}/show_metrics.sh"
 cd "${PUB}" || stop "cannot open ${PUB}"
 
 
@@ -1053,15 +1034,20 @@ if ((newly > 0)); then rm -f _logs/done-bundles _logs/done-enduser-test _logs/do
 # STEP 7: BUILD AND PUBLISH THE 4 BUNDLE REPOSITORIES
 # ==============================================================================
 # Each bundle holds its 32 workloads as git submodules pinned to this run's
-# version, at the top level under their full repository names, plus run.sh,
-# run_benchmark_suite.sh and a README for the technician. Cloning a bundle
+# version, at the top level under their full repository names, plus
+# run_benchmark_suite.sh and a README for the technician. (Bundles before
+# 2026-10-18 also had run.sh; step 7 removes it.) Cloning a bundle
 # into /opt/benchmarks puts the workloads straight into /opt/benchmarks.
 
 if is_done bundles; then skipped 7; else
   step 7 "Build and publish the 4 bundle repositories"
   mkdir -p "${WORK}" || stop "cannot create ${WORK}"
-  write_bundle_run_sh "${WORK}/run.sh.template"
-  if [[ -f "${SUITE_SCRIPT}" ]]; then echo "run_benchmark_suite.sh for the bundles: ${SUITE_SCRIPT}"; else echo "NOTE: no run_benchmark_suite.sh found; the bundles will not include it"; fi
+  # run_benchmark_suite.sh is how a bundle lists and runs its workloads, so a
+  # bundle is not built without it.
+  [[ -f "${SUITE_SCRIPT}" ]] || stop "no run_benchmark_suite.sh found (looked for ${SUITE_SCRIPT}); the bundles need it to list and run their workloads"
+  echo "run_benchmark_suite.sh for the bundles: ${SUITE_SCRIPT}"
+  if [[ -f "${METRICS_SCRIPT}" ]]; then echo "show_metrics.sh for the bundles: ${METRICS_SCRIPT}"; else echo "NOTE: no show_metrics.sh found; the bundles will not include it"; fi
+  rm -f "${WORK}/run.sh.template"
   for spec in "amd-ubuntu-2404:1" "nvidia-ubuntu-2404:2" "amd-ubuntu-2604:3" "nvidia-ubuntu-2604:4"; do
     IFS=: read -r name s <<<"${spec}"
     bundle="bundle-${name}"
@@ -1084,18 +1070,21 @@ if is_done bundles; then skipped 7; else
       again git add "${dir}" || stop "git add failed for ${dir} in ${bundle}"
       rows="${rows}- **${dir:0:3}** - [${dir}](https://github.com/${ORG}/${dir})"$'\n'
     done
-    cp "${WORK}/run.sh.template" run.sh
-    suite_files=""
-    if [[ -f "${SUITE_SCRIPT}" ]]; then
-      tr -d '\r' <"${SUITE_SCRIPT}" >run_benchmark_suite.sh
-      suite_files="run_benchmark_suite.sh"
+    # run.sh was folded into run_benchmark_suite.sh (--list, --show-output).
+    git rm -q --ignore-unmatch run.sh >/dev/null 2>&1
+    rm -f run.sh
+    tr -d '\r' <"${SUITE_SCRIPT}" >run_benchmark_suite.sh
+    suite_files="run_benchmark_suite.sh"
+    if [[ -f "${METRICS_SCRIPT}" ]]; then
+      tr -d '\r' <"${METRICS_SCRIPT}" >show_metrics.sh
+      suite_files="${suite_files} show_metrics.sh"
     fi
     printf 'results/\nbenchmark_suite_log/\n' >.gitignore
     bundle_readme "${s}" "${bundle}" "${want}" "${rows}" >README.md
-    # shellcheck disable=SC2086  # suite_files is empty or one name
-    again git add .gitmodules .gitignore README.md run.sh ${suite_files} || stop "git add failed in ${bundle}"
+    # shellcheck disable=SC2086  # suite_files is one or two names
+    again git add .gitmodules .gitignore README.md ${suite_files} || stop "git add failed in ${bundle}"
     # shellcheck disable=SC2086
-    git update-index --chmod=+x run.sh ${suite_files}
+    git update-index --chmod=+x ${suite_files}
     attach_history </dev/null || stop "could not read the history of ${ORG}/${bundle}"
     git diff --cached --quiet || again git commit -q -m "Pin $(platform "${s}") benchmarks at ${VERSION}" || stop "git commit failed in ${bundle}"
     git push -u origin main </dev/null || stop "pushing ${bundle} failed"
@@ -1126,12 +1115,16 @@ if is_done enduser-test; then skipped 8; else
     git -c advice.detachedHead=false clone -q --recurse-submodules --branch "${VERSION}" \
       "https://github.com/${ORG}/bundle-amd-ubuntu-2404.git" "${WORK}/_test_clone" </dev/null ||
       stop "cloning bundle-amd-ubuntu-2404 at ${VERSION} failed"
-    got=$(cd "${WORK}/_test_clone" && ./run.sh list | grep -c ' ready$')
-    (cd "${WORK}/_test_clone" && ./run.sh list | head -n 3)
-    echo "Benchmarks ready in the test clone: ${got} of ${want}"
-    for f in run.sh run_benchmark_suite.sh; do
+    [[ -x "${WORK}/_test_clone/run_benchmark_suite.sh" ]] || stop "run_benchmark_suite.sh in the bundle is missing or not executable"
+    for f in run_benchmark_suite.sh show_metrics.sh; do
       [[ ! -f "${WORK}/_test_clone/${f}" || -x "${WORK}/_test_clone/${f}" ]] || stop "${f} in the bundle is not executable"
     done
+    [[ ! -e "${WORK}/_test_clone/run.sh" ]] || stop "the bundle still has run.sh; step 7 should have removed it"
+    listing=$(cd "${WORK}/_test_clone" && ./run_benchmark_suite.sh --list)
+    got=$(printf '%s\n' "${listing}" | grep -c ' ready$')
+    printf '%s\n' "${listing}" | head -n 3
+    printf '%s\n' "${listing}" | tail -n 1
+    echo "Benchmarks ready in the test clone: ${got} of ${want}"
     rm -rf "${WORK}/_test_clone"
     ((got == want)) || stop "only ${got} of ${want} benchmarks came down with the bundle"
   fi

@@ -12,8 +12,7 @@
   ],
   "verifies": [
     "rocminfo",
-    "amd-smi",
-    "rocm-smi"
+    "amd-smi"
   ],
   "contracts": {
     "skip_rvs_default": 0,

@@ -63,14 +63,14 @@ This repository is one of the 32 workloads in the {{GPU Vendor}} {{CI OS Display
 apt-get update && apt-get install -y git
 git clone --recurse-submodules https://github.com/{{CI Owner}}/{{CI Bundle Repo}} {{CI Install Root}} \
   && cd {{CI Install Root}} \
-  && ./run.sh list \
+  && ./run_benchmark_suite.sh --list \
   && cd {{CI Install Root}}/{{CI GitHub Slug}} \
   && bash run_benchmark.sh --profile smoke --validate \
   && cd {{CI Install Root}} \
   && echo "Done: 32 workloads in {{CI Install Root}}; {{CI GitHub Slug}} smoke run passed. Next: ./run_benchmark_suite.sh --help"
 ```
 
-Every line in `./run.sh list` should show `ready`. The commands are joined with `&&`, so if the clone or the smoke run fails, the chain stops there, and the closing message appears only when everything succeeded. The chain ends in `{{CI Install Root}}`, where the suite runner is. For more extensive testing:
+Every line in `./run_benchmark_suite.sh --list` should show `ready`; it exits with an error if any workload is not fetched. The commands are joined with `&&`, so if the clone, the list or the smoke run fails, the chain stops there, and the closing message appears only when everything succeeded. The chain ends in `{{CI Install Root}}`, where the suite runner is. For more extensive testing:
 
 ```bash
 ./run_benchmark_suite.sh -p smoke                 # smoke test of all 32 workloads
@@ -104,8 +104,8 @@ Three operator scripts from [`{{CI Owner}}/{{CI Suite Tools Repo}}`](https://git
 - **`get_remote_info.sh`** (on your laptop; Git Bash on Windows) — over one SSH connection, copies the runtime ledger and every workload's `results/raw`, `results/parsed` and suite logs into `RUNTIME_LEDGERS/` and `DIRECTORIES/`.
   ```bash
   git clone https://github.com/{{CI Owner}}/{{CI Suite Tools Repo}} && cd {{CI Suite Tools Repo}}
-  ./scripts/get_remote_info.sh 203.0.113.10                     # root@host, port 22
-  ./scripts/get_remote_info.sh -i ~/.ssh/id_ed25519 -o ~/results ubuntu@203.0.113.10 2222
+  ./scripts/get_remote_info.sh --host 203.0.113.10              # root@host, port 22
+  ./scripts/get_remote_info.sh --host ubuntu@203.0.113.10 --port 2222 -i ~/.ssh/id_ed25519 -o ~/results
   ```
 - **`show_metrics.sh`** (laptop or GPU host) — prints one workload's runs from the runtime ledger in fixed-width metric columns with per-profile means. On the GPU host it is `{{CI Install Root}}/show_metrics.sh`.
   ```bash

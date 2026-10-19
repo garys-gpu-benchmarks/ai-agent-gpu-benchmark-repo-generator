@@ -138,13 +138,13 @@ Regenerate the catalog with:
 python3 scripts/generate_workload_parameters.py
 ```
 
-Validate active parameter names without writing the catalog with:
+Check that `config/workload_parameters.yaml` matches the workbook, without writing it:
 
 ```bash
 python3 scripts/generate_workload_parameters.py --check
 ```
 
-The generator validates that every active workbook parameter appears in its workload's execution description.
+The generator also lists active workbook parameters that their workload's execution description does not name. The descriptions say what each workload's code actually does, and some leave out parameters the code does not use (107: "numactl is not used"), so these are a `[WARN]`. Add `--strict` to make them a failure. Unused `Parameter_NN` slots hold `-` and are not parameters.
 
 The generator currently requires `openpyxl` and `PyYAML`.
 

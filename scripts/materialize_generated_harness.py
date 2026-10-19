@@ -65,7 +65,8 @@ from pathlib import Path
 ANSI_RE = re.compile(r"\\x1b\\[[0-9;]*[A-Za-z]|\\x00")
 _COL_ALIASES = {
     "rocm-package-mismatch-count": "rocm_package_mismatch_count",
-    "kernel-driver-mismatch-count": "kernel_driver_mismatch_count",
+    "kernel-driver-mismatch-count": "kernel_release_mismatch_count",
+    "kernel-release-mismatch-count": "kernel_release_mismatch_count",
     "firmware-compliance-percent": "firmware_compliance_percent",
     "driver-compliance-percent": "driver_compliance_percent",
     "permission-error-count": "permission_error_count",
@@ -302,6 +303,102 @@ _PIVOT_GROUP_COLUMNS = {"tier", "benchmark", "direction"}
 _PIVOT_HEADLINE = {"direction": "fwd"}
 
 
+def _apply_declared_headline(summary_metrics, rows):
+    """Pick the row a sweep label names, and keep every other point.
+
+    first_case (fio jobs) copies that job into the singular keys and stores
+    every job under <metric>__<configuration>. A hipMemcpy size x direction
+    table uses max-size H2D bandwidth and min-size H2D latency. Convolution
+    directions (fwd/bwd) have no transfer_size_bytes and stay on the pivot
+    above.
+    """
+    if not rows:
+        return summary_metrics
+    if any(str(row.get("headline_rule", "")).strip() == "first_case" for row in rows):
+        chosen = None
+        for row in rows:
+            if str(row.get("is_headline", "")).strip() in {"1", "true", "yes"}:
+                chosen = row
+                break
+        if chosen is None:
+            chosen = rows[0]
+        point = str(chosen.get("headline_configuration") or "first_case").strip()
+        skip_keys = {
+            "sample_index", "status", "error_message", "headline_rule",
+            "is_headline", "headline_configuration",
+        }
+        for key, raw in chosen.items():
+            if key in skip_keys:
+                continue
+            number = to_number(raw)
+            if isinstance(number, (int, float)) and key in summary_metrics:
+                summary_metrics[key] = number
+        for row in rows:
+            config = str(row.get("headline_configuration") or "").strip()
+            if not config:
+                config = "_".join(
+                    str(row.get(part, "")).strip()
+                    for part in ("rw", "block_size", "io_depth")
+                    if str(row.get(part, "")).strip()
+                )
+            slug = re.sub(r"[^A-Za-z0-9]+", "_", config).strip("_").lower()
+            if not slug:
+                continue
+            for key, raw in row.items():
+                if key in skip_keys or key.startswith("case_"):
+                    continue
+                number = to_number(raw)
+                if isinstance(number, (int, float)):
+                    summary_metrics[f"{key}__{slug}"] = number
+        summary_metrics["headline_point"] = f"first_case {point}"
+        summary_metrics["headline_sample_count"] = len(rows)
+    if "transfer_size_bytes" not in rows[0]:
+        return summary_metrics
+    directions = {str(row.get("direction", "")).strip().lower() for row in rows}
+    if not (directions & {"h2d", "d2h", "d2d"}):
+        return summary_metrics
+    sized = []
+    for row in rows:
+        size = to_number(row.get("transfer_size_bytes", ""))
+        if isinstance(size, (int, float)):
+            sized.append((float(size), str(row.get("direction", "")).strip().lower(), row))
+    if not sized:
+        return summary_metrics
+    max_size = max(item[0] for item in sized)
+    min_size = min(item[0] for item in sized)
+    bw_key = next((key for key in ("bandwidth_gbps",) if any(key in row for row in rows)), "")
+    lat_key = "latency_us" if any("latency_us" in row for row in rows) else ""
+
+    def pick(size, direction, key):
+        if not key:
+            return None
+        for item_size, item_dir, row in sized:
+            if item_size == size and item_dir == direction:
+                number = to_number(row.get(key, ""))
+                if isinstance(number, (int, float)):
+                    return number
+        return None
+
+    h2d_bw = pick(max_size, "h2d", bw_key)
+    h2d_lat = pick(min_size, "h2d", lat_key)
+    if h2d_bw is not None:
+        summary_metrics[bw_key] = h2d_bw
+    if h2d_lat is not None:
+        summary_metrics[lat_key] = h2d_lat
+    summary_metrics["headline_transfer_bytes"] = int(max_size)
+    mib = max_size / (1024.0 * 1024.0)
+    mib_text = str(int(mib)) if float(mib).is_integer() else f"{mib:.3g}"
+    summary_metrics["headline_point"] = f"at {mib_text} MiB H2D"
+    for direction in ("h2d", "d2h", "d2d"):
+        bandwidth = pick(max_size, direction, bw_key)
+        latency = pick(min_size, direction, lat_key)
+        if bandwidth is not None:
+            summary_metrics[f"{bw_key}_{direction}"] = bandwidth
+        if latency is not None:
+            summary_metrics[f"{lat_key}_{direction}"] = latency
+    return summary_metrics
+
+
 def build_metrics_summary(metric_cols, rows, aggregates):
     """The "metrics" dict written to results/summary.json. Two changes from
     the raw per-column aggregate map used for the SQLite tables above:
@@ -402,7 +499,7 @@ def build_metrics_summary(metric_cols, rows, aggregates):
                 if not _NA_REASON_RE.match(reason):
                     reason = ""
                 summary_metrics.setdefault(key, reason or "not measured")
-    return summary_metrics
+    return _apply_declared_headline(summary_metrics, rows)
 
 
 def main() -> int:
@@ -423,6 +520,7 @@ def main() -> int:
         # are handled specially below (not generic metrics).
         "sample_index", "status", "error_message", "check_name",
         "rc", "command", "check",
+        "headline_rule", "is_headline", "headline_configuration",
         # Every column name already hardcoded into the "runs"/"samples"
         # schema below. A collector CSV that happens to emit its own
         # column with one of these exact names (e.g. a per-sample
@@ -706,7 +804,7 @@ def main() -> int:
     samples = conn.execute("SELECT * FROM samples WHERE run_id = ?", (run["run_id"],)).fetchall()
     failures = []
     run_keys = set(run.keys())
-    if run["status"] != "ok":
+    if run["status"] not in {"ok", "stub"}:
         failures.append("latest run status is not ok")
     if "error_message" in run_keys and run["error_message"] not in {None, ""}:
         failures.append("run.error_message is not NULL")
@@ -735,7 +833,7 @@ def main() -> int:
         if isinstance(value, (int, float)) and float(value) <= 0 and not zero_ok(column):
             failures.append(f"run.{column} is not positive")
     for sample in samples:
-        if sample["status"] != "ok":
+        if sample["status"] not in {"ok", "stub"}:
             failures.append(f"sample {sample['sample_index']} is not ok")
         # A sample with status == "ok" and a non-empty error_message is a
         # collector reporting an optional measurement it honestly could not
@@ -774,6 +872,34 @@ def main() -> int:
         if direction == "max" and measured > expected:
             failures.append(f"{column} {measured} > max {expected}")
     conn.close()
+    summary_path = Path("results/summary.json")
+    publication = "PASS"
+    if summary_path.is_file():
+        try:
+            from metric_contract import publication_status, text_dimension_key
+            from print_metric_summary import metric_items, resolve_metrics
+        except ImportError:
+            publication_status = None
+        if publication_status is not None:
+            payload = json.loads(summary_path.read_text(encoding="utf-8"))
+            metrics = payload.get("metrics") if isinstance(payload.get("metrics"), dict) else {}
+            definition = Path("benchmark_specification.json")
+            items = metric_items(definition) if definition.is_file() else []
+            for _number, description in items:
+                if text_dimension_key(description):
+                    failures.append(f"numbered metric is a text dimension: {description}")
+            resolved = resolve_metrics(items, metrics) if items else []
+            pairs = [(label, value) for _number, _description, label, value in resolved]
+            context = {
+                "profile": os.environ.get("BENCHMARK_PROFILE", ""),
+                "status": payload.get("status", ""),
+                "standin": str(payload.get("status", "")).lower() in {"stub", "smoke-standin"},
+                "gpu_count": metrics.get("gpu_count", os.environ.get("GPU_COUNT", "")),
+                "numa_nodes": metrics.get("numa_nodes", ""),
+            }
+            publication, _na_count = publication_status(pairs, context)
+            if publication == "INCOMPLETE":
+                failures.append("required metric missing or unexpected na")
     if failures:
         if not args.quiet:
             print("[FAIL] validation")
@@ -781,7 +907,13 @@ def main() -> int:
                 print(" -", item)
         return 1
     if not args.quiet:
-        print(f"[PASS] validated {len(samples)} samples")
+        if publication == "SMOKE-STANDIN":
+            print("STUB stand-in server; numbered serving metrics are na (stub server, smoke only).")
+            print(f"[SMOKE-STANDIN] validated {len(samples)} samples")
+        elif publication == "N/A-EXPECTED":
+            print(f"[N/A-EXPECTED] validated {len(samples)} samples")
+        else:
+            print(f"[PASS] validated {len(samples)} samples")
     return 0
 
 

@@ -140,18 +140,17 @@ def main() -> int:
     # retains the complete matrix. Use the first declared rw/bs/qd case as
     # the reproducible headline and preserve every row's measurement under
     # case_* columns instead of averaging incompatible operating points.
-    headline = dict(rows[0])
-    headline_name = f"{headline['rw']}_{headline['block_size']}_qd{headline['io_depth']}"
     metric_columns = [
         "iops_mean", "iops_p95", "iops_p99", "bandwidth_mb_s",
         "clat_p50_us", "clat_p99_us", "clat_p999_us", "p999_latency_ms",
     ]
-    for row in rows:
-        row["headline_configuration"] = headline_name
+    for index, row in enumerate(rows):
+        row["headline_configuration"] = f"{row['rw']}_{row['block_size']}_qd{row['io_depth']}"
+        row["headline_rule"] = "first_case"
+        row["is_headline"] = "1" if index == 0 else "0"
         for key in metric_columns:
             row[f"case_{key}"] = row[key]
-            row[key] = headline[key]
-    header.extend(["headline_configuration", *[f"case_{key}" for key in metric_columns]])
+    header.extend(["headline_configuration", "headline_rule", "is_headline", *[f"case_{key}" for key in metric_columns]])
     write_csv(args.raw_file, header, rows)
     return 0
 

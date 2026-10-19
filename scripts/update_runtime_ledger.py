@@ -72,6 +72,9 @@ LEDGER_COLUMNS = [
     *parameter_slot_column_names(),
     "parameters_set",
     "notes",
+    "metrics_na_count",
+    "result_status",
+    "gpu_model_note",
 ]
 
 FAILURE_STAGES = (
@@ -237,7 +240,7 @@ def gpu_name() -> str:
         nvidia=command_output(
             "nvidia-smi --query-gpu=name --format=csv,noheader 2>/dev/null"
         ),
-        rocm_product=command_output("rocm-smi --showproductname 2>/dev/null"),
+        rocm_product="",  # ROCm 10.x has no rocm-smi; amd-smi static is the source.
         amd_smi=command_output("amd-smi static 2>/dev/null"),
     )
 
@@ -247,7 +250,7 @@ def gpu_vram() -> str:
         nvidia=command_output(
             "nvidia-smi --query-gpu=memory.total --format=csv,noheader 2>/dev/null"
         ),
-        rocm_mem=command_output("rocm-smi --showmeminfo vram 2>/dev/null"),
+        rocm_mem="",  # ROCm 10.x has no rocm-smi; amd-smi is the source.
         amd_smi=command_output("amd-smi static 2>/dev/null; amd-smi metric 2>/dev/null"),
     )
 
@@ -259,12 +262,6 @@ def gpu_count() -> str:
     amd = amd_gpu_count(command_output("amd-smi static 2>/dev/null"))
     if amd.isdigit() and int(amd) > 0:
         return amd
-    rocm = command_output(
-        "rocm-smi -i 2>/dev/null | "
-        "grep -Eo 'GPU\\[[0-9]+\\]|GPU [0-9]+' | sort -u | wc -l"
-    )
-    if rocm.isdigit() and int(rocm) > 0:
-        return rocm
     return ""
 
 
@@ -310,32 +307,35 @@ def metric_results(summary_path: Path, items: list[tuple[str, str]]) -> list[str
         if str(key).lower() not in _NON_RESULT_METRIC_KEYS
     }
     try:
+        from metric_contract import annotate_metrics
+
+        filtered = annotate_metrics(filtered, str(payload.get("gpu_name") or ""))
+    except Exception:
+        pass
+    try:
         from print_metric_summary import resolve_metrics
 
         resolved = resolve_metrics(items, filtered)
-        results: list[str] = []
-        for _number, _description, _label, value in resolved:
-            if value == "NOT FOUND" or value is None:
-                results.append("")
-            else:
-                results.append(str(value))
-        return results
     except Exception:
-        values = list(filtered.values())
-        results = []
-        for index, (_, description) in enumerate(items):
+        resolved = []
+        for _, description in items:
             match = re.search(r"\(([A-Za-z0-9_]+)(?:[;,/ ].*)?\)$", description.strip())
             paren_key = match.group(1) if match else ""
             key = metric_key(description)
-            value = ""
             if paren_key and paren_key in filtered:
                 value = filtered[paren_key]
             elif key in filtered:
                 value = filtered[key]
-            elif index < len(values):
-                value = values[index]
-            results.append(str(value) if value is not None else "")
-        return results
+            else:
+                value = "NOT FOUND"
+            resolved.append(("", description, key, value))
+    results: list[str] = []
+    for _number, _description, _label, value in resolved:
+        if value == "NOT FOUND" or value is None:
+            results.append("na (unresolved metric)")
+        else:
+            results.append(str(value))
+    return results
 
 
 def workload_name(definition: Path) -> str:
@@ -931,6 +931,19 @@ def main() -> int:
     metrics = metric_items(args.definition)[:METRIC_SLOT_COUNT]
     results = metric_results(args.summary, metrics)
     metric_defs = [description for _, description in metrics]
+    from metric_contract import gpu_model_note, publication_status
+
+    detected_gpu = gpu_name()
+    model_note = gpu_model_note(detected_gpu, fields.get("GPU Model", ""))
+    result_status, na_count = publication_status(
+        list(zip(metric_defs, results)),
+        {"profile": args.profile, "gpu_count": gpu_count()},
+    )
+    notes = args.notes
+    if result_status == "SMOKE-STANDIN":
+        notes = "stub"
+    elif model_note:
+        notes = "; ".join(part for part in (notes, model_note) if part)
     metric_defs.extend([""] * (METRIC_SLOT_COUNT - len(metric_defs)))
     results.extend([""] * (METRIC_SLOT_COUNT - len(results)))
 
@@ -957,7 +970,7 @@ def main() -> int:
         ),
         "raw_run_dir": args.raw_run_dir,
         "hostname": socket.gethostname(),
-        "gpu_name": gpu_name(),
+        "gpu_name": detected_gpu,
         "gpu_vram": gpu_vram(),
         "gpu_count": gpu_count(),
         "os_version": os_version(),
@@ -973,7 +986,10 @@ def main() -> int:
             explicit=args.run_benchmark_command_fully_resolved or args.run_benchmark_command,
         ),
         "parameters_set": args.parameters_set,
-        "notes": args.notes,
+        "notes": notes,
+        "metrics_na_count": str(na_count),
+        "result_status": result_status,
+        "gpu_model_note": model_note,
     }
     for index in range(METRIC_SLOT_COUNT):
         row[f"metric_{index + 1}_def"] = metric_defs[index]

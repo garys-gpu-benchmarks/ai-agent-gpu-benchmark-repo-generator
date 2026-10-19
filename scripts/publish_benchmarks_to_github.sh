@@ -10,11 +10,9 @@ if grep -q $'\r' "$0"; then echo "This file has Windows (CRLF) line endings. Fix
 #                               201-232 NVIDIA CUDA Ubuntu 24.04
 #                               301-332 AMD ROCm    Ubuntu 26.04
 #                               401-432 NVIDIA CUDA Ubuntu 26.04
-#   4 bundle repositories       bundle-<vendor>-ubuntu-<2404|2604>, each holding
-#                               its 32 workloads as pinned git submodules
+#   4 bundle repositories       bundle-<vendor>-ubuntu-<2404|2604>, each holding its 32 workloads as pinned git submodules
 #   shared-workflows            the CI every workload calls (@v1)
-#   gpu-bench-suite             operator tools (run_benchmark_suite.sh,
-#                               get_remote_info.sh, show_metrics.sh)
+#   gpu-bench-suite             operator tools (run_benchmark_suite.sh, get_remote_info.sh)
 #   the generator               ai-agent-gpu-benchmark-repo-generator
 #
 # Where this script lives:
@@ -38,13 +36,26 @@ if grep -q $'\r' "$0"; then echo "This file has Windows (CRLF) line endings. Fix
 #   Z:\ServersProcsMemory\Github_Garys_GPU_Repos\
 #   └── Publishing\
 #       ├── publish_benchmarks_to_github.sh          copy of this script
-#       └── Publish_20261010_02\
-#           ├── src_342_343_344_345\                 RUN_FOLDER: filled by step 0
-#           │   ├── 101-...\                         the 128 generated workloads
-#           │   ├── 102-...\                         (from Projects 342-345)
-#           │   ├── 103-...\
+#       └── 20261010_02\
+#           ├── src_342_343_344_345\                 User creates folder
+#           │   ├── 101-...\                         User copies Project342's 101_... to 132_... into directory
+#           │   ├── 102-...\                        
+#           │   ├── .......
+#           │   ├── 132-...\
+#           │   ├── 201-...\                         User copies Project343's 201_... to 232_... into directory
+#           │   ├── 202-...\                        
+#           │   ├── .......
+#           │   ├── 232-...\
+#           │   ├── 301-...\                         User copies Project344's 301_... to 332_... into directory
+#           │   ├── 302-...\                        
+#           │   ├── .......
+#           │   ├── 332-...\
+#           │   ├── 401-...\                         User copies Project345's 401_... to 432_... into directory
+#           │   ├── 402-...\                        
+#           │   ├── .......
 #           │   ├── 432-...\
-#           │   └── ai-agent-gpu-benchmark-repo-generator\ the generator (Project341)
+#           │   └── ai-agent-gpu-benchmark-repo-generator\ User copies from Project341
+#           │
 #           ├── src_342_343_344_345_PubTree\         created by this script (logs in _logs\)
 #           ├── src_342_343_344_345_Bundles\         created by this script
 #           ├── shared-workflows\                    created/updated by this script
@@ -64,6 +75,7 @@ if grep -q $'\r' "$0"; then echo "This file has Windows (CRLF) line endings. Fix
 # change them in the generator, never by hand.
 #
 # Usage:    ./publish_benchmarks_to_github.sh RUN_FOLDER
+# Example:  ./publish_benchmarks_to_github.sh src_342_343_344_345
 # Help:     ./publish_benchmarks_to_github.sh --help
 # Runs on:  Git Bash on Windows (also Linux and macOS), with gh logged in.
 #
@@ -77,9 +89,6 @@ if grep -q $'\r' "$0"; then echo "This file has Windows (CRLF) line endings. Fix
 #   1  stopped on a problem (see the STOPPED line)
 #   2  usage error
 #
-# Revision: 2026-10-14 (step 0 and step 9 run the generator's own ruff lint
-#           before anything is pushed; step 9 removes __pycache__ and other
-#           Python caches from the generator copy)
 # Revision: 2026-10-10b (master copy moved into the generator's scripts/;
 #           Z:\ServersProcsMemory paths; step 0 fills the run folder
 #           src_342_343_344_345 from Projects 341-345)
@@ -118,13 +127,6 @@ readonly -a WORKLOAD_SOURCES=(
   "3:${PROJECTS_ROOT}/Project344_301_to_332_TEMPLATE_00_104_20261010/DIRECTORIES"
   "4:${PROJECTS_ROOT}/Project345_401_to_432_TEMPLATE_00_104_20261010/DIRECTORIES"
 )
-# Run the generator's own ruff lint (the "ruff check" lines in its
-# .github/workflows/*.yml) in step 0 and again in step 9, so a lint error
-# stops the run here instead of failing the generator's CI on GitHub:
-#   yes  stop if ruff is not installed or the lint fails (default)
-#   no   skip the lint
-readonly LINT_GENERATOR="yes"
-
 # The run folder name used in the examples and messages (the folder you give
 # on the command line, inside Publish_<YYYYMMDD>_<NN>).
 readonly RUN_FOLDER_NAME="src_342_343_344_345"
@@ -386,46 +388,6 @@ emit_repo() {
   echo "Built ${dir} from the generator"
 }
 
-# Runs the same ruff lint as the generator's CI, in the generator folder $1,
-# without writing a .ruff_cache or __pycache__ there. The commands are read
-# from the "ruff check" lines in its .github/workflows/*.yml, so they stay in
-# step with CI. Stops the run if a command fails.
-lint_generator() {
-  local dir=$1 cmds cmd n=0
-  [[ "${LINT_GENERATOR}" == yes ]] || { echo "Lint of ${GENREPO}: skipped (LINT_GENERATOR=\"${LINT_GENERATOR}\")"; return 0; }
-  cmds=$(cat "${dir}"/.github/workflows/*.yml "${dir}"/.github/workflows/*.yaml 2>/dev/null | tr -d '\r' |
-         sed -nE 's/^[[:space:]]*(-[[:space:]]+)?(run:[[:space:]]*)?(ruff[[:space:]]+check([[:space:]].*)?)$/\3/p' | sort -u)
-  if [[ -z "${cmds}" ]]; then
-    echo "Lint of ${GENREPO}: its CI runs no ruff check, nothing to do"
-    return 0
-  fi
-  local -a RUFF=()
-  if command -v ruff >/dev/null 2>&1; then
-    RUFF=(ruff)
-  else
-    local p
-    for p in python3 python py; do
-      command -v "${p}" >/dev/null 2>&1 || continue
-      if [[ "${p}" == py ]]; then RUFF=(py -3 -m ruff); else RUFF=("${p}" -m ruff); fi
-      "${RUFF[@]}" --version >/dev/null 2>&1 && break
-      RUFF=()
-    done
-  fi
-  ((${#RUFF[@]} > 0)) || stop "ruff is needed to lint ${GENREPO} the way its CI does. Install it with:  python -m pip install ruff   (or set LINT_GENERATOR=\"no\" near the top of this file)"
-  echo "Lint of ${GENREPO} in ${dir} with $("${RUFF[@]}" --version 2>/dev/null)"
-  while IFS= read -r cmd; do
-    [[ -n "${cmd}" ]] || continue
-    n=$((n + 1))
-    echo "  ${cmd}"
-    # Replace the leading "ruff check" with this machine's ruff, keep CI's
-    # arguments, and add --no-cache so nothing is written into the folder.
-    if ! (cd "${dir}" && PYTHONDONTWRITEBYTECODE=1 eval "\"\${RUFF[@]}\" check --no-cache ${cmd#ruff*check}") </dev/null; then
-      stop "the generator fails its own ruff lint (above), so its CI on GitHub would fail. Fix it in the generator source and in ${dir}, then run again. Many problems are fixed by running the same command with --fix."
-    fi
-  done <<<"${cmds}"
-  echo "Lint of ${GENREPO}: ${n} ruff command(s) passed"
-}
-
 # Waits for the Self-test workflow run of commit $1 in $SHARED_REPO and
 # returns its result. Waits up to 3 minutes for the run to start.
 wait_self_test() {
@@ -438,54 +400,6 @@ wait_self_test() {
   if [[ -z "${id}" ]]; then echo "No Self-test run started for commit ${sha:0:7} within 3 minutes."; return 1; fi
   echo "Waiting for the Self-test run: https://github.com/${ORG}/${SHARED_REPO}/actions/runs/${id}"
   gh run watch "${id}" -R "${ORG}/${SHARED_REPO}" --exit-status --interval 15 >/dev/null
-}
-
-# Writes run.sh for a bundle to $1.
-write_bundle_run_sh() {
-  cat >"$1" <<'RUNSH'
-#!/usr/bin/env bash
-# run.sh - list, fetch and run the benchmarks in this bundle.
-#   ./run.sh list | ./run.sh <NNN> [--baseline|--extended] | ./run.sh all
-set -uo pipefail
-cd "$(dirname "$0")"
-find_dir() { local d; for d in "$1"-*/; do [ -d "$d" ] && { echo "${d%/}"; return; }; done; }
-ensure() {
-  if [ ! -e "$1/.git" ]; then
-    echo ">> fetching $(basename "$1")"
-    git submodule update --init -- "$1" || return 1
-  fi
-}
-run_one() {
-  local n=$1; shift
-  local d; d=$(find_dir "$n")
-  [ -n "$d" ] || { echo "No benchmark $n in this bundle (try ./run.sh list)"; return 2; }
-  ensure "$d" || return 1
-  mkdir -p results
-  local logf="results/$(basename "$d")-$(date +%Y%m%d-%H%M%S).log"
-  echo ">> $(basename "$d"): setup"
-  ( cd "$d" && bash ./setup.sh ) 2>&1 | tee "$logf"; [ "${PIPESTATUS[0]}" -eq 0 ] || return 1
-  echo ">> $(basename "$d"): run"
-  ( cd "$d" && bash ./run_benchmark.sh "$@" ) 2>&1 | tee -a "$logf"; [ "${PIPESTATUS[0]}" -eq 0 ] || return 1
-  echo ">> log: $logf"
-}
-case "${1:-}" in
-  list)
-    git config -f .gitmodules --get-regexp '^submodule\..*\.path$' | while read -r key p; do
-      name=$(basename "$p")
-      state="not fetched"; [ -e "$p/.git" ] && state="ready"
-      printf '%-4s %-60s %s\n' "${name%%-*}" "$name" "$state"
-    done ;;
-  all)
-    pass=0; fail=0; failed=()
-    for d in [1-4][0-9][0-9]-*/; do
-      n=$(basename "$d"); n=${n%%-*}
-      if run_one "$n"; then pass=$((pass+1)); else fail=$((fail+1)); failed+=("$n"); fi
-    done
-    echo "== $pass passed, $fail failed ${failed[*]:-}" ;;
-  ''|-h|--help) sed -n '2,3p' "$0" | sed 's/^# //' ;;
-  *) n=$1; shift; run_one "$n" "$@" ;;
-esac
-RUNSH
 }
 
 # Prints a bundle's README.md. $1 = platform digit (1-4), $2 = bundle name,
@@ -525,10 +439,10 @@ Use this bundle only on that platform. The others have their own bundle:
 apt-get update && apt-get install -y git tmux
 git clone --recurse-submodules https://github.com/@ORG@/@BUNDLE@ /opt/benchmarks
 cd /opt/benchmarks
-./run.sh list
+./run_benchmark_suite.sh --list
 ```
 
-`./run.sh list` should show all @WANT@ benchmarks as `ready`.
+`./run_benchmark_suite.sh --list` should show all @WANT@ benchmarks as `ready`.
 Do not use GitHub's **Download ZIP**: it leaves the benchmark folders empty.
 
 ## Getting started: three quick benchmarks
@@ -553,18 +467,27 @@ own, and run the same command again.
 
 Each run prints a short block, and the suite ends with a pass/fail summary.
 The full output is in `/opt/benchmarks/benchmark_suite_log/`.
-`show_metrics.sh` is in this same folder. After a run, print one benchmark's ledger rows:
-
-```bash
-./show_metrics.sh @S@01
-```
 
 To run a single benchmark with its output on screen:
 
 ```bash
-./run.sh @S@05                # setup, then the smoke profile of benchmark @S@05
-./run.sh @S@05 --baseline     # the standard profile
+./run_benchmark_suite.sh -w @S@05 -p smoke --show-output      # benchmark @S@05, smoke profile
+./run_benchmark_suite.sh -w @S@05 -p baseline --show-output   # the standard profile
 ```
+
+## See your results
+
+`show_metrics.sh` prints one benchmark's runs from the runtime ledger: one row
+per run with its metrics, then the mean for each profile.
+
+```bash
+cd /opt/benchmarks
+./show_metrics.sh @S@15                # benchmark @S@15, every profile
+./show_metrics.sh @S@15 --baseline     # baseline runs only
+./show_metrics.sh --help             # all options
+```
+
+To copy the results to your laptop, see [Results](#results).
 
 ## Run everything
 
@@ -590,6 +513,8 @@ restart) happens before the long run.
 | `-w @S@01,@S@07,@S@21` | only these benchmarks; ranges work too: `-w @S@01-@S@10` |
 | `-r 20` | repeat the whole set 20 times (soak test) |
 | `--fail-fast` | stop at the first failed run |
+| `--show-output` | show each run's full output on screen too (it always goes to the log) |
+| `--list` | list the benchmarks as `ready` or `not fetched`, then exit |
 | `-n` | show what would run, without running it |
 | `--help` | all options |
 
@@ -601,9 +526,18 @@ restart) happens before the long run.
 | Full output of every run | `/opt/benchmarks/benchmark_suite_log/` |
 | Each benchmark's results | `/opt/benchmarks/<benchmark>/results/` (`raw/` and `parsed/`) |
 | One line per run (time, exit code) | `/var/opt/benchmarks/runtime_ledger.csv` |
+| One benchmark's runs and per-profile means | `./show_metrics.sh <benchmark>` |
 
-To copy everything to a Windows laptop, use `get_remote_info.sh` from
-[gpu-bench-suite](https://github.com/@ORG@/gpu-bench-suite).
+To copy the ledger, every benchmark's `results/` and the suite logs to your
+laptop (Git Bash on Windows), use `get_remote_info.sh` from
+[gpu-bench-suite](https://github.com/@ORG@/gpu-bench-suite). It writes
+`RUNTIME_LEDGERS/` and `DIRECTORIES/` in the folder you run it from:
+
+```bash
+git clone https://github.com/@ORG@/gpu-bench-suite && cd gpu-bench-suite
+./scripts/get_remote_info.sh --host 203.0.113.10       # this machine's address; --port PORT if ssh is not on 22
+./scripts/show_metrics.sh @S@15 --host 203.0.113.10      # the same table, read over ssh
+```
 
 ## Update to a newer release
 
@@ -713,9 +647,6 @@ if ! cmp -s "${SCRIPT_DIR}/${SCRIPT_NAME}" "${GEN}/${GENREPO}/scripts/${SCRIPT_N
   echo "NOTE: this script differs from ${GENREPO}/scripts/${SCRIPT_NAME} in the run folder (or the generator has none)."
   echo "      The generator holds the master copy; copy it over this one if it is newer."
 fi
-# The generator's CI runs ruff; catch a lint error now, before hours of
-# publishing, instead of on GitHub after step 9.
-lint_generator "${GEN}/${GENREPO}"
 # Git for Windows refuses a repository folder ($GIT_DIR) longer than 220
 # characters (PATH_MAX 260 minus 40), even with core.longpaths. The longest
 # one this run creates is a bundle's submodule store:
@@ -883,10 +814,8 @@ fi
 #   tag is vN.0.0, each later change the next vN.x.0, and vN is moved to it.
 #
 # gpu-bench-suite: operator tools (scripts/run_benchmark_suite.sh for the GPU
-#   host, scripts/get_remote_info.sh for the laptop, scripts/show_metrics.sh
-#   for the ledger table). Tagged with this run's version. Step 7 copies
-#   run_benchmark_suite.sh and show_metrics.sh into every bundle, so a clone
-#   into /opt/benchmarks leaves both at /opt/benchmarks.
+#   host, scripts/get_remote_info.sh for the laptop). Tagged with this run's
+#   version. Step 7 copies its run_benchmark_suite.sh into every bundle.
 #
 # Runs every time; nothing is pushed or tagged when nothing changed.
 
@@ -987,13 +916,14 @@ else
   echo "${TOOLS_REPO} is published: https://github.com/${ORG}/${TOOLS_REPO}"
 fi
 
-# Where the bundles get run_benchmark_suite.sh and show_metrics.sh: the
-# emitted gpu-bench-suite copies, or the generator templates.
+# Where the bundles get run_benchmark_suite.sh: the generator's copy, or, for
+# a generator without suite tools, a copy next to this script.
 SUITE_SCRIPT="${TOOLS_DIR:+${TOOLS_DIR}/scripts/run_benchmark_suite.sh}"
 [[ -n "${SUITE_SCRIPT}" && -f "${SUITE_SCRIPT}" ]] || SUITE_SCRIPT="${SCRIPT_DIR}/run_benchmark_suite.sh"
+# show_metrics.sh comes along the same way, so a cloned bundle has it in
+# /opt/benchmarks (the README says so).
 METRICS_SCRIPT="${TOOLS_DIR:+${TOOLS_DIR}/scripts/show_metrics.sh}"
-[[ -n "${METRICS_SCRIPT}" && -f "${METRICS_SCRIPT}" ]] || METRICS_SCRIPT="${GEN}/${GENREPO}/templates/suite-tools/scripts/show_metrics.sh"
-[[ -f "${METRICS_SCRIPT}" ]] || stop "show_metrics.sh was not found at ${METRICS_SCRIPT}; a bundle clone into /opt/benchmarks must include it"
+[[ -n "${METRICS_SCRIPT}" && -f "${METRICS_SCRIPT}" ]] || METRICS_SCRIPT="${SCRIPT_DIR}/show_metrics.sh"
 cd "${PUB}" || stop "cannot open ${PUB}"
 
 
@@ -1062,17 +992,20 @@ if ((newly > 0)); then rm -f _logs/done-bundles _logs/done-enduser-test _logs/do
 # STEP 7: BUILD AND PUBLISH THE 4 BUNDLE REPOSITORIES
 # ==============================================================================
 # Each bundle holds its 32 workloads as git submodules pinned to this run's
-# version, at the top level under their full repository names, plus run.sh,
-# run_benchmark_suite.sh, show_metrics.sh and a README for the technician.
-# Cloning a bundle into /opt/benchmarks puts the workloads, run_benchmark_suite.sh
-# and show_metrics.sh straight into /opt/benchmarks.
+# version, at the top level under their full repository names, plus
+# run_benchmark_suite.sh and a README for the technician. (Bundles before
+# 2026-10-18 also had run.sh; step 7 removes it.) Cloning a bundle
+# into /opt/benchmarks puts the workloads straight into /opt/benchmarks.
 
 if is_done bundles; then skipped 7; else
   step 7 "Build and publish the 4 bundle repositories"
   mkdir -p "${WORK}" || stop "cannot create ${WORK}"
-  write_bundle_run_sh "${WORK}/run.sh.template"
-  if [[ -f "${SUITE_SCRIPT}" ]]; then echo "run_benchmark_suite.sh for the bundles: ${SUITE_SCRIPT}"; else echo "NOTE: no run_benchmark_suite.sh found; the bundles will not include it"; fi
-  echo "show_metrics.sh for the bundles: ${METRICS_SCRIPT}"
+  # run_benchmark_suite.sh is how a bundle lists and runs its workloads, so a
+  # bundle is not built without it.
+  [[ -f "${SUITE_SCRIPT}" ]] || stop "no run_benchmark_suite.sh found (looked for ${SUITE_SCRIPT}); the bundles need it to list and run their workloads"
+  echo "run_benchmark_suite.sh for the bundles: ${SUITE_SCRIPT}"
+  if [[ -f "${METRICS_SCRIPT}" ]]; then echo "show_metrics.sh for the bundles: ${METRICS_SCRIPT}"; else echo "NOTE: no show_metrics.sh found; the bundles will not include it"; fi
+  rm -f "${WORK}/run.sh.template"
   for spec in "amd-ubuntu-2404:1" "nvidia-ubuntu-2404:2" "amd-ubuntu-2604:3" "nvidia-ubuntu-2604:4"; do
     IFS=: read -r name s <<<"${spec}"
     bundle="bundle-${name}"
@@ -1095,20 +1028,21 @@ if is_done bundles; then skipped 7; else
       again git add "${dir}" || stop "git add failed for ${dir} in ${bundle}"
       rows="${rows}- **${dir:0:3}** - [${dir}](https://github.com/${ORG}/${dir})"$'\n'
     done
-    cp "${WORK}/run.sh.template" run.sh
-    suite_files=""
-    if [[ -f "${SUITE_SCRIPT}" ]]; then
-      tr -d '\r' <"${SUITE_SCRIPT}" >run_benchmark_suite.sh
-      suite_files="run_benchmark_suite.sh"
+    # run.sh was folded into run_benchmark_suite.sh (--list, --show-output).
+    git rm -q --ignore-unmatch run.sh >/dev/null 2>&1
+    rm -f run.sh
+    tr -d '\r' <"${SUITE_SCRIPT}" >run_benchmark_suite.sh
+    suite_files="run_benchmark_suite.sh"
+    if [[ -f "${METRICS_SCRIPT}" ]]; then
+      tr -d '\r' <"${METRICS_SCRIPT}" >show_metrics.sh
+      suite_files="${suite_files} show_metrics.sh"
     fi
-    tr -d '\r' <"${METRICS_SCRIPT}" >show_metrics.sh
-    suite_files="${suite_files:+${suite_files} }show_metrics.sh"
     printf 'results/\nbenchmark_suite_log/\n' >.gitignore
     bundle_readme "${s}" "${bundle}" "${want}" "${rows}" >README.md
-    # shellcheck disable=SC2086  # suite_files is one or two script names
-    again git add .gitmodules .gitignore README.md run.sh ${suite_files} || stop "git add failed in ${bundle}"
+    # shellcheck disable=SC2086  # suite_files is one or two names
+    again git add .gitmodules .gitignore README.md ${suite_files} || stop "git add failed in ${bundle}"
     # shellcheck disable=SC2086
-    git update-index --chmod=+x run.sh ${suite_files}
+    git update-index --chmod=+x ${suite_files}
     attach_history </dev/null || stop "could not read the history of ${ORG}/${bundle}"
     git diff --cached --quiet || again git commit -q -m "Pin $(platform "${s}") benchmarks at ${VERSION}" || stop "git commit failed in ${bundle}"
     git push -u origin main </dev/null || stop "pushing ${bundle} failed"
@@ -1139,12 +1073,16 @@ if is_done enduser-test; then skipped 8; else
     git -c advice.detachedHead=false clone -q --recurse-submodules --branch "${VERSION}" \
       "https://github.com/${ORG}/bundle-amd-ubuntu-2404.git" "${WORK}/_test_clone" </dev/null ||
       stop "cloning bundle-amd-ubuntu-2404 at ${VERSION} failed"
-    got=$(cd "${WORK}/_test_clone" && ./run.sh list | grep -c ' ready$')
-    (cd "${WORK}/_test_clone" && ./run.sh list | head -n 3)
-    echo "Benchmarks ready in the test clone: ${got} of ${want}"
-    for f in run.sh run_benchmark_suite.sh show_metrics.sh; do
+    [[ -x "${WORK}/_test_clone/run_benchmark_suite.sh" ]] || stop "run_benchmark_suite.sh in the bundle is missing or not executable"
+    for f in run_benchmark_suite.sh show_metrics.sh; do
       [[ ! -f "${WORK}/_test_clone/${f}" || -x "${WORK}/_test_clone/${f}" ]] || stop "${f} in the bundle is not executable"
     done
+    [[ ! -e "${WORK}/_test_clone/run.sh" ]] || stop "the bundle still has run.sh; step 7 should have removed it"
+    listing=$(cd "${WORK}/_test_clone" && ./run_benchmark_suite.sh --list)
+    got=$(printf '%s\n' "${listing}" | grep -c ' ready$')
+    printf '%s\n' "${listing}" | head -n 3
+    printf '%s\n' "${listing}" | tail -n 1
+    echo "Benchmarks ready in the test clone: ${got} of ${want}"
     rm -rf "${WORK}/_test_clone"
     ((got == want)) || stop "only ${got} of ${want} benchmarks came down with the bundle"
   fi
@@ -1210,16 +1148,9 @@ if is_done generator; then skipped 9; else
     echo "copied  ${GENREPO}"
   fi
   cd "${PUB}/${GENREPO}" || stop "cannot open ${PUB}/${GENREPO}"
-  # Python caches come along with cp -a whenever the generator's scripts or
-  # tests were run before the copy. They are never published.
-  removed=$(find . -path ./.git -prune -o -type d \( -name __pycache__ -o -name .pytest_cache -o -name .ruff_cache -o -name .mypy_cache \) -prune -print -exec rm -rf {} + | wc -l)
-  removed=$((removed + $(find . -path ./.git -prune -o -type f -name '*.py[co]' -print -delete | wc -l)))
-  echo "--- Python cache folders and files removed: ${removed}"
-  # The copy is kept between runs, so lint it too: it is what gets pushed.
-  lint_generator "${PUB}/${GENREPO}"
   problems=0
   check_zero "nested *_copy and .git folders" < <(find . -mindepth 1 \( -path ./.git -prune \) -o -type d \( -name '*_copy' -o -name .git \) -print)
-  check_zero "never-publish items and generated workload folders" < <(find . -path ./.git -prune -o \( -name RESULTS -o -name runtime_ledger.csv -o -name '*.zip' -o -name .env -o -name .venv -o -name __pycache__ -o -name '*.py[co]' -o -type d -name '[1-4][0-9][0-9]-*' \) -print)
+  check_zero "never-publish items and generated workload folders" < <(find . -path ./.git -prune -o \( -name RESULTS -o -name runtime_ledger.csv -o -name '*.zip' -o -name .env -o -name .venv -o -type d -name '[1-4][0-9][0-9]-*' \) -print)
   missing=""
   for f in LICENSE legal/NOTICE .gitattributes .gitignore; do [[ -e "${f}" ]] || missing="${missing} ${f}"; done
   echo "--- files the publish doc says to keep, missing (must be none):${missing:- none}"

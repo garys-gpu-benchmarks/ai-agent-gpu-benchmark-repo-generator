@@ -13,8 +13,8 @@
   "thresholds": {
     "rocm_package_mismatch_count_min": 0,
     "rocm_package_mismatch_count_max": 0,
-    "kernel_driver_mismatch_count_min": 0,
-    "kernel_driver_mismatch_count_max": 0,
+    "kernel_release_mismatch_count_min": 0,
+    "kernel_release_mismatch_count_max": 0,
     "driver_compliance_percent_min": 100,
     "driver_compliance_percent_max": 100,
     "permission_error_count_min": 0,

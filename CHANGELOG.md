@@ -1,5 +1,95 @@
 # Changelog
 
+## 2026-10-18 — Generation unblocked; checks fixed; 24.04/26.04 metric wording matches
+
+- **Generation blocker — `scripts/self_check_generated_repo.sh`:** the ledger-column check expected the list from before `update_runtime_ledger.py` added `metrics_na_count`, `result_status` and `gpu_model_note` (2026-10-17), so every generated workload failed its self-check. The three columns are now expected. New `tests/test_self_check_ledger_columns.py` runs that embedded check against the real module.
+- **`tests/test_amdgpu_reload.py`:** both ROCm installers must be LF (the test required CRLF for 26.04, which bash cannot run). Its newest-kernel check now tests behaviour (no `${newest}`, no `/lib/modules/` scan, no `linux-modules-extra` install) instead of a comment marker.
+- **`scripts/lib/rocm_install_26_04.sh`:** removed the dead step-8 branch (it called `_rocm_install_linux_modules_extra`, which only the 24.04 file defines); 26.04 only logs that `linux-modules-extra` is folded into `linux-modules`.
+- **`scripts/verify_generation_workflow.py`:** links in `templates/*_TEMPLATE.md` resolve in the generated-repo layout (generator root and `templates/workload/`), so `LICENSE` and `.github/workflows/*.yml` no longer fail. The whole check now passes, in about a second.
+- **`scripts/generate_workload_parameters.py`:** an unused `Parameter_NN` slot (`-`) is no longer treated as a parameter (only `—` was skipped). The workbook is read once (the check took 2 min 22 s, now under 1 s). `--check` compares `config/workload_parameters.yaml` with the workbook. Parameters a description does not name are a `[WARN]` (descriptions say what the code does, and some leave out unused parameters); `--strict` makes them a failure. `config/workload_parameters.yaml` regenerated: 33 shared parameters it was missing.
+- **`BenchmarkSpecDefinitions.xlsx` — 24.04/26.04 pairs now identical:** 117/217/317/417 "Achieved compute throughput, TFLOP/s (`achieved_compute_tflops`)" (exact 2·M·N·K FLOPs); 121/321 "Modeled training throughput, 3x forward FLOPs, TFLOP/s (`modeled_tflops`)" (321 named `achieved_TFLOPS`, which nothing writes), and their Output Fields, Raw Output Example and parser notes now name what the collector writes (`modeled_tflops`, `min_operand_traffic_gb_s`); 421 matches 221; 328 says p50 like 128; 409/410/412 drop the fixed "cache-resident below 4x LLC" text (the run-time annotation still applies); 132/232/332 say "E2E mean over queries" like 432. Metric_Short_Labels updated, `show_metrics.sh` regenerated. The `achieved_compute_tflops → modeled_tflops` alias is removed. New `tests/test_metric_pair_parity.py`.
+- **Docs:** `docs/AI_AGENT_HANDOFF.md` describes `--check` and `--strict`.
+
+## 2026-10-18 — Bundle README explains `show_metrics.sh` and `get_remote_info.sh`
+
+- **`scripts/publish_benchmarks_to_github.sh` and `_manual.sh` (bundle README):** new "See your results" section after "Getting started" with `./show_metrics.sh NNN`, `--baseline` and `--help`; a `show_metrics.sh` row in the Results table; and a worked `get_remote_info.sh --host` example (clone `gpu-bench-suite`, where it writes `RUNTIME_LEDGERS/` and `DIRECTORIES/`, `--port` for a non-22 ssh port, and `show_metrics.sh --host`). Before, the bundle shipped `show_metrics.sh` without mentioning it and gave `get_remote_info.sh` one line.
+- **`tests/test_bundle_readme_tools.py`:** new. Renders the bundle README with the real `bundle_readme()` for all four platforms and checks that it shows every script step 7 copies into the bundle, the `get_remote_info.sh --host` example, no unfilled `@...@` placeholder and no `./run.sh`.
+
+## 2026-10-18 — Bundle `run.sh` folded into `run_benchmark_suite.sh`
+
+`/opt/benchmarks` had both `run.sh` and `run_benchmark_suite.sh`, so `run<Tab>` did not complete. Everything `run.sh` did is now in the suite runner, and bundles no longer ship `run.sh`.
+
+- **`templates/suite-tools/scripts/run_benchmark_suite.sh`:** new `-l, --list` prints every workload (folders and `.gitmodules` entries) as `ready` or `not fetched`, with a count and the `git submodule update` command when something is missing; exit 0 when all are ready, 1 otherwise; honours `-w` and `-d`; finds a bundle root even before any submodule is fetched. New `--show-output` also streams each run's output to the screen (it always goes to the log); the exit code is kept. `-w NNN` for a folder that is not fetched says so and how to fetch it. `-w` parsing moved into the main shell, so a bad value always stops the script.
+- **`scripts/publish_benchmarks_to_github.sh` and `_manual.sh`:** step 7 no longer writes `run.sh` and removes it from existing bundle repositories (`git rm`); it stops if `run_benchmark_suite.sh` is missing (the bundle cannot list or run without it). It now also copies `show_metrics.sh` into every bundle, as the README already said. Step 8 checks the test clone with `./run_benchmark_suite.sh --list`, checks both scripts are executable, and fails if `run.sh` is still there. The bundle README uses `--list` and `-w NN -p smoke --show-output`, and its options table lists both.
+- **Docs:** `templates/README_TEMPLATE.md` (every workload README: the bundle install chain now uses `--list`, which stops the chain when a workload is missing), `README.md`, `templates/suite-tools/README.md`, `docs/github-profile-README.md`.
+- **Tests:** new `tests/test_run_benchmark_suite_list.py` (`--list` states, `.gitmodules`, `-w` filter, unfetched and missing workloads, `--show-output` on screen and in the log, exit code kept, `--help`; no `./run.sh` left in the publish scripts or READMEs). `tests/test_operator_tools.py` checks the bundle copies `show_metrics.sh`; it now passes.
+
+## 2026-10-18 — `get_remote_info.sh` takes `--host` and `--port`
+
+- **`templates/suite-tools/scripts/get_remote_info.sh`:** new `--host HOST`, `-p, --port PORT` and `--user USER` options, the same names `show_metrics.sh` uses: `./get_remote_info.sh --host 203.0.113.10 --port 39116`. The positional form `HOST [PORT]` still works. Every option that takes a value also accepts `--option=VALUE`. A host, port or user given twice with different values, a port outside 1-65535, a missing value, or an option followed by another option instead of its value is a usage error (exit 2) before any ssh connection. `--help` lists the connection options first.
+- **Docs:** README.md, templates/README_TEMPLATE.md, templates/suite-tools/README.md and docs/github-profile-README.md show the `--host`/`--port` form.
+- **`tests/test_get_remote_info_options.py`:** new. Runs the script against a stand-in `ssh` that records its arguments and refuses the connection: checks that every form reaches ssh as `-p PORT user@host`, and that bad input exits 2 without running ssh.
+
+## 2026-10-18 — Metric keys and labels match what the collectors measure
+
+Reviewed against the code. Old keys still resolve through `STORAGE_ALIASES`, so earlier `summary.json` files keep printing.
+
+- **101/301 `system-config-amd`:** `kernel_driver_mismatch_count` → `kernel_release_mismatch_count` (it counts the kernel release only). Collector, `gate.json` thresholds, and the `kernel-*-mismatch-count` column maps in `materialize_generated_harness.py` and the 114/115 `parse_results.py`.
+- **103/303 `system-stress-amd`:** `gpu_system_ecc_error_count` → `ras_uncorrectable_ecc_delta_count` (collector and `gate.json`). When amd-smi prints no throttle counter, `thermal_throttle_event_count` is `na (expected: throttle counter not exposed)` instead of blank, so the run publishes N/A-EXPECTED rather than INCOMPLETE. 203/403 keep `gpu_system_ecc_error_count`; 103/303 keep `peak_gpu_junction_temp_c` (amd-smi reads junction/hotspot).
+- **104/304 `sdc-ecc-amd`:** `even_word_store_pass_rate` → `loop_verification_pass_pct` (percent of clean loops; even and odd indexes are checked).
+- **109/309, 209/409:** label says `latency_ns_remote_dram` is na on a host with fewer than two NUMA nodes (the collector and `classify_na()` already did this).
+- **116/316, 216/416:** all-reduce only, so `busbw_gb_s`, `algbw_gb_s`, `latency_us` → `allreduce_busbw_gb_s`, `allreduce_algbw_gb_s`, `allreduce_latency_at_min_bytes_us` in both vendors, labels say "na on single GPU". `classify_na()` also recognizes `allreduce` keys. `nccl_bw.cu` uses (n-1)/n busbw for all_gather/reduce_scatter and 1 for broadcast/reduce (the published all_reduce headline is unchanged). 216/416 baseline/extended `max_bytes` 16 MiB → 1 GiB. 116/316 Known Runtime Constraints corrected: `rccl_perf` is multi-rank; `num_gpus` is 1 in every profile, which is why the metrics are na.
+- **120/320:** metric label stays "Mean rocSOLVER LU FP64". `bin/rochpl` is built from `src/rochpl.cpp` (`rocsolver_dgetrf`/`dgetrs`), not upstream rocHPL, so the collector's comments and log lines now say rocSOLVER LU.
+- **203/403 `system-stress-nvidia`:** `peak_gpu_junction_temp_c` → `peak_gpu_temperature_c` (nvidia-smi `temperature.gpu` is the core sensor, not junction).
+- **204/404 `sdc-ecc-nvidia`:** Metrics #4 key is `hbm3_coverage_gb` (the emitted key, GiB); `walking_1s_moving_inversion_pass_rate` → `fixed_pattern_fill_verify_pass_rate`.
+- **218/418:** "Achieved convolution throughput, forward (`tflops_fwd`)" and "Minimum forward operand traffic (`min_operand_traffic_gb_s`)". The `tflops_fwd → modeled_tflops_fwd` alias is removed.
+- **221:** "Modeled FP16 training throughput, 3x forward FLOPs (`fp16_tflops`)". The `fp16_tflops → modeled_fp16_tflops` alias is removed.
+- **227/427 `vllm-kvcache-nvidia`:** `sustained_decode_throughput_under_cache_pressure_tokens_sec` → `decode_throughput_tokens_sec`, "Aggregate decode throughput".
+- **`BenchmarkSpecDefinitions.xlsx`:** Metrics, Output Fields, Raw Output Example, parser notes, 216/416 run commands and parameters, and Metric_Short_Labels updated; `show_metrics.sh` regenerated.
+- **`tests/test_metric_renames_20261018.py`:** new. Every renamed metric resolves from the workbook to the emitted key, old keys resolve through the aliases, gates use the new keys, the throttle na is expected, and the busbw factors and 1 GiB `max_bytes` are in place.
+
+## 2026-10-18 — Reliable cleanup of generation copies; empty copy shells removed
+
+Project370 (101–132) could not be copied to the publish folder: 103 still held its 454-file `ai-agent-gpu-benchmark-repo-generator_copy` (paths up to 286 characters), and 126, `.ai-agent-gpu-benchmark-repo-generator_109_*` and `_123_*` were left as empty folder skeletons by deletes that stopped partway.
+
+- **`scripts/remove_template_copy.py` (1.1.0):** new `rmtree_reliable()` deletes a tree, keeps going past individual errors (read-only files, files briefly held on the Z: share or by antivirus, "directory not empty"), retries up to 5 times with a growing delay (0.5, 1, 2, 4 s), and confirms the path is gone; otherwise it prints a `[WARN]` naming the path. New `reliable_temp_dir()` is `tempfile.TemporaryDirectory` with that cleanup, and it reports a leftover instead of ignoring it.
+- **Empty copy shells:** `remove_template_copy.py` now also removes a generator `*_copy` folder that holds no files (named `ai-agent-gpu-benchmark-repo-generator_copy` or `TEMPLATE_00_<n>_copy`), and the copy named in `results/generation_manifest.json` even after a partial delete removed its marker files. It records `template_copy_removed_at` as for a full copy. Other folders that merely end in `_copy`, and generator-named folders that still hold files but are not the manifest's copy, are left alone. Previously such shells got "No nested template copy found; nothing to remove".
+- **`scripts/create_generated_repo.py` (1.5.0):** the discovery folder `.<generator>_<workload>_*` uses `reliable_temp_dir()` instead of `TemporaryDirectory(ignore_cleanup_errors=True)`, which silently left those folders in the project root. `--force` and the template-copy refresh delete with `rmtree_reliable()` and stop with a clear message if something is still in the way.
+- **`tests/test_remove_template_copy.py`:** 8 new tests (empty shell, partial copy, unrelated folder kept, retry until gone, failure reported, missing path, temp folder removed, leftover reported).
+
+## 2026-10-18 — Guarded rocBLAS `cd` (shellcheck SC2164 failed CI on push)
+
+- **`scripts/lib/rocm_install_24_04.sh`, `scripts/lib/rocm_install_26_04.sh`:** `rocm_compile_rocblas_bench` now runs `cd "${ROCBLAS_SOURCE_DIR}" || _rocm_die "Cannot cd to ${ROCBLAS_SOURCE_DIR}"`. These libraries are sourced without `set -e`, so the bare `cd` was a shellcheck warning (SC2164), and the shared CI lint (`--severity=warning`) failed every one of the 128 workloads on push. A failed `cd` would also have run `./install.sh` from the wrong folder.
+- **`tests/test_shell_cd_guarded.py`:** new. Fails when a `.sh` under `scripts/`, `templates/` or `implementation_components/` that does not run under `set -e` has a `cd` without `||`/`&&` (heredoc text is skipped). It needs no shellcheck install.
+- **`scripts/smoke_check_generated_repo.sh`:** runs the same `shellcheck --severity=warning` command as the shared CI on the generated repository, and fails if it reports anything; prints a `[WARN]` and skips when shellcheck is not installed.
+
+## 2026-10-18 — AMD system stress ceilings match MI300X operating range
+
+- **103/303 `system-stress-amd`:** `sweep.temp_threshold` and `thresholds.peak_gpu_junction_temp_c_max` are 100. `sweep.power_threshold` and `thresholds.sustained_gpu_power_w_max` are 1000. Thermal-throttle and ECC maxima stay 0. The old 75 °C and 500 W ceilings failed a normal Instinct MI300X reading (junction on the 75 °C line, board power about 730 W). The gate in `implementation_components/system-stress-amd/gate.json` and the 103/303 rows on `Parameters_SmokeBaselineExtend` are the sources the next generation writes into `config/benchmark_config.yaml`.
+
+## 2026-10-17 — NVIDIA values checked against Project365/367 runs
+
+- **vLLM (227–229, 427–429):** `requirements.txt` and `setup.sh` pin `vllm==0.31.0`, the version every passing run installed (it pulls torch `2.13.0+cu130`).
+- **`BenchmarkSpecDefinitions.xlsx`:** Container Base Image is the provider-supplied container on both Ubuntu releases (overlay root, no systemd; the generator builds no image). 2xx GPU Runtime is CUDA 12.6 (nvcc 12.6.85 preinstalled; setup installs 12.8 only when nvcc is missing); 4xx is CUDA 13.3 (nvcc 13.3.73). Driver is 580.159.04 on both, so `--nvidia-driver-version 580` is correct. vLLM rows record vLLM 0.31.0 and PyTorch 2.13.0+cu130.
+
+## 2026-10-17 — NVIDIA spec corrections and ROCm 10.1 inventory package names
+
+- **`BenchmarkSpecDefinitions.xlsx` (NVIDIA rows):** values now match the install scripts. 419 and 421–425: PyTorch `2.13.0+cu130` (was `2.7.1+cu128`, which has no Python 3.14 wheel); 421/422 torchvision `0.28.0+cu130`. 430/431: PyTorch `2.13.0+cu130`, torchvision `0.28.0+cu130`, `sglang-kernel==0.4.6.post1`. 227–229 and 427–429: PyTorch is whatever unpinned `pip install vllm` pulls. 232: torchvision `0.22.1+cu128`. g++ is the distro compiler (13.3.0 on 24.04, 15.2.0 on 26.04); 4xx CMake is 4.2.3. Container Base Image for 2xx is host-native (the generator has no container step). Label fixes: `N/A - g++ not used`, `N/A - cuBLAS not used`. 201/401 `nvidia_driver_version` and `cuda_version` are stored as text. Schema Last Updated is 2026-10-17 on every AMD and NVIDIA row.
+- **`scripts/install_pytorch_nvidia.sh`, `rag-faiss-end2end-nvidia/files/scripts/install_rag_nvidia.sh`:** Ubuntu 24.04 torchvision pinned to `0.22.1+cu128` (it was unpinned).
+- **`config/hw_sw_info_commands.xlsx`:** ROCm 7 package queries replaced with ROCm 10.1 names (`amdrocm-base10.1`, `amdrocm-dnn-host10.1`, `amdrocm-rccl-host10.1`, `amdrocm-blas10.1`, `amdrocm-solver-host10.1`); RVS is called from PATH; the installed-package list matches `amdrocm|amdgpu`. `scripts/collect_hw_sw_info.sh` regenerated.
+- **`config/machines.yaml`:** `rocm_version` 10.1.0 (was 7.2.4).
+
+## 2026-10-17 — amd-smi replaces rocm-smi (ROCm 10.x)
+
+ROCm 10.x does not ship `rocm-smi`. Every AMD probe now uses `amd-smi`. Originals are in `../_backup_rocmsmi_20261017/`.
+
+- **`system-config-amd` (101/301):** the `rocm-smi` probe is now `amd-smi version` (still seven probes; transcript `amd-smi-version.txt`). Each row has a new `rc` column with that probe's own exit code (127 = tool missing); `rc` is not a metric and is not gated. Firmware lookup no longer falls back to `rocm-smi`. Default `required_packages` is `amdrocm-base10.1,amdrocm-amdsmi10.1`; the old `rocm-core`/`rocm-smi` aliases still resolve. `component.json` verifies `amd-smi version` instead of `rocm-smi`.
+- **`rocm-health-amd` (102/302), `system-stress-amd` (103/303), `sdc-ecc-amd` (104/304), `resnet50-inference-amd` (122/322), `vllm-kvcache-amd` (127/327), `jax-xla-amd`/`jax-xla-nvidia`:** removed the `rocm-smi` calls; `amd-smi metric`/`static` and sysfs were already the working sources. The 122 utilization note now says `na (amd-smi gave no utilization reading)`.
+- **`rocm-tool-verify-build`:** no longer warns that `rocm-smi` is missing.
+- **`config/hw_sw_info_commands.xlsx`:** `rocm-smi --showmeminfo vram` → `amd-smi static --vram`, `rocm-smi --showproductname` → `amd-smi static --asic`, `rocm-smi` → `amd-smi metric`, `rocm-smi --version` → `amd-smi firmware`. `scripts/collect_hw_sw_info.sh` regenerated; its vendor fallback checks `amd-smi`/`rocminfo`.
+- **`scripts/update_runtime_ledger.py`, `templates/shared-workflows/.github/workflows/gpu-smoke.yml`, `config/workload_parameters.yaml`:** `rocm-smi` calls and examples replaced with `amd-smi` and the ROCm 10.1 package names.
+- **`BenchmarkSpecDefinitions.xlsx`:** ROCm 10.1 corrections (Python 3.14.8, g++ label, 101/301 `driver_version` 7.1.9 and `required_packages amdrocm-base10.1,amdrocm-amdsmi10.1`) and 50 AMD description cells changed from `rocm-smi` to `amd-smi`. Changed cells are yellow with the old value in a comment.
+
 ## 2026-10-16 — ROCm 10.1.0 and amdgpu 31.60
 
 - **Software levels** come from `Tmp_ROC_10_1_0_Migration_NewSoftwareLevels_20261016a.xlsx`, which supersedes the version cells in `BenchmarkSpecDefinitions.xlsx`. AMD rows now pin ROCm 10.1.0, PyTorch `2.13.0+rocm10.1.0`, torchvision `0.28.0+rocm10.1.0`, torchaudio `2.11.0.2+rocm10.1.0`, vLLM `0.29.1.dev0+rocm10.1.0` (cp314), SGLang 0.5.18 at commit `71de97b264b04dcd514cf904003028aefe9775c8`, JAX 0.11.1 with `jax_rocm10_plugin`, rocBLAS 5.7.0, and uv-managed CPython 3.14 for every benchmark virtualenv.

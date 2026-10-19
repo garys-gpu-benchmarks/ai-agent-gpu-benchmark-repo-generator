@@ -5,7 +5,7 @@
 #              workers at cpu_load_percent) for the yaml duration, polling
 #              nvidia-smi every poll_interval seconds on a fixed schedule.
 #              Same three metrics and CSV layout as the AMD twin (103/303):
-#              peak_gpu_junction_temp_c, sustained_gpu_power_w, gpu_system_ecc_error_count.
+#              peak_gpu_temperature_c, sustained_gpu_power_w, gpu_system_ecc_error_count.
 #              Gates: the run fails if gpu_stress fails or GPU utilization never
 #              reaches half the requested load; peak temperature above
 #              temp_threshold, mean power above power_threshold, or (with
@@ -25,11 +25,11 @@ from pathlib import Path
 import yaml
 
 # One row per poll, same columns as implementation_components/system-stress-amd.
-# peak_gpu_junction_temp_c / sustained_gpu_power_w hold the per-poll reading;
+# peak_gpu_temperature_c / sustained_gpu_power_w hold the per-poll reading;
 # parse_results.py reduces them by leading word: peak_ -> max, sustained_ -> mean.
 HEADER = [
     "sample_index", "status", "second", "gpu_util_pct", "gpu_temp_c", "gpu_power_w",
-    "ecc_uncorrected", "peak_gpu_junction_temp_c", "sustained_gpu_power_w",
+    "ecc_uncorrected", "peak_gpu_temperature_c", "sustained_gpu_power_w",
     "thermal_throttle_event_count", "gpu_system_ecc_error_count", "error_message",
 ]
 QUERY_FIELDS = "temperature.gpu,power.draw,utilization.gpu,clocks_throttle_reasons.hw_thermal_slowdown"
@@ -245,7 +245,7 @@ def main() -> int:
             "gpu_temp_c": blank(temp),
             "gpu_power_w": blank(power),
             "ecc_uncorrected": blank(ecc),
-            "peak_gpu_junction_temp_c": blank(temp),
+            "peak_gpu_temperature_c": blank(temp),
             "sustained_gpu_power_w": blank(power),
             "thermal_throttle_event_count": float(throttle_events),
             "gpu_system_ecc_error_count": blank(ecc),

@@ -630,7 +630,7 @@ def main(argv: list[str]) -> int:
     format_by_workload = {
         "111": "Linux perf stat -x, stderr records with wrapper metadata.",
         "116": "RCCL rccl-tests stdout tables.",
-        "120": "rocHPL stdout text captured from mpirun.",
+        "120": "bin/rochpl (rocSOLVER LU) stdout text captured from mpirun.",
     }
     if "Raw Output Format" not in field_map:
         definition.append({

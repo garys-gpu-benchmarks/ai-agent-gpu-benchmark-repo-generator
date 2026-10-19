@@ -102,10 +102,11 @@ def main() -> int:
     Path(args.run_dir).mkdir(parents=True, exist_ok=True)
     csv_block = write_csv(args.raw_file, [
         "sample_index", "status", "copy_bandwidth_gb_s", "scale_bandwidth_gb_s",
-        "add_bandwidth_gb_s", "triad_bandwidth_gb_s", "error_message",
+        "add_bandwidth_gb_s", "triad_bandwidth_gb_s", "working_set_bytes", "error_message",
     ], [{
         "status": "ok", "copy_bandwidth_gb_s": rates["copy"], "scale_bandwidth_gb_s": rates["scale"],
         "add_bandwidth_gb_s": rates["add"], "triad_bandwidth_gb_s": rates["triad"],
+        "working_set_bytes": int(float(array_size)) * 8 * 3,
         "error_message": "",
     }])
     Path(args.raw_file).write_text(text + "\n" + csv_block, encoding="utf-8")

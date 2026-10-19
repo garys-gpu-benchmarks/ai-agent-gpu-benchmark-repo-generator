@@ -1,6 +1,6 @@
 {
   "component_id": "system-stress-nvidia",
-  "description": "NVIDIA 203/403 system stress: bin/gpu_stress (cuBLAS FP16 GEMM, native SASS) holds the GPU at gpu_load_percent while stress-ng runs num_threads CPU workers at cpu_load_percent, for yaml duration; nvidia-smi polled every poll_interval on a fixed schedule. Same three metrics and CSV layout as system-stress-amd: peak_gpu_junction_temp_c (max of temperature.gpu), sustained_gpu_power_w (mean of power.draw), gpu_system_ecc_error_count (ecc.errors.uncorrected.volatile.total). Fails if the GPU load does not run or utilization never reaches half the requested load; temp_threshold, power_threshold, and throttle_check mark samples error.",
+  "description": "NVIDIA 203/403 system stress: bin/gpu_stress (cuBLAS FP16 GEMM, native SASS) holds the GPU at gpu_load_percent while stress-ng runs num_threads CPU workers at cpu_load_percent, for yaml duration; nvidia-smi polled every poll_interval on a fixed schedule. Same CSV layout as system-stress-amd, except the temperature key: peak_gpu_temperature_c (max of temperature.gpu, the GPU core sensor, not junction), sustained_gpu_power_w (mean of power.draw), gpu_system_ecc_error_count (ecc.errors.uncorrected.volatile.total). Fails if the GPU load does not run or utilization never reaches half the requested load; temp_threshold, power_threshold, and throttle_check mark samples error.",
   "overlay": [
     "scripts/collect_workload.py",
     "scripts/build.sh",

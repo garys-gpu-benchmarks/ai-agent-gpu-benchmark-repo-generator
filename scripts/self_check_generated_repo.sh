@@ -317,7 +317,7 @@ expected = [
 expected.extend(module.metric_slot_column_names())
 expected.extend(["run_benchmark_command_submitted", "run_benchmark_command_fully_resolved"])
 expected.extend(module.parameter_slot_column_names())
-expected.extend(["parameters_set", "notes"])
+expected.extend(["parameters_set", "notes", "metrics_na_count", "result_status", "gpu_model_note"])
 if list(module.LEDGER_COLUMNS) != expected:
     raise SystemExit("[FAIL] scripts/update_runtime_ledger.py LEDGER_COLUMNS order is incorrect.")
 if module.format_total_runtime_mm_ss("75") != "01:15":
@@ -1165,5 +1165,34 @@ if rg -n "\r$" . \
     echo "[FAIL] CRLF line endings detected in generated text files." >&2
     exit 1
 fi
+
+"${PYTHON_BIN:-python3}" - <<'PY'
+import sys
+sys.path.insert(0, "scripts")
+from metric_contract import (
+    finalize_serving_publication,
+    publication_status,
+    text_dimension_key,
+    STUB_NA,
+)
+redacted, status = finalize_serving_publication(
+    {"ttft_p50_msec": 1.0, "request_throughput_requests_sec": 10.0},
+    "scripts/tiny_sglang_server.py",
+)
+if status != "stub" or redacted["ttft_p50_msec"] != STUB_NA:
+    raise SystemExit("[FAIL] stand-in metrics were published under real names")
+if text_dimension_key("Transfer direction (direction)") is not True:
+    raise SystemExit("[FAIL] direction is still accepted as a numbered metric")
+incomplete, _count = publication_status([("latency", "NOT FOUND")], {"profile": "baseline"})
+if incomplete != "INCOMPLETE":
+    raise SystemExit("[FAIL] unresolved metric still counts as a pass")
+expected, _count = publication_status(
+    [("allreduce_busbw_gb_s", "na (requires at least two GPUs)")],
+    {"profile": "baseline", "gpu_count": 1},
+)
+if expected != "N/A-EXPECTED":
+    raise SystemExit(f"[FAIL] expected na counted as {expected}")
+print("[PASS] metric publication contract")
+PY
 
 echo "[PASS] Generated repository self-check succeeded."

@@ -83,6 +83,14 @@ def main() -> int:
         text = (completed.stdout or "") + "\n" + (completed.stderr or "")
     except subprocess.TimeoutExpired as exc:
         text = str(exc)
+    array_count = float(pv(params, "array_size", args.profile, "1048576") or 1048576)
+    working_set = int(array_count) * 8 * 3
+    try:
+        from metric_contract import lookup_device
+        _label, spec = lookup_device("")
+        peak_gbps = float(spec["hbm_gbps"]) if spec else None
+    except Exception:
+        peak_gbps = None
     rows = []
     for kernel in ("Copy", "Mul", "Add", "Triad", "Dot"):
         match = re.search(rf"^{kernel}:\s+([0-9]+(?:\.[0-9]+)?)", text, re.I | re.M)
@@ -92,12 +100,14 @@ def main() -> int:
             "status": "ok" if match else "error",
             "kernel": kernel,
             "bandwidth_gb_s": bw,
-            "peak_percent": min(100.0, (bw / 5300.0) * 100.0) if bw > 0 else 0.0,
+            "peak_percent": (min(100.0, (bw / peak_gbps) * 100.0) if peak_gbps and bw > 0 else ""),
             "runtime_ms": 1.0,
+            "working_set_bytes": working_set,
             "error_message": "" if match else "missing kernel line",
         })
     csv_text = write_csv(args.raw_file, [
-        "sample_index", "status", "kernel", "bandwidth_gb_s", "peak_percent", "runtime_ms", "error_message",
+        "sample_index", "status", "kernel", "bandwidth_gb_s", "peak_percent", "runtime_ms",
+        "working_set_bytes", "error_message",
     ], rows)
     Path(args.raw_file).write_text(text + "\n" + csv_text, encoding="utf-8")
     return 0

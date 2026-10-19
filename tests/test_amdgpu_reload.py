@@ -277,11 +277,10 @@ class RunningKernelGuardTests(unittest.TestCase):
     def test_both_installers_follow_every_kernel_rule(self):
         for name in ("rocm_install_24_04.sh", "rocm_install_26_04.sh"):
             raw = (LIB / name).read_bytes()
-            if name.endswith("26_04.sh"):
-                self.assertIn(b"\r\n", raw)
-                self.assertNotIn(b"\n", raw.replace(b"\r\n", b""))
-            else:
-                self.assertNotIn(b"\r\n", raw)
+            # Both installers are sourced by bash on Ubuntu, so LF only
+            # (.gitattributes: *.sh eol=lf). A CRLF copy fails with
+            # "$'\\r': command not found" and the generated repo's CRLF scan.
+            self.assertNotIn(b"\r", raw, f"{name} has CR (Windows) line endings")
             text = raw.decode("utf-8").replace("\r\n", "\n")
             executable = "\n".join(
                 line for line in text.splitlines() if not line.lstrip().startswith("#")
@@ -306,7 +305,11 @@ class RunningKernelGuardTests(unittest.TestCase):
         )
         self.assertNotIn("apt-get install -y linux-modules-extra", executable26)
         self.assertNotIn("apt install -y linux-modules-extra", executable26)
-        self.assertIn("no newest /lib/modules install", text26)
+        # No newest-kernel branch on 26.04: nothing looks for a newer kernel
+        # under /lib/modules or installs modules for one.
+        self.assertNotIn("${newest}", executable26)
+        self.assertNotIn("/lib/modules/", executable26)
+        self.assertNotIn("_rocm_install_linux_modules_extra", executable26)
 
     def test_unknown_hold_names_are_skipped_and_foreign_module_fails(self):
         if BASH is None:

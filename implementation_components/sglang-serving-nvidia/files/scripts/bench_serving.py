@@ -9,16 +9,22 @@ from __future__ import annotations
 import argparse
 import csv
 import json
+import os
 import time
 import urllib.request
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 
-from metric_contract import apply_itl_contract
+from metric_contract import apply_itl_contract, finalize_serving_publication, guarded_percentile
 
 def _f6(value) -> str:
-    """6-decimal text for a number; blank when the value was not measured."""
-    return "" if value is None or value == "" else f"{float(value):.6f}"
+    """6-decimal text for a number; leave an explicit na reason unchanged."""
+    if value is None or value == "":
+        return ""
+    text = str(value)
+    if text.lower().startswith("na ("):
+        return text
+    return f"{float(value):.6f}"
 
 
 METRIC_KEYS = (
@@ -72,7 +78,10 @@ def one_request(url: str, model_name: str, input_len: int, output_len: int, seed
     token_times: list[float] = []
     out_tokens = 0
     usage_tokens = None
+    standin = os.environ.get("BENCHMARK_SERVER_KIND", "").lower() == "stub"
     with urllib.request.urlopen(req, timeout=3600) as resp:
+        if "stub" in str(resp.headers.get("X-Benchmark-Server") or "").lower():
+            standin = True
         for raw_line in resp:
             line = raw_line.decode("utf-8", errors="replace").strip()
             if not line.startswith("data:"):
@@ -84,6 +93,8 @@ def one_request(url: str, model_name: str, input_len: int, output_len: int, seed
                 chunk = json.loads(data)
             except json.JSONDecodeError:
                 continue
+            if chunk.get("server_identity") == "stub" or str(chunk.get("id", "")).startswith("tiny-sglang"):
+                standin = True
             usage = chunk.get("usage") or {}
             if usage.get("completion_tokens"):
                 usage_tokens = int(usage["completion_tokens"])
@@ -102,6 +113,7 @@ def one_request(url: str, model_name: str, input_len: int, output_len: int, seed
         return {
             "e2e_ms": elapsed_ms, "ttft_ms": "", "tpot_ms": "",
             "itl_ms": "", "itl_gaps_ms": [], "out_tokens": produced,
+            "server_identity": "stub" if standin else "",
         }
     ttft_ms = (first - start) * 1000.0
     tpot_ms = (elapsed_ms - ttft_ms) / max(1, produced - 1)
@@ -114,6 +126,7 @@ def one_request(url: str, model_name: str, input_len: int, output_len: int, seed
         "e2e_ms": elapsed_ms, "ttft_ms": ttft_ms, "tpot_ms": tpot_ms,
         "itl_ms": itl_ms, "itl_gaps_ms": gaps if len(token_times) >= 2 else [],
         "out_tokens": produced,
+        "server_identity": "stub" if standin else "",
     }
 
 
@@ -187,7 +200,26 @@ def main() -> int:
         "tpot_p95_ms": pct(tpot, 0.95),
         "tpot_p99_ms": pct(tpot, 0.99),
     }
+    summary_metrics["end_to_end_request_latency_p95_msec"] = guarded_percentile(e2e, 0.95, "p95")
+    summary_metrics["end_to_end_request_latency_p99_msec"] = guarded_percentile(e2e, 0.99, "p99")
+    summary_metrics["ttft_p95_msec"] = guarded_percentile(ttft, 0.95, "p95")
+    summary_metrics["ttft_p99_msec"] = guarded_percentile(ttft, 0.99, "p99")
+    summary_metrics["time_per_output_token_tpot_p95_msec"] = guarded_percentile(tpot, 0.95, "p95")
+    summary_metrics["time_per_output_token_tpot_p99_msec"] = guarded_percentile(tpot, 0.99, "p99")
+    summary_metrics["inter_token_latency_itl_p95_msec"] = guarded_percentile(itl, 0.95, "p95")
+    summary_metrics["inter_token_latency_itl_p99_msec"] = guarded_percentile(itl, 0.99, "p99")
+    summary_metrics["e2e_p95_ms"] = summary_metrics["end_to_end_request_latency_p95_msec"]
+    summary_metrics["e2e_p99_ms"] = summary_metrics["end_to_end_request_latency_p99_msec"]
+    summary_metrics["ttft_p95_ms"] = summary_metrics["ttft_p95_msec"]
+    summary_metrics["ttft_p99_ms"] = summary_metrics["ttft_p99_msec"]
+    summary_metrics["tpot_p95_ms"] = summary_metrics["time_per_output_token_tpot_p95_msec"]
+    summary_metrics["tpot_p99_ms"] = summary_metrics["time_per_output_token_tpot_p99_msec"]
+    summary_metrics["latency_sample_count"] = len(results)
     apply_itl_contract(summary_metrics)
+    identity = " ".join(str(item.get("server_identity", "")) for item in results)
+    if os.environ.get("BENCHMARK_SERVER_KIND", "").lower() == "stub":
+        identity += " server_identity=stub"
+    summary_metrics, serve_status = finalize_serving_publication(summary_metrics, identity)
     params = {
         "model_name": args.model_name,
         "dtype": args.dtype,
@@ -208,15 +240,15 @@ def main() -> int:
     for i, rec in enumerate(results):
         rows.append({
             "check_name": f"req_{i}",
-            "status": "ok",
+            "status": "stub" if serve_status == "stub" else "ok",
             **params,
             "e2e_ms": rec["e2e_ms"],
             "ttft_ms": rec["ttft_ms"],
             "tpot_ms": rec["tpot_ms"],
             **{k: summary_metrics[k] for k in METRIC_KEYS},
         })
-    rows.append({"check_name": "summary", "status": "ok", **params, "e2e_ms": summary_metrics["end_to_end_request_latency_p50_msec"], "ttft_ms": summary_metrics["ttft_p50_msec"], "tpot_ms": summary_metrics["time_per_output_token_tpot_p50_msec"], **{k: summary_metrics[k] for k in METRIC_KEYS}})
-    fieldnames = list(rows[0].keys())
+    rows.append({"check_name": "summary", "status": "stub" if serve_status == "stub" else "ok", "server_identity": summary_metrics.get("server_identity", ""), **params, "e2e_ms": summary_metrics["end_to_end_request_latency_p50_msec"], "ttft_ms": summary_metrics["ttft_p50_msec"], "tpot_ms": summary_metrics["time_per_output_token_tpot_p50_msec"], **{k: summary_metrics[k] for k in METRIC_KEYS}})
+    fieldnames = list(dict.fromkeys([*rows[0].keys(), "server_identity"]))
     with (run_dir / "raw_results.csv").open("w", encoding="utf-8", newline="") as handle:
         writer = csv.DictWriter(handle, fieldnames=fieldnames)
         writer.writeheader()
@@ -224,8 +256,8 @@ def main() -> int:
     (run_dir / "raw_results.jsonl").write_text("".join(json.dumps(row) + "\n" for row in rows), encoding="utf-8")
     (run_dir / "raw_output.txt").write_text(json.dumps(summary_metrics, indent=2) + "\n", encoding="utf-8")
     print(
-        f"e2e_p99_ms={summary_metrics['e2e_p99_ms']:.6f} ttft_p99_ms={_f6(summary_metrics['ttft_p99_ms'])} "
-        f"tpot_p99_ms={summary_metrics['tpot_p99_ms']:.6f} samples={len(results)}",
+        f"e2e_p99_ms={_f6(summary_metrics['e2e_p99_ms'])} ttft_p99_ms={_f6(summary_metrics['ttft_p99_ms'])} "
+        f"tpot_p99_ms={_f6(summary_metrics['tpot_p99_ms'])} samples={len(results)}",
         flush=True,
     )
     print("[INFO] summary " + " ".join(f"{k}={summary_metrics[k]}" for k in METRIC_KEYS), flush=True)

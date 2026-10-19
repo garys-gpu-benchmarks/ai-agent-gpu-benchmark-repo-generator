@@ -26,7 +26,7 @@ else
     "${PYTHON_BIN}" -m pip install 'torch==2.7.1+cu128' --index-url https://download.pytorch.org/whl/cu128
   fi
   if ! "${PYTHON_BIN}" -c "import torchvision" >/dev/null 2>&1; then
-    "${PYTHON_BIN}" -m pip install torchvision --index-url https://download.pytorch.org/whl/cu128
+    "${PYTHON_BIN}" -m pip install 'torchvision==0.22.1+cu128' --index-url https://download.pytorch.org/whl/cu128  # matches torch 2.7.1
   fi
 fi
 if ! "${PYTHON_BIN}" -c "import transformers" >/dev/null 2>&1; then

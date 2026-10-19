@@ -120,14 +120,14 @@ def main() -> int:
                 "bytes": largest.get("bytes", sizes[-1]),
                 # Bandwidth is reported at the largest message; latency at the smallest.
                 # One rank publishes the reason instead of a local-copy number.
-                "busbw_gb_s": NA_SINGLE_GPU if single else largest["busbw_gb_s"],
-                "algbw_gb_s": NA_SINGLE_GPU if single else largest.get("algbw_gb_s", ""),
-                "latency_us": NA_SINGLE_GPU if single else smallest.get("latency_us", ""),
+                "allreduce_busbw_gb_s": NA_SINGLE_GPU if single else largest["busbw_gb_s"],
+                "allreduce_algbw_gb_s": NA_SINGLE_GPU if single else largest.get("algbw_gb_s", ""),
+                "allreduce_latency_at_min_bytes_us": NA_SINGLE_GPU if single else smallest.get("latency_us", ""),
                 "error_message": "",
             })
     header = [
         "sample_index", "status", "collective", "num_gpus", "bytes",
-        "busbw_gb_s", "algbw_gb_s", "latency_us", "error_message",
+        "allreduce_busbw_gb_s", "allreduce_algbw_gb_s", "allreduce_latency_at_min_bytes_us", "error_message",
     ]
     buf = io.StringIO()
     writer = csv.DictWriter(buf, fieldnames=header, extrasaction="ignore", lineterminator=chr(10))

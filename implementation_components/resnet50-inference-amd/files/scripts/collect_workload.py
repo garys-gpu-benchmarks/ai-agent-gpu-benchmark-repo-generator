@@ -56,7 +56,7 @@ def write_csv(path, header, rows):
 
 def read_amd_gpu_util() -> float | None:
     """GPU busy percent. amdgpu sysfs (instant, no subprocess) first, the
-    highest across AMD cards; rocm-smi / amd-smi as a fallback."""
+    highest across AMD cards; amd-smi as a fallback."""
     values = []
     for path in Path("/sys/class/drm").glob("card[0-9]*/device/gpu_busy_percent"):
         try:
@@ -69,8 +69,6 @@ def read_amd_gpu_util() -> float | None:
     if values:
         return max(values)
     for cmd in (
-        ["rocm-smi", "--showuse"],
-        ["/opt/rocm/bin/rocm-smi", "--showuse"],
         ["amd-smi", "metric", "--usage"],
     ):
         try:
@@ -170,32 +168,47 @@ def main() -> int:
                 # reported the largest peak so far.
                 torch.cuda.reset_peak_memory_stats()
             samples = []
-            with UtilSampler(read_amd_gpu_util, "rocm-smi") as sampler:
-                for _ in range(iters):
+            loop_start = time.perf_counter()
+            with UtilSampler(read_amd_gpu_util, "amd-smi") as sampler:
+                while True:
                     step_start = time.perf_counter()
                     model(x)
                     if device.type == "cuda":
                         torch.cuda.synchronize()
                     samples.append((time.perf_counter() - step_start) * 1000.0)
+                    if len(samples) >= iters and (time.perf_counter() - loop_start) >= 1.0:
+                        break
+                    if len(samples) >= max(iters, 200):
+                        break
             util = sampler.result()
+            if (
+                isinstance(util, str)
+                and "too short" in util
+                and args.profile == "smoke"
+            ):
+                util = "na (expected: timed loop shorter than 1s on smoke)"
             mean_ms = sum(samples) / len(samples)
             ordered = sorted(samples)
             p99_index = min(len(ordered) - 1, max(0, math.ceil(0.99 * len(ordered)) - 1))
             p99 = ordered[p99_index]
+            latency_max = ordered[-1]
+            p99_value = p99 if len(samples) >= 100 else f"na (p99 requires at least 100 samples; n={len(samples)})"
             elapsed = mean_ms / 1000.0
             mem = ""
             if device.type == "cuda":
                 mem = torch.cuda.max_memory_allocated() / 1e9
             rows.append({
                 "batch_size": batch,
-                "batch_p99_latency_msec": p99,
+                "batch_latency_max_msec": latency_max,
+                "latency_sample_count": len(samples),
+                "batch_p99_latency_msec": p99_value,
                 "per_image_latency_ms": mean_ms / batch,
                 "images_sec": batch / elapsed if elapsed else "",
                 "gpu_util_percent": util,
                 "peak_gpu_memory_GB": mem,
             })
     metric_columns = [
-        "batch_p99_latency_msec", "per_image_latency_ms", "images_sec",
+        "batch_latency_max_msec", "batch_p99_latency_msec", "per_image_latency_ms", "images_sec",
         "gpu_util_percent", "peak_gpu_memory_GB",
     ]
     headline = max(rows, key=lambda row: row["batch_size"])
@@ -205,7 +218,7 @@ def main() -> int:
             row[f"case_{key}"] = row[key]
             row[key] = headline[key]
     write_csv(args.raw_file, [
-        "batch_size", "batch_p99_latency_msec",
+        "batch_size", "batch_latency_max_msec", "latency_sample_count", "batch_p99_latency_msec",
         "per_image_latency_ms", "images_sec", "gpu_util_percent", "peak_gpu_memory_GB",
         "headline_batch_size", *[f"case_{key}" for key in metric_columns],
     ], rows)

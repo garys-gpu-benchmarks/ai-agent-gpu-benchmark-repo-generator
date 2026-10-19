@@ -37,7 +37,7 @@ case "${VERSION_ID:-}" in
   *)
     TORCH_INDEX="${PYTORCH_CUDA_INDEX_URL:-https://download.pytorch.org/whl/cu128}"
     TORCH_SPEC="${PYTORCH_INSTALL_SPEC:-torch==2.7.1+cu128}"
-    VISION_SPEC="${TORCHVISION_INSTALL_SPEC:-torchvision}"
+    VISION_SPEC="${TORCHVISION_INSTALL_SPEC:-torchvision==0.22.1+cu128}"  # matches torch 2.7.1
     ;;
 esac
 

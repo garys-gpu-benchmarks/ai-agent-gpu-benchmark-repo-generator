@@ -7,6 +7,7 @@ import io
 import os
 import re
 import subprocess
+import sys
 from pathlib import Path
 
 import yaml
@@ -70,7 +71,9 @@ def run_command(command):
     return completed.returncode, (completed.stdout or "") + "\n" + (completed.stderr or "")
 
 
-# Ubuntu 26.04 TheRock packages replace the older rocm-core / rocm-smi names.
+# ROCm 10.x (TheRock) packages replace the older rocm-core / rocm-smi names.
+# The spec now names the real packages (amdrocm-base10.1, amdrocm-amdsmi10.1).
+# These aliases only keep older spec values (rocm-core, rocm-smi) working.
 PACKAGE_ALIASES = {
     "rocm-core": (
         "rocm-core",
@@ -154,7 +157,7 @@ def firmware_revision():
                 continue
             if text and text.lower() not in {"n/a", "unknown"}:
                 return text
-    for command in (["amd-smi", "firmware"], ["rocm-smi", "--showfwinfo"], ["rocm-smi", "--showvbios"]):
+    for command in (["amd-smi", "firmware"],):
         _code, text = run_command(command)
         match = re.search(r"(?:firmware|VBIOS)\s+version\s*[:=]\s*(\S+)", text, re.I)
         if match and match.group(1).lower() not in {"n/a", "unknown"}:
@@ -189,11 +192,11 @@ def main() -> int:
     expected_driver = str(sweep.get("driver_version", "6"))
     # Read for the record; not compared yet (kernel/runtime checks live elsewhere).
     _expected_rocm = str(sweep.get("rocm_version", "10.1.0"))
-    packages = [item.strip() for item in str(sweep.get("required_packages", "rocm-core,rocm-smi")).split(",") if item.strip()]
+    packages = [item.strip() for item in str(sweep.get("required_packages", "amdrocm-base10.1,amdrocm-amdsmi10.1")).split(",") if item.strip()]
     permissions_check = str(sweep.get("permissions_check", "true")).lower() in {"1", "true", "yes"}
     uname = os.uname().release
     amdgpu = run_command(["modinfo", "amdgpu"])[1]
-    # kernel_driver_mismatch_count is the kernel release only. The amdgpu
+    # kernel_release_mismatch_count is the kernel release only. The amdgpu
     # version field is driver compliance, not part of this count.
     kernel_mismatch = 0 if kernel_release_matches(expected_kernel, uname) else 1
     # In-tree amdgpu (Ubuntu 26.04 --no-dkms) has no modinfo version: field.
@@ -223,11 +226,25 @@ def main() -> int:
     Path(args.run_dir).mkdir(parents=True, exist_ok=True)
     (Path(args.run_dir) / "firmware_version.txt").write_text((firmware_revision() or "not detected") + "\n", encoding="utf-8")
     checks = []
-    for command in (["rvs", "--version"], ["rocminfo"], ["rocm-smi"], ["amd-smi", "static"], ["uname", "-a"], ["modinfo", "amdgpu"], ["hipcc", "--version"]):
-        checks.append((command[0], *run_command(command)))
+    # Seven probes. ROCm 10.x removed rocm-smi, so its slot is now "amd-smi version",
+    # which reports the AMD SMI, ROCm and amdgpu versions.
+    probes = (
+        ("rvs", ["rvs", "--version"]),
+        ("rocminfo", ["rocminfo"]),
+        ("amd-smi-version", ["amd-smi", "version"]),
+        ("amd-smi", ["amd-smi", "static"]),
+        ("uname", ["uname", "-a"]),
+        ("modinfo", ["modinfo", "amdgpu"]),
+        ("hipcc", ["hipcc", "--version"]),
+    )
+    for name, command in probes:
+        code, text = run_command(command)
+        if code != 0:
+            print(f"[WARN] probe {name} ({' '.join(command)}) exited {code}", file=sys.stderr)
+        checks.append((name, code, text))
     header = [
-        "sample_index", "check_name", "rocm_package_mismatch_count",
-        "kernel_driver_mismatch_count", "kernel_mismatch_count",
+        "sample_index", "check_name", "rc", "rocm_package_mismatch_count",
+        "kernel_release_mismatch_count", "kernel_mismatch_count",
         "driver_mismatch_count", "driver_version_available",
         "driver_compliance_percent", "permission_error_count",
     ]
@@ -235,8 +252,10 @@ def main() -> int:
     for name, code, text in checks:
         rows.append({
             "check_name": name,
+            # The probe's own exit code (127 = tool missing). rc is not a metric.
+            "rc": code,
             "rocm_package_mismatch_count": float(package_mismatch),
-            "kernel_driver_mismatch_count": float(kernel_mismatch),
+            "kernel_release_mismatch_count": float(kernel_mismatch),
             "kernel_mismatch_count": float(kernel_mismatch),
             "driver_mismatch_count": float(driver_mismatch),
             "driver_version_available": driver_available,

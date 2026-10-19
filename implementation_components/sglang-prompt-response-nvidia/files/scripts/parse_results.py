@@ -444,9 +444,13 @@ def main() -> int:
         ensure_schema(conn)
     started = utc_now()
     ok_samples = [sample for sample in parsed_samples if sample["status"] == "ok"]
-    run_status = "ok" if ok_samples and all(
-        sample["status"] == "ok" or index in client_failed for index, sample in enumerate(parsed_samples)
-    ) else "error"
+    stub_samples = [sample for sample in parsed_samples if sample["status"] == "stub"]
+    if stub_samples and not ok_samples:
+        run_status = "stub"
+    else:
+        run_status = "ok" if ok_samples and all(
+            sample["status"] == "ok" or index in client_failed for index, sample in enumerate(parsed_samples)
+        ) else "error"
     ok_rows = [rows[index] for index, sample in enumerate(parsed_samples) if sample["status"] == "ok"]
 
     def ok_numbers(name: str) -> list[float]:
@@ -457,7 +461,10 @@ def main() -> int:
         values = ok_numbers(name)
         if name == "completed_request_rate_pct":
             values = [sample[name] for sample in parsed_samples if sample[name] is not None]
-        run_metrics[name] = statistics.fmean(values) if values else na_reason([row.get(name) for row in ok_rows])
+        if run_status == "stub":
+            run_metrics[name] = "na (stub server, smoke only)"
+        else:
+            run_metrics[name] = statistics.fmean(values) if values else na_reason([row.get(name) for row in ok_rows])
     e2e_values = ok_numbers("end_to_end_latency_ms")
     ttft_values = ok_numbers("ttft_ms")
     insert_values = (
@@ -475,7 +482,7 @@ def main() -> int:
         "",
         str(Path(args.config)),
         f"parse_results.py --raw-file {raw_file}",
-        None if run_status == "ok" else "missing or invalid prompt-response samples",
+        None if run_status in {"ok", "stub"} else "missing or invalid prompt-response samples",
         db_value(run_metrics["end_to_end_latency_ms"]),
         db_value(run_metrics["ttft_ms"]),
         db_value(run_metrics["output_tokens_per_s"]),

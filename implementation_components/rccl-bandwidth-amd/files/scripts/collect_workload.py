@@ -139,9 +139,9 @@ def main() -> int:
                 "collective": collective,
                 "num_gpus": 1,
                 "bytes": 1024,
-                "algbw_gb_s": NA_SINGLE_GPU,
-                "busbw_gb_s": NA_SINGLE_GPU,
-                "latency_us": NA_SINGLE_GPU,
+                "allreduce_algbw_gb_s": NA_SINGLE_GPU,
+                "allreduce_busbw_gb_s": NA_SINGLE_GPU,
+                "allreduce_latency_at_min_bytes_us": NA_SINGLE_GPU,
                 "error_message": "",
             })
             continue
@@ -159,14 +159,14 @@ def main() -> int:
             "bytes": largest["bytes"],
             # Bandwidth at the largest message size, latency at the smallest.
             # One rank publishes the reason instead of a local-copy number.
-            "algbw_gb_s": NA_SINGLE_GPU if single else largest["algbw_gb_s"],
-            "busbw_gb_s": NA_SINGLE_GPU if single else largest["busbw_gb_s"],
-            "latency_us": NA_SINGLE_GPU if single else smallest["latency_us"],
+            "allreduce_algbw_gb_s": NA_SINGLE_GPU if single else largest["algbw_gb_s"],
+            "allreduce_busbw_gb_s": NA_SINGLE_GPU if single else largest["busbw_gb_s"],
+            "allreduce_latency_at_min_bytes_us": NA_SINGLE_GPU if single else smallest["latency_us"],
             "error_message": "",
         })
     write_csv(args.raw_file, [
         "sample_index", "status", "collective", "num_gpus", "bytes",
-        "algbw_gb_s", "busbw_gb_s", "latency_us", "error_message",
+        "allreduce_algbw_gb_s", "allreduce_busbw_gb_s", "allreduce_latency_at_min_bytes_us", "error_message",
     ], rows)
     return 0
 

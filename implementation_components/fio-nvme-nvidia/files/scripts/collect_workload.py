@@ -120,20 +120,19 @@ def main() -> int:
         for block_size in blocks or ["4k"]:
             for io_depth in depths or ["1"]:
                 rows.append(run_fio(filename, rw, block_size, io_depth, jobs, size, runtime, engine, direct))
-    # Publish one reproducible operating point under the workbook's singular
-    # keys, while retaining every matrix result under case_* columns.
-    headline = dict(rows[0])
-    headline_name = f"{headline['rw']}_{headline['block_size']}_qd{headline['io_depth']}"
+    # The singular keys are the first declared case (headline_rule=first_case).
+    # Every job keeps its own measurement; nothing is overwritten with job 1.
     metric_columns = [
         "iops_mean", "iops_p95", "iops_p99", "bandwidth_mb_s",
         "clat_p50_us", "clat_p99_us", "clat_p999_us", "p999_latency_ms",
     ]
-    for row in rows:
-        row["headline_configuration"] = headline_name
+    for index, row in enumerate(rows):
+        row["headline_configuration"] = f"{row['rw']}_{row['block_size']}_qd{row['io_depth']}"
+        row["headline_rule"] = "first_case"
+        row["is_headline"] = "1" if index == 0 else "0"
         for key in metric_columns:
             row[f"case_{key}"] = row[key]
-            row[key] = headline[key]
-    header.extend(["headline_configuration", *[f"case_{key}" for key in metric_columns]])
+    header.extend(["headline_configuration", "headline_rule", "is_headline", *[f"case_{key}" for key in metric_columns]])
     buf = io.StringIO()
     writer = csv.DictWriter(buf, fieldnames=header, extrasaction="ignore", lineterminator=chr(10))
     writer.writeheader()

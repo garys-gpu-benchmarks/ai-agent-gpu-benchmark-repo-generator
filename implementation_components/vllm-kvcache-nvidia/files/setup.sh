@@ -160,7 +160,7 @@ fi
 "${REPO_ROOT}/.venv/bin/python" -m pip install -r requirements.txt
 if ! "${REPO_ROOT}/.venv/bin/python" -c "import vllm" >/dev/null 2>&1; then
   log_status "STEP|SETUP pip install vllm"
-  "${REPO_ROOT}/.venv/bin/python" -m pip install vllm
+  "${REPO_ROOT}/.venv/bin/python" -m pip install "vllm==0.31.0"  # validated 2026-10-17 (torch 2.13.0+cu130)
 fi
 if ! "${REPO_ROOT}/.venv/bin/python" -c "import transformers" >/dev/null 2>&1; then
   log_status "STEP|SETUP pip install transformers"

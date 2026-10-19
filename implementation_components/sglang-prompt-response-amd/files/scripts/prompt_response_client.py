@@ -26,10 +26,13 @@ from __future__ import annotations
 import argparse
 import csv
 import json
+import os
 import time
 import urllib.error
 import urllib.request
 from pathlib import Path
+
+from metric_contract import STUB_NA, finalize_serving_publication
 
 METRIC_KEYS = (
     "end_to_end_latency_ms",
@@ -99,11 +102,15 @@ def one_request(url: str, model_name: str, input_len: int, output_len: int, seed
         data=json.dumps(payload).encode("utf-8"),
         headers={"Content-Type": "application/json"},
     )
-    rec: dict = {"usage_tokens": None, "prompt_tokens": None, "cached_tokens": None}
+    rec: dict = {"usage_tokens": None, "prompt_tokens": None, "cached_tokens": None, "server_identity": ""}
+    if os.environ.get("BENCHMARK_SERVER_KIND", "").lower() == "stub":
+        rec["server_identity"] = "stub"
     start = time.perf_counter()
     first_token = None
     chunks = 0
     with urllib.request.urlopen(req, timeout=3600) as resp:
+        if "stub" in str(resp.headers.get("X-Benchmark-Server") or "").lower():
+            rec["server_identity"] = "stub"
         if streaming:
             for raw_line in resp:
                 line = raw_line.decode("utf-8", errors="replace").strip()
@@ -116,6 +123,8 @@ def one_request(url: str, model_name: str, input_len: int, output_len: int, seed
                     body = json.loads(data)
                 except json.JSONDecodeError:
                     continue
+                if body.get("server_identity") == "stub" or str(body.get("id", "")).startswith("tiny-sglang"):
+                    rec["server_identity"] = "stub"
                 choices = body.get("choices") or []
                 if choices and choices[0].get("text"):
                     if first_token is None:
@@ -124,6 +133,8 @@ def one_request(url: str, model_name: str, input_len: int, output_len: int, seed
                 _read_usage(body.get("usage") or {}, rec)
         else:
             body = json.loads(resp.read().decode("utf-8"))
+            if body.get("server_identity") == "stub" or str(body.get("id", "")).startswith("tiny-sglang"):
+                rec["server_identity"] = "stub"
             _read_usage(body.get("usage") or {}, rec)
     end = time.perf_counter()
     e2e_ms = (end - start) * 1000.0
@@ -141,6 +152,7 @@ def one_request(url: str, model_name: str, input_len: int, output_len: int, seed
         "output_tokens_per_s": rate,
         "prompt_tokens": rec["prompt_tokens"],
         "cached_tokens": rec["cached_tokens"],
+        "server_identity": rec["server_identity"],
     }
 
 
@@ -181,6 +193,7 @@ def main() -> int:
                         **{key: rec[key] for key in METRIC_KEYS[:3]},
                         "prompt_tokens": "" if rec["prompt_tokens"] is None else rec["prompt_tokens"],
                         "cached_tokens": "" if rec["cached_tokens"] is None else rec["cached_tokens"],
+                        "server_identity": rec.get("server_identity", ""),
                         "error_message": ""})
         except urllib.error.HTTPError as exc:
             detail = exc.read().decode("utf-8", errors="replace")[:300]
@@ -211,12 +224,21 @@ def main() -> int:
         "tensor_parallel_size": args.tensor_parallel_size, "schedule_policy": args.schedule_policy,
         "prompt_source": args.prompt_source,
     }
+    identity = " ".join(str(row.get("server_identity", "")) for row in rows)
+    standin = "stub" in identity or os.environ.get("BENCHMARK_SERVER_KIND", "").lower() == "stub"
     for row in rows:
-        row["completed_request_rate_pct"] = completed_pct
-        row["radixattention_cache_hit_rate_pct"] = hit_rate if row["status"] == "ok" else NA_FAILED
+        if standin:
+            row["status"] = "stub" if row.get("status") == "ok" else row.get("status")
+            row["completed_request_rate_pct"] = STUB_NA
+            row["radixattention_cache_hit_rate_pct"] = STUB_NA
+            for key in METRIC_KEYS[:3]:
+                row[key] = STUB_NA
+        else:
+            row["completed_request_rate_pct"] = completed_pct
+            row["radixattention_cache_hit_rate_pct"] = hit_rate if row["status"] == "ok" else NA_FAILED
         row.update(meta)
     fieldnames = ["request_id", "sample_index", "status", "input_tokens", "output_tokens", *METRIC_KEYS,
-                  "prompt_tokens", "cached_tokens", "error_message", *meta]
+                  "prompt_tokens", "cached_tokens", "server_identity", "error_message", *meta]
     csv_path = run_dir / "raw_results.csv"
     with csv_path.open("w", encoding="utf-8", newline="") as handle:
         writer = csv.DictWriter(handle, fieldnames=fieldnames)
@@ -238,8 +260,9 @@ def main() -> int:
         return reasons.pop() if len(reasons) == 1 else NA_FAILED
 
     summary_metrics = {key: _summary(key) for key in METRIC_KEYS[:3]}
-    summary_metrics["completed_request_rate_pct"] = completed_pct
-    summary_metrics["radixattention_cache_hit_rate_pct"] = hit_rate
+    summary_metrics["completed_request_rate_pct"] = STUB_NA if standin else completed_pct
+    summary_metrics["radixattention_cache_hit_rate_pct"] = STUB_NA if standin else hit_rate
+    summary_metrics, _serve_status = finalize_serving_publication(summary_metrics, identity if standin else "")
     raw_txt = run_dir / "raw_output.txt"
     if not args.raw_file or Path(args.raw_file).resolve() != raw_txt.resolve():
         raw_txt.write_text(json.dumps(summary_metrics, indent=2) + "\n", encoding="utf-8")

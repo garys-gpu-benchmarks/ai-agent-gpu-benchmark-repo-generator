@@ -88,12 +88,11 @@ def main() -> int:
     import re
     fatal_re = re.compile(r"page fault|gpu hang|hardware reset|uncorrectable", re.IGNORECASE)
     dmesg_faults = float(len([line for line in dmesg_text.splitlines() if fatal_re.search(line)]))
-    rocm_text = run_command(["/opt/rocm/bin/rocm-smi", "--showtemp", "--showbus", "--showclocks", "--showpower"])[1]
     amd_text = run_command(["amd-smi", "metric"])[1]
     if amd_text.startswith("missing:"):
         amd_text = run_command(["/opt/rocm/bin/amd-smi", "metric"])[1]
     info_text = run_command(["rocminfo"])[1]
-    combined = "\n".join([rocm_text, amd_text, info_text])
+    combined = "\n".join([amd_text, info_text])
     # amd-smi 27 reports EDGE: N/A on this MI300X VF and the live temperature on HOTSPOT.
     temp = first_float(r"HOTSPOT\s*:\s*([0-9]+(?:\.[0-9]+)?)", combined, "")
     if temp == "":

@@ -277,6 +277,9 @@ write_metrics_summary_txt() {
   elapsed="$(benchmark_elapsed_display)"
   {
     echo "===== Benchmark Summary ====="
+    if [[ "${status}" == "stub" || "${status}" == "SMOKE-STANDIN" ]]; then
+      echo "STUB stand-in server; numbered serving metrics are na (stub server, smoke only)."
+    fi
     echo "Run ID: ${run_id} | Status: ${status} | Samples: ${samples} | Profile: ${PROFILE:-} | Device: $(display_device)"
     echo "Command submitted: ${BENCHMARK_RUN_COMMAND_SUBMITTED:-}"
     echo "Command fully resolved: $(display_shell_command "${BENCHMARK_RUN_COMMAND:-}")"

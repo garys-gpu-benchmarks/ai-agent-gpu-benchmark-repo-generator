@@ -74,7 +74,7 @@ jobs:
           if [[ "${VENDOR}" == "amd" ]]; then
             command -v rocminfo >/dev/null || { echo "::error::rocminfo not found; provision ROCm on this runner first"; exit 1; }
             rocminfo | grep -m1 -E 'Name:[[:space:]]+gfx' || { echo "::error::rocminfo lists no gfx GPU agent"; exit 1; }
-            if command -v rocm-smi >/dev/null; then rocm-smi --showproductname || true; fi
+            if command -v amd-smi >/dev/null; then amd-smi static --asic || true; fi
           else
             command -v nvidia-smi >/dev/null || { echo "::error::nvidia-smi not found; provision the NVIDIA driver on this runner first"; exit 1; }
             nvidia-smi -L
@@ -124,7 +124,7 @@ jobs:
           if vendor == "amd":
               env["rocm_version"] = read("/opt/rocm/.info/version")
               env["amdgpu_driver"] = read("/sys/module/amdgpu/version")
-              env["gpus"] = run("rocm-smi --showproductname --json")
+              env["gpus"] = run("amd-smi static --asic --json")
               env["gpu_agents"] = run("rocminfo | grep -E 'Marketing Name:|Name:[[:space:]]+gfx'")
           else:
               env["nvidia_driver"] = run("nvidia-smi --query-gpu=driver_version --format=csv,noheader | head -n 1")

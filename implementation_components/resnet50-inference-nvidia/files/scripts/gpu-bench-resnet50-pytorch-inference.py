@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 import math
+import time
 import subprocess
 import threading
 
@@ -138,24 +139,36 @@ def main() -> int:
         times_ms: list[float] = []
         start = torch.cuda.Event(enable_timing=True)
         end = torch.cuda.Event(enable_timing=True)
+        loop_start = time.perf_counter()
         with UtilSampler(lambda: gpu_util(int(args.device_id)), "nvidia-smi") as sampler:
-            for _ in range(iters):
+            while True:
                 start.record()
                 model(images)
                 end.record()
                 torch.cuda.synchronize(device)
                 times_ms.append(float(start.elapsed_time(end)))
+                if len(times_ms) >= iters and (time.perf_counter() - loop_start) >= 1.0:
+                    break
+                if len(times_ms) >= max(iters, 200):
+                    break
         util = sampler.result()
         mean_ms = sum(times_ms) / len(times_ms)
         images_per_sec = finite_nonneg(float(batch) / (mean_ms / 1000.0))
         per_image = finite_nonneg(mean_ms / float(batch))
+        latency_max = finite_nonneg(max(times_ms))
         p99 = finite_nonneg(percentile(times_ms, 0.99))
+        p99_text = f"{p99:.6f}" if len(times_ms) >= 100 else "na"
         peak = finite_nonneg(float(torch.cuda.max_memory_allocated(device)) / 1e9)
         # "na" keeps the RESULT line one token per field; the reason follows on
         # its own UTIL_NA line for collect_resnet50_infer.py.
         util_text = f"{util:.6f}" if isinstance(util, float) else "na"
         if not isinstance(util, float):
             print(f"UTIL_NA batch_size={batch} reason={util}")
+        if len(times_ms) < 100:
+            print(
+                f"PERCENTILE_NA batch_size={batch} "
+                f"reason=na (p99 requires at least 100 samples; n={len(times_ms)})"
+            )
         print(
             "RESULT"
             f" dtype={args.dtype}"
@@ -164,7 +177,9 @@ def main() -> int:
             f" batch_size={batch}"
             f" images_per_sec={images_per_sec:.6f}"
             f" per_image_latency_msec={per_image:.6f}"
-            f" batch_p99_latency_msec={p99:.6f}"
+            f" batch_latency_max_msec={latency_max:.6f}"
+            f" latency_sample_count={len(times_ms)}"
+            f" batch_p99_latency_msec={p99_text}"
             f" gpu_utilization_percent={util_text}"
             f" peak_gpu_memory_gb={peak:.6f}"
             " status=ok"

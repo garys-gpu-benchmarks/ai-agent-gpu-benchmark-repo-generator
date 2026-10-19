@@ -10,11 +10,13 @@ import os
 import sys
 import tempfile
 import unittest
+from unittest import mock
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "scripts"))
 
+import remove_template_copy as rtc  # noqa: E402
 from remove_template_copy import remove_template_copy  # noqa: E402
 
 COPY = "ai-agent-gpu-benchmark-repo-generator_copy"
@@ -117,6 +119,89 @@ class RemoveTemplateCopyTests(unittest.TestCase):
             os.chmod(locked, 0o444)
             self.assertEqual(_run(repo), 0)
             self.assertFalse((repo / COPY).exists())
+
+
+class LeftoverShellTests(unittest.TestCase):
+    def test_removes_empty_copy_shell_and_records_manifest(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            repo = _make_repo(Path(tmp), with_copy=False)
+            (repo / COPY / "implementation_components" / "x" / "files").mkdir(parents=True)
+            self.assertTrue(rtc.is_empty_copy_shell(repo / COPY))
+            self.assertEqual(_run(repo), 0)
+            self.assertFalse((repo / COPY).exists())
+            manifest = json.loads((repo / "results" / "generation_manifest.json").read_text(encoding="utf-8"))
+            self.assertIn("template_copy_removed_at", manifest)
+
+    def test_removes_partial_copy_named_in_manifest(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            repo = _make_repo(Path(tmp), with_copy=False)
+            leftover = repo / COPY / "implementation_components" / "y"
+            leftover.mkdir(parents=True)
+            (leftover / "left.txt").write_text("x\n", encoding="utf-8")
+            self.assertEqual(_run(repo), 0)
+            self.assertFalse((repo / COPY).exists())
+
+    def test_keeps_unrelated_folder_with_generator_like_name_when_not_empty(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            repo = _make_repo(Path(tmp), with_copy=False)
+            other = repo / "TEMPLATE_00_110_copy"
+            other.mkdir()
+            (other / "notes.txt").write_text("keep\n", encoding="utf-8")
+            self.assertFalse(rtc.is_empty_copy_shell(other))
+            self.assertEqual(_run(repo), 0)
+            self.assertTrue((other / "notes.txt").is_file())
+
+
+class RmtreeReliableTests(unittest.TestCase):
+    def test_retries_until_gone(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            target = Path(tmp) / "tree"
+            (target / "a" / "b").mkdir(parents=True)
+            (target / "a" / "b" / "f.txt").write_text("x\n", encoding="utf-8")
+            real = rtc._rmtree
+            calls = []
+
+            def flaky(path):
+                calls.append(path)
+                if len(calls) == 1:
+                    raise OSError("directory not empty")
+                real(path)
+
+            with mock.patch.object(rtc, "_rmtree", side_effect=flaky):
+                self.assertTrue(rtc.rmtree_reliable(target, first_delay=0))
+            self.assertEqual(len(calls), 2)
+            self.assertFalse(target.exists())
+
+    def test_reports_failure_when_tree_stays(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            target = Path(tmp) / "stuck"
+            target.mkdir()
+            out = io.StringIO()
+            with mock.patch.object(rtc, "_rmtree", side_effect=OSError("locked")), contextlib.redirect_stdout(out):
+                self.assertFalse(rtc.rmtree_reliable(target, attempts=3, first_delay=0))
+            self.assertIn("[WARN] Could not fully remove", out.getvalue())
+            self.assertTrue(target.is_dir())
+
+    def test_missing_path_is_success(self):
+        self.assertTrue(rtc.rmtree_reliable(Path(tempfile.gettempdir()) / "does-not-exist-rtc-test"))
+
+
+class ReliableTempDirTests(unittest.TestCase):
+    def test_removes_tree_on_exit(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            with rtc.reliable_temp_dir(prefix=".gen_101_", dir=tmp) as work:
+                (Path(work) / "copy" / "deep").mkdir(parents=True)
+                (Path(work) / "copy" / "deep" / "f.txt").write_text("x\n", encoding="utf-8")
+            self.assertEqual(list(Path(tmp).iterdir()), [])
+
+    def test_warns_and_names_leftover(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            out = io.StringIO()
+            with mock.patch.object(rtc, "rmtree_reliable", return_value=False), contextlib.redirect_stdout(out):
+                with rtc.reliable_temp_dir(prefix=".gen_109_", dir=tmp) as work:
+                    pass
+            self.assertIn("Temporary generation folder was left behind", out.getvalue())
+            self.assertIn(Path(work).name, out.getvalue())
 
 
 if __name__ == "__main__":

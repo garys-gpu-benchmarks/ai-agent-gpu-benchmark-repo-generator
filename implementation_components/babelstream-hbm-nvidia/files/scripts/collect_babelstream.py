@@ -91,11 +91,16 @@ def main() -> int:
         for name in METRIC_FIELDS:
             row[name] = f"{latest[name]:.6f}"
         rows.append(row)
-    summary = {"check": "summary", "device_id": device, "array_size": array_size, "dtype": dtype, "block_size": block, "status": "ok"}
+    element = 8 if "64" in str(dtype) else 4 if "32" in str(dtype) else 2
+    working_set = int(float(array_size)) * element * 3
+    summary = {
+        "check": "summary", "device_id": device, "array_size": array_size, "dtype": dtype,
+        "block_size": block, "status": "ok", "working_set_bytes": working_set,
+    }
     for name in METRIC_FIELDS:
         summary[name] = f"{latest[name]:.6f}"
     rows.append(summary)
-    fields = [*PARAM_FIELDS, *METRIC_FIELDS]
+    fields = [*PARAM_FIELDS, *METRIC_FIELDS, "working_set_bytes"]
     with (run_dir / "raw_results.csv").open("w", encoding="utf-8", newline="") as handle:
         writer = csv.DictWriter(handle, fieldnames=fields, extrasaction="ignore", lineterminator="\n")
         writer.writeheader()

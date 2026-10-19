@@ -45,8 +45,6 @@ def nvidia_vram_used_gb():
 def amd_vram_used_gb() -> str:
     """Peak-or-used VRAM in GB when JAX memory_stats has no peak_bytes_in_use."""
     for cmd in (
-        ["rocm-smi", "--showmeminfo", "vram"],
-        ["/opt/rocm/bin/rocm-smi", "--showmeminfo", "vram"],
         ["amd-smi", "metric"],
     ):
         try:
@@ -76,7 +74,7 @@ def amd_vram_used_gb() -> str:
 
 def gpu_vram_used_gb():
     """Used VRAM in GB when JAX memory_stats has no peak_bytes_in_use: nvidia-smi
-    (226/426) or rocm-smi / amd-smi (126/326). "" when neither reports it."""
+    (226/426) or amd-smi (126/326). "" when neither reports it."""
     value = nvidia_vram_used_gb()
     return value if value != "" else amd_vram_used_gb()
 
