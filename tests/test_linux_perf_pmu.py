@@ -125,6 +125,26 @@ class LinuxPerfPmuCollectorTest(unittest.TestCase):
         events = (root / "run" / "pmu_events.txt").read_text(encoding="utf-8") if (root / "run" / "pmu_events.txt").is_file() else ""
         return done, rows, log, events
 
+    def test_combined_row_is_ratio_of_summed_counts(self):
+        """Several commands publish one row whose ratios come from summed counts
+        (2026-10-19): a mean of per-command ratios mixed unlike programs."""
+        import importlib.util
+        path = COMPONENTS / "linux-perf-pmu-amd" / "files" / "scripts" / "collect_workload.py"
+        spec = importlib.util.spec_from_file_location("pmu_collector", path)
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        common = {"duration_sec": 10, "elapsed_sec": 10, "cpu_time_sec": 40, "pmu_source": "perf",
+                  "pmu_counter_running_pct": 100, "pipeline_stall_event": "x"}
+        cpu = {**common, "cycles": 1e10, "instructions": 2e10, "branches": 1e9, "branch_misses": 1e7,
+               "cache_misses": 2e6, "stall_cycles": 1e9, "context_switches": 200}
+        branch = {**common, "cycles": 1e10, "instructions": 5e9, "branches": 1e8, "branch_misses": 5e7,
+                  "cache_misses": 1e6, "stall_cycles": 6e9, "context_switches": 1000}
+        row = module.combine_rows([cpu, branch], 4.0)
+        self.assertAlmostEqual(row["instructions_per_cycle_ipc"], 1.25)
+        self.assertAlmostEqual(row["branch_misprediction_rate"], 100.0 * 6e7 / 1.1e9)
+        self.assertAlmostEqual(row["pipeline_stall_pct"], 35.0)
+        self.assertAlmostEqual(row["context_switches_during_workload_switches_s"], 60.0)
+
     def test_both_vendors_ship_the_same_collector(self):
         amd = (COMPONENTS / "linux-perf-pmu-amd" / "files" / "scripts" / "collect_workload.py").read_bytes()
         nvidia = (COMPONENTS / "linux-perf-pmu-nvidia" / "files" / "scripts" / "collect_workload.py").read_bytes()
@@ -186,7 +206,7 @@ class LinuxPerfPmuCollectorTest(unittest.TestCase):
     def test_perf_missing(self):
         done, rows, _, _ = self.run_collector(None)
         self.assertEqual(done.returncode, 0, done.stderr)
-        self.assertTrue(rows[0]["instructions_per_cycle_ipc"].startswith("na (perf not installed"))
+        self.assertTrue(rows[0]["instructions_per_cycle_ipc"].startswith("na (expected: perf not installed"))
         self.assertEqual(rows[0]["pmu_source"], "perf_missing")
 
     def test_runner_flags_override_yaml(self):

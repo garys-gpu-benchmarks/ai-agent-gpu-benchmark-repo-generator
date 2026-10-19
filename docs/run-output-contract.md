@@ -18,8 +18,10 @@ The wrapper format is fixed. Line order is mandatory for every generated workloa
 [INFO] Repository:                    <repository path>
 [INFO] Ubuntu Version:                <Ubuntu release>
 [INFO] Python Version:                <Python version>
-[INFO] rocBLAS Version:               <rocBLAS package version>
-[INFO] ROCm Version:                  <ROCm package version>
+[INFO] rocBLAS Version:               <rocBLAS package version>          (AMD workloads)
+[INFO] ROCm Version:                  <ROCm package version>             (AMD workloads)
+[INFO] CUDA Version:                  <nvcc release>                     (NVIDIA workloads, instead of the two lines above)
+[INFO] NVIDIA Driver Version:         <nvidia-smi driver_version>        (NVIDIA workloads)
 [INFO] System:                        <DMI system family>
 [INFO]
 [INFO] ===== Benchmark Summary =====
@@ -35,6 +37,9 @@ The wrapper format is fixed. Line order is mandatory for every generated workloa
 [INFO] <metric summary lines derived from benchmark_specification.json Metrics>
 [INFO]
 ```
+
+When the GPU stack is missing, `scripts/print_run_metadata.sh` prints `not installed (not used by this CPU benchmark)` for a workload whose Execution Domain is `CPU / System`, and `NOT FOUND (GPU setup did not install it)` for a GPU workload.
+
 
 Required ordering rules:
 

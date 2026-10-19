@@ -1,5 +1,166 @@
 # Changelog
 
+## 2026-10-19 — 203/403: ECC disabled is an expected na
+
+- **`implementation_components/system-stress-nvidia/files/scripts/collect_workload.py`:** when `nvidia-smi` reports ECC as `[N/A]` / not supported on every GPU (ECC disabled), the ECC metric is `na (expected: ECC disabled)` instead of a blank that failed validation. Fixed in workload 403 by the 401–432 generation session (its H100 has ECC off); brought into the generator and, before publishing v1.0.16, into workload 203 (collector plus the `results/overlay_lock.json` checksum). 203 passed `check_github_publish_ready.sh --published` with it; the identical code passed smoke on 403.
+
+## 2026-10-19 — Fixes made during the TEMPLATE_00_112 generation runs (recorded afterwards)
+
+Made in the publish run folder's generator copy at about 12:30 local time while generating 101–432 from TEMPLATE_00_112; brought into TEMPLATE_00_113 so the next generation keeps them.
+
+- **`implementation_components/sglang-prompt-response-amd` / `-nvidia` `prompt_response_client.py`, `sglang-serving-amd` / `-nvidia` `bench_serving.py`:** the CSV header and rows include `server_identity`; without it x30/x31 crashed while writing results.
+- **`implementation_components/linpack-rochpl-amd/files/scripts/collect_workload.py`:** GPU name probe tries `amd-smi static --asic` and `rocminfo` (ROCm), not only `nvidia-smi`, with a 20 s timeout, and accepts only text that names a GPU (an MI300X VF reports "AMD Instinct MI300X VF").
+- **`implementation_components/hipmemcpy-bandwidth-amd/files/scripts/parse_results.py`:** `add_h2d_headline` publishes the numbered H2D metrics: `bandwidth_gbps` at the largest size, `latency_us` at the smallest, `headline_transfer_bytes` and `headline_point`.
+- **`scripts/materialize_generated_harness.py`:** `summary.json` records the profile, and the ledger falls back to it when `BENCHMARK_PROFILE` is not set.
+- **`scripts/metric_contract.py`:** `na (LLC load counters unavailable)` (x13 `l3_miss_rate`) is an expected na; new test in `tests/test_metric_renames_20261018.py`.
+- **Checks:** all 24 test files pass (252 tests); `verify_generation_workflow.py` passes.
+
+## 2026-10-19 — One publish script: the manual variant, named `publish_benchmarks_to_github.sh`
+
+- **`scripts/publish_benchmarks_to_github.sh`:** now the former `publish_benchmarks_to_github_manual.sh` (renamed; `_manual.sh` removed). It has no source folders built in: the run folder is filled by hand and step 0 only checks it. The variant that copied workloads and the generator in from `WORKLOAD_SOURCES` / `GENERATOR_SOURCE` (still pointing at Project341–345) is removed. Header, `--help` example and `RUN_FOLDER_NAME` show the layout in use: the script in `Publishing\`, run as `./publish_benchmarks_to_github.sh 20261019_02/src_380_381_382_383`.
+- **`README.md` (Commands):** describes the hand-filled run folder and that command.
+- **`tests/test_bundle_readme_tools.py`, `test_run_benchmark_suite_list.py`:** check the one script. These and `test_operator_tools`, `test_readme_bundle_sections`, `test_generation_creation_fixes`, and `verify_generation_workflow.py` pass.
+
+## 2026-10-19 — x11: a missing kernel-matched perf is an expected na; setup warns instead of stopping
+
+Supersedes two points of the earlier 2026-10-19 entry "111/211/311/411: a missing kernel-matched perf stops setup".
+
+- **Why:** on the NVIDIA Ubuntu 26.04 VM the workload runs in a container on the host's `6.8.0-136-generic` kernel, and the 26.04 archive has no `linux-tools` for it, so no correct `perf` can come from apt. Even with one installed by hand, that container cannot count (`perf_event_paranoid=4`, read-only `/proc/sys`, no `CAP_PERFMON`). Stopping setup made 411 fail on a host that can never produce counters.
+- **`scripts/templates/setup_cpu_system_skeleton.sh`, `setup_nvidia_skeleton.sh`:** `fail_missing_kernel_perf` → `warn_missing_kernel_perf`. When the kernel-matched `perf` is missing, setup logs a warning naming the two `linux-tools` packages to install for counters, then continues to `.setup_state`.
+- **`implementation_components/linux-perf-pmu-amd` / `-nvidia` `collect_workload.py`:** the four PMU metrics are `na (expected: perf not installed for kernel <release>)`, which `classify_na` treats as expected (its `na (expected:` rule; `classify_na` itself unchanged). The workload passes with empty counters, as 211 does when PMU access is denied. Context switches per second is still measured (getrusage).
+- **Where perf exists** (a normal 24.04 or 26.04 machine running its own kernel), nothing changes: setup installs `linux-tools-$(uname -r)` and the counters are measured.
+- **Tests:** `test_linux_perf_pmu.test_perf_missing` expects the new reason; `test_linux_perf_pmu`, `test_amdgpu_reload`, `test_nvidia_build_contracts`, `test_deferred_reboot`, `test_generation_checks`, `test_metric_feedback_updates` pass.
+
+## 2026-10-19 — Publish scripts: bundle README and suite copy from the lab-technician review
+
+`scripts/publish_benchmarks_to_github_manual.sh` is now the script that published v1.0.15 (from `Publishing\publish_benchmarks_to_github.sh`), plus the README line below; `scripts/publish_benchmarks_to_github.sh` carries the same changes. Both scripts' `bundle_readme()`, `bundle_suite_script()`, `add_submodule()` and steps 7–8 are identical.
+
+- **`.gitmodules`:** no `branch = main` (it let `git submodule update --remote` leave the pinned release); existing bundles have the line removed in step 7.
+- **Bundle copy of `run_benchmark_suite.sh`:** runs smoke only when no `-p` is given; `--help` examples and the bad-number message use the bundle's own workload numbers. Step 7 stops if these edits did not apply.
+- **Bundle README:** Getting started begins with x07 (STREAM, CPU only, no GPU install), then x01, x02, x14; the GPU command says the first run is quiet for 5–20 minutes while it installs and how to watch it (`--show-output` or `install_status.txt`); smoke is a wiring check; restart steps; results that are expected to be `na`; full run is `-p smoke,baseline,extended`; Hugging Face range x23–x32; `git describe --tags`; do not use `--remote`; `show_metrics.sh` examples use x07.
+- **Step 8:** the test clone also fails on a `branch` line, on a suite copy that does not default to smoke, and on any `./script.sh` the README names that is not in the bundle.
+- **`tests/test_bundle_readme_tools.py`:** the results-section check expects `./show_metrics.sh 307 --baseline`.
+
+## 2026-10-19 — Metric review, second pass: labels say what is measured; four measurement fixes
+
+From the 32-workload metric review on the four FreshInstall VMs. Earlier ledgers are not comparable for the keys and labels below.
+
+**Measurement fixes**
+- **111/211/311/411 `linux-perf-pmu-amd` / `-nvidia` `collect_workload.py` (identical):** with several stress commands the parser averaged each ratio across commands (a 25–33% "branch misprediction rate" no command had). The collector now publishes one row whose ratios come from summed counts (total misses / total branches, total instructions / total cycles); a metric that is `na` on any command stays `na`. Per-command rows are in `per_command_results.csv` in the run directory. New test `test_combined_row_is_ratio_of_summed_counts`. Labels end in ", all commands combined".
+- **123/323 `bert-inference-amd`, 125/325 `distilbert-amd`:** peak GPU memory reset after the model load. 123/323 published 485951488 bytes on every profile: the FP32 → FP16 conversion peak at load, not inference. The NVIDIA collectors already reset.
+- **220/420 `linpack-hpl-nvidia`:** percent of peak divides by the FP64 tensor-core peak `nvhpl` prints as `peak_fp64_tflops` (cuSOLVER Dgetrf runs on tensor cores; the vector peak gave 101–102%). Key `percent_of_fp64_vector_peak` → `percent_of_fp64_tensor_peak`, label "Mean percent of FP64 tensor-core peak", override `BENCHMARK_PEAK_FP64_TFLOPS`. `nvhpl.cu` prints seconds with four decimals (two rounded smoke times to 0.08 s).
+- **104/304 `sdc-ecc-amd`:** honors `memory_size` (it was raised to 5% of the GPU: `--memory-size 1` allocated about 10 GB on an MI300X) and emits `allocated_verification_buffer_gb` directly.
+- **109/209/309/409 `multichase-numa-amd/collect_multichase.py`:** when `numactl --hardware` reports no NUMA but `/sys/devices/system/node` shows two or more nodes, or `--membind` is refused, remote DRAM is `na (expected: host has 2+ NUMA nodes but numactl cannot bind memory to a remote node here)` instead of "requires a second NUMA node".
+
+**Key renames (collector and workbook)**
+- 204/404 #4 `hbm3_coverage_gb` → `device_buffer_gib` (`sdc-ecc-nvidia`); test `test_metric_renames_20261018` updated.
+- 132/232/332/432 #5 `embedding_throughput_docs_s` → `embedding_throughput_chunks_s`, label "Embedding throughput, chunks/s" (the value was always chunks/s).
+
+**Label-only changes (keys unchanged)**
+- x12 #3 "16 MB stride-128 sequential-read latency, cache- and prefetch-assisted, ns"; #4 "Single-thread memory read bandwidth, MB/s".
+- 214/414 #7 "Pinned-over-pageable H2D bandwidth ratio".
+- x27 #2 "Time To First Token p50, ms", #3 "TPOT p50, ms"; 228/229/428/429 #5 "End-to-end request latency p50, ms" (matching 128/129/328/329).
+- 217/417 #5 "Relative L2 error of checked columns".
+- x31 #1 "E2E latency p50, includes queue wait, ms", #2 "TTFT p50, includes queue wait, ms" (request rate inf with a small running-request limit, so most of the p50 is queueing).
+
+**Run output**
+- **`scripts/print_metric_summary.py`:** the bandwidth headline tag (for example `[at 1024 MiB H2D]`) is no longer appended to latency metrics, which are measured at the minimum transfer size.
+
+**Workbook and checks:** `Workload_Definitions` Metrics (60 metric entries) and `Metric_Short_Labels` (60 rows) updated together; `show_metrics.sh` regenerated (`generate_show_metrics.py --check` passes). Sync, parameter and workflow checks pass; all 24 test files pass (251 tests). Backup: `../BenchmarkSpecDefinitions_before_20261019_metric_labels.xlsx`.
+
+## 2026-10-19 — Run header: GPU stack lines match the vendor and say why a stack is missing
+
+- **`scripts/print_run_metadata.sh`:** reads `GPU Vendor` and `Execution Domain` from `benchmark_specification.json`. AMD workloads print rocBLAS and ROCm versions as before; NVIDIA workloads now print `CUDA Version` (nvcc release) and `NVIDIA Driver Version` (nvidia-smi) instead of rocBLAS/ROCm lines that always read NOT FOUND. A missing stack prints `not installed (not used by this CPU benchmark)` for a `CPU / System` workload (technician test: 107 printed `ROCm Version: NOT FOUND` before any GPU benchmark had installed ROCm) and `NOT FOUND (GPU setup did not install it)` for a GPU workload. The `dmidecode` pipeline now ends in `|| true`: under `set -o pipefail` a host without dmidecode stopped the script after three lines.
+- **`docs/run-output-contract.md`:** header block and missing-stack wording updated.
+- **Checks:** `bash -n`; run against stand-in specifications for AMD/NVIDIA × CPU/GPU and with no specification.
+
+## 2026-10-19 — Setup uses Ubuntu's Python even when the image activates a virtualenv
+
+- **Problem (technician test, v1.0.15, NVIDIA 24.04 VM):** 207 setup failed on `apt-get install python3.11-venv`. The image ships no distro Python and activates `/root/.venv` (Python 3.11) in every shell (`VIRTUAL_ENV=/root/.venv`). Setup installed the distro Python only when no `python3` was on PATH, so it skipped that; it pins `BENCHMARK_PYTHON=/usr/bin/python3` only when that file exists, so the version probe ran on the venv's 3.11 and asked for a package Ubuntu does not publish. Rerunning worked, because the failed run had installed `python3` by then.
+- **`scripts/templates/setup_cpu_system_skeleton.sh`, `setup_nvidia_skeleton.sh`, `setup_rocm_reboot_skeleton.sh`:** install the distro Python when `/usr/bin/python3` is missing (was: when no `python3` is on PATH). The ROCm skeleton now also pins `BENCHMARK_PYTHON=/usr/bin/python3` when it is unset, as the other two already did, so AMD GPU workloads on such an image do not build their `.venv` from the image's interpreter.
+- **Checks:** `bash -n` on the three skeletons; `tests/test_amdgpu_reload`, `test_deferred_reboot`, `test_nvidia_build_contracts` pass.
+
+## 2026-10-19 — Metric review: x03 AMD GPU load, x09 DRAM tier, x08 UDP cap
+
+From the 32-workload `metrics_summary.txt` review on the four FreshInstall VMs. Only metrics that were wrong in every profile were changed; smoke-only artifacts are left (the bundle README calls smoke a wiring check).
+
+- **103/303 `implementation_components/system-stress-amd/files/scripts/collect_workload.py`:** "Peak GPU junction temperature" and "Sustained GPU power" were idle readings (303 extended: 42 °C, 159.6 W over 580 s at 0% GPU utilization) under a 50% GPU-load request. Two causes: the load was `python -c "import torch ..."` and torch is not installed in the workload environment, so the child died with its stderr sent to /dev/null; and the utilization parser matched `gfx activity` while `amd-smi metric` prints `GFX_ACTIVITY` (underscore), so utilization always read 0. The load is now the repository-local `rocblas-bench` that setup already compiles (FP32 8192³ GEMMs, duty-cycled to `gpu_load_percent`, output in `gpu_load.log`), the parser also matches `gfx_activity`, and when the load never runs or activity never reaches 10% the two metrics are `na (GPU load did not run: <reason>)` (smoke: the `timed loop too short` form, which is an expected na). Component README updated. Tested locally with stand-in `rocblas-bench` / `amd-smi` (load runs: 58% mean for 50% requested; missing or failing `rocblas-bench`: na with the reason). Not yet run on an MI300X.
+- **109/309 `Parameters_SmokeBaselineExtend` `working_set_size`:** baseline/extended `local_dram`/`remote_dram` 256 MiB → 1 GiB. On the MI300X VMs (Xeon Platinum 8568Y+, very large unified L3) the 256 MiB chase measured 44.6–46.5 ns, a cache latency published as local DRAM; the same code measures 118–148 ns at 256 MiB on the H100 hosts, so 209/409 are unchanged. `num_iterations` 2900000000/8800000000 → 1500000000/4500000000 to hold ~4 / ~11.5 minutes (estimate; per-iteration latency sum ~78 → ~150 ns).
+- **108/208/308/408 UDP cap removed:** `bandwidth_limit` 10G → 0 in the workbook, and `DEFAULT_UDP_RATE` "10G" → "0" in `implementation_components/iperf3-amd` and `iperf3-nvidia` (`-b 0` is iperf3's unlimited rate). `udp_throughput_gbps` reported the cap (9.99 Gbit/s on every profile on MI300X while TCP loopback reached 55 Gbit/s). Packet loss is now measured at the unlimited send rate and will be higher than with the cap.
+- **Not changed — 120/320 "rocSOLVER LU" labels are correct.** `bin/rochpl` is this component's own `src/rochpl.cpp`, which calls `rocsolver_dgetrf` + `rocsolver_dgetrs` and prints HPL-style output; it is not AMD's rocHPL. (One reviewer reading the binary name proposed renaming the metrics to rocHPL.)
+- **Workbook:** `Workload_Definitions` command columns regenerated (`sync_matrix_profile_commands.py`, 16 cells). Backup before these edits: `../BenchmarkSpecDefinitions_before_20261019_metric_fixes.xlsx`.
+- **Checks:** sync `--check`, `generate_workload_parameters.py --check`, `verify_generation_workflow.py` pass; `tests/test_generation_creation_fixes`, `test_metric_pair_parity`, `test_metric_renames_20261018`, `test_metric_feedback_updates`, `test_template_87_contracts`, `test_system_stress_nvidia` pass (92 tests).
+
+## 2026-10-19 — 111/211/311/411: a missing kernel-matched perf stops setup; the PMU collector lowers perf_event_paranoid
+
+Recorded after the fact; the change was made by a Cursor session at about 08:00 local time.
+
+- **Problem:** on the Ubuntu 26.04 NVIDIA VM (kernel `6.8.0-136-generic`, whose 26.04 archive only has `linux-tools` for 7.0.0) setup warned and continued without `perf`. The collector then published the four PMU metrics as `na (perf not installed for kernel …)`, which `classify_na` treats as unexpected, so 411 failed validation on smoke, baseline and extended. 211 passed only because its host had perf and reported the expected `na (PMU access denied: perf_event_paranoid=4)`.
+- **`scripts/templates/setup_cpu_system_skeleton.sh` and `setup_nvidia_skeleton.sh`:** new `kernel_perf_bin` uses the collector's rule (a kernel-matched `/usr/lib/linux-tools…/perf` over 10000 bytes, following the symlink with `stat -L`). When it is missing or its version text says `not found`, a workload whose perf is required exits before `.setup_state` with `fail_missing_kernel_perf`, which names `uname -r`, the OS version and the `linux-tools-<kernel>` packages to install; where perf is optional (`perf_is_optional`, e.g. 110's cache-miss counter) setup still warns and continues.
+- **`implementation_components/linux-perf-pmu-amd` and `linux-perf-pmu-nvidia` `collect_workload.py`:** `_lower_perf_event_paranoid` drops `kernel.perf_event_paranoid` to 2 for the timed section and restores the previous value on exit, including a failed run. Where `/proc/sys` is read-only (containers without `CAP_PERFMON`) the write fails and the metrics stay the expected `na (PMU access denied: …)`.
+- **`classify_na` unchanged:** a missing perf stays an unexpected `na`; a paranoid denial stays expected.
+- **Operator note:** on a host like that VM, x11 setup now stops with the package names instead of passing setup and failing validation. Install the two `linux-tools-<kernel>` debs from the Ubuntu release that built the kernel (do not add that release's apt suite), then rerun.
+
+## 2026-10-19 — Baseline and extended retimed toward 5 / 15 minutes
+
+Targets: baseline under 5 minutes, extended under 15 minutes, aimed at about 4:00 and 12:00 for margin. Measured times come from `runtime_ledger_Aggregate_375_376_377_378_20261019a_845am.xlsx` (the four FreshInstall VMs: MI300X VF for 1xx/3xx, H100 NVL for 2xx, H100 PCIe for 4xx).
+
+- **`BenchmarkSpecDefinitions.xlsx` `Parameters_SmokeBaselineExtend`:** 40 baseline/extended values changed (table below). Each cell was first checked against the value the ledger shows the run used; all matched. New value = old × (target − fixed start) / (measured − fixed start), where the fixed start is the workload's own smoke time (SGLang x30/x31, whose smoke is a stand-in: 60 s assumed) and the measured time is the slower run. Each row's notes cell has a `2026-10-19 GARY_LEDGER` entry with the numbers. Unconfirmed by a fresh run.
+- **Not changed, first-run SGLang start:** 131, 230, 231 and 331 baseline went over 5:00 only on the first baseline after install (for example 230: 6:54, then 4:05); 431 has only its first run (6:06), about 3:17 once the cold start is removed. SGLang smoke is a stand-in, so the first baseline is the first real server start and pays a one-time cost of about 2½ minutes that fewer tokens cannot remove. 430 baseline, which had only that first run, was retimed from the first run minus the 2:49 measured on 230.
+- **`Workload_Definitions` command columns:** regenerated with `scripts/sync_matrix_profile_commands.py` (46 stale cells: the 40 above plus 103/303 smoke/baseline/extended, whose display text still showed `--temp-threshold 75 --power-threshold 500`; the sheet already held 100 / 1000).
+- **Checks:** `sync_matrix_profile_commands.py --check`, `generate_workload_parameters.py --check`, `verify_generation_workflow.py`, and `tests/test_generation_creation_fixes.py`, `test_metric_pair_parity.py`, `test_metric_renames_20261018.py` pass. The workbook before this change is `../BenchmarkSpecDefinitions_before_20261019_runtime_retune.xlsx` (outside the generator folder).
+
+| Workload | Profile | Parameter | Old → new | Measured | Predicted |
+|---|---|---|---|---|---|
+| 120 | baseline | `num_iterations` | 6 → 5 | 5:24/4:19 | ~4:30 |
+| 214 | baseline | `num_iterations` | 750 → 563 | 5:05/5:08 | ~3:59 |
+| 216 | baseline | `num_iterations` | 295000 → 157000 | 7:18/7:30 | ~3:59 |
+| 216 | extended | `num_iterations` | 620000 → 382000 | 19:28 | ~11:59 |
+| 218 | baseline | `num_iterations` | 85000 → 64200 | 5:17/5:17 | ~4:00 |
+| 218 | extended | `num_iterations` | 250000 → 194000 | 15:26 | ~11:59 |
+| 219 | baseline | `num_iterations` | 1140000 → 501000 | 8:57/8:53 | ~3:59 |
+| 219 | extended | `num_iterations` | 2750000 → 1390000 | 23:33 | ~11:57 |
+| 222 | baseline | `num_iterations` | 13350 → 8030 | 6:24/6:33 | ~3:59 |
+| 223 | baseline | `num_iterations` | 37100 → 27400 | 5:20/4:57 | ~4:00 |
+| 228 | extended | `output_len` | 50800 → 35700 | 16:47 | ~12:00 |
+| 229 | extended | `output_len` | 52600 → 38100 | 16:16 | ~11:59 |
+| 320 | baseline | `num_iterations` | 6 → 5 | 5:05/4:25 | ~4:14 |
+| 407 | baseline | `num_iterations` | 23280 → 14800 | 6:16/6:01 | ~3:59 |
+| 413 | baseline | `num_iterations` | 880 → 617 | 4:44/5:42 | ~4:00 |
+| 414 | baseline | `num_iterations` | 750 → 489 | 5:41/5:46 | ~3:59 |
+| 414 | extended | `num_iterations` | 2200 → 1720 | 15:07 | ~11:58 |
+| 415 | baseline | `num_iterations` | 30000 → 17600 | 6:48/6:48 | ~3:59 |
+| 415 | extended | `num_iterations` | 35550 → 26500 | 16:05 | ~11:59 |
+| 416 | baseline | `num_iterations` | 244000 → 113000 | 8:39/8:37 | ~4:00 |
+| 416 | extended | `num_iterations` | 620000 → 319000 | 23:19 | ~11:59 |
+| 418 | baseline | `num_iterations` | 85000 → 57600 | 5:51/5:52 | ~3:59 |
+| 418 | extended | `num_iterations` | 250000 → 175000 | 17:06 | ~11:59 |
+| 419 | baseline | `num_iterations` | 1140000 → 556000 | 8:04/8:03 | ~4:00 |
+| 419 | extended | `num_iterations` | 2750000 → 1520000 | 21:38 | ~12:01 |
+| 421 | baseline | `num_iterations` | 3100 → 2170 | 5:22/5:37 | ~4:00 |
+| 421 | extended | `num_iterations` | 8800 → 6750 | 15:35 | ~12:00 |
+| 422 | baseline | `num_iterations` | 13350 → 4420 | 11:44/11:29 | ~3:59 |
+| 422 | extended | `num_iterations` | 16200 → 10500 | 18:28 | ~12:01 |
+| 423 | baseline | `num_iterations` | 37100 → 15000 | 7:56/9:26 | ~4:00 |
+| 423 | extended | `num_iterations` | 102000 → 56400 | 21:27 | ~12:00 |
+| 424 | extended | `num_images` | 120 → 72 | 19:33 | ~11:57 |
+| 425 | baseline | `num_iterations` | 4130 → 2880 | 5:20/5:35 | ~3:59 |
+| 425 | extended | `num_iterations` | 12300 → 9420 | 15:34 | ~12:00 |
+| 426 | extended | `num_iterations` | 760000 → 588000 | 15:24 | ~11:59 |
+| 428 | extended | `output_len` | 50800 → 27500 | 21:34 | ~11:58 |
+| 429 | baseline | `output_len` | 18600 → 12300 | 5:40 | ~4:00 |
+| 429 | extended | `output_len` | 52600 → 29100 | 21:05 | ~11:59 |
+| 430 | baseline | `output_len` | 3870 → 2400 | 8:39 | ~3:59 |
+| 430 | extended | `output_len` | 15890 → 8100 | 22:34 | ~11:59 |
+
+## 2026-10-18 — A locked overlay is a fingerprint, and a smoke failure is repaired in place
+
+- **`results/component_leftover_work.md`, `AGENTS.md` §20.25, `implementation_components/README.md`, `docs/AI_AGENT_INSTRUCTIONS.md`, `docs/generation-workflow.md`, `docs/IMPLEMENTATION_COMPONENTS.md`, `docs/TEMPLATE_README.md`, `docs/repository-template.md`, and the failure-mode text in `scripts/fill_generated_docs.py`:** “do not rewrite” after init now means do not replace an overlay with a new collector. A smoke failure inside a locked file is fixed by writing the same bytes in the template source, the sibling, and that path’s `sha256` in `results/overlay_lock.json`, then `create_one_workload.py --validate-only`. `scripts/metric_contract.py` has no lock entry and is repaired in the generator copy and the sibling copy. `self_check_generated_repo.sh` and `smoke_check_generated_repo.sh` are unchanged: an unrecorded rewrite still fails, and a sibling that differs from the template still fails.
+
+## 2026-10-18 — `run_benchmark_suite.sh` is installed at `/opt/benchmarks`
+
+- **`scripts/create_one_workload.py`:** after a workload is copied onto the VM, `templates/suite-tools/scripts/run_benchmark_suite.sh` is installed at `/opt/benchmarks/run_benchmark_suite.sh` (LF, mode 755), beside the existing `show_metrics.sh` install. It is not placed inside the workload tree. Published bundles already ship this script.
+
 ## 2026-10-18 — Generation unblocked; checks fixed; 24.04/26.04 metric wording matches
 
 - **Generation blocker — `scripts/self_check_generated_repo.sh`:** the ledger-column check expected the list from before `update_runtime_ledger.py` added `metrics_na_count`, `result_status` and `gpu_model_note` (2026-10-17), so every generated workload failed its self-check. The three columns are now expected. New `tests/test_self_check_ledger_columns.py` runs that embedded check against the real module.

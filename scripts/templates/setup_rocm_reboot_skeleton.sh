@@ -86,10 +86,17 @@ elif [[ "${AITER_SOURCE_DIR}" != "${REPO_ROOT}/"* ]]; then
   echo "[WARN] Ignoring external AITER_SOURCE_DIR=${AITER_SOURCE_DIR}; using ${REPO_ROOT}/third_party/aiter" >&2
   AITER_SOURCE_DIR="${REPO_ROOT}/third_party/aiter"
 fi
-if ! command -v python3 >/dev/null 2>&1; then
+# Check for Ubuntu's own /usr/bin/python3, not any python3 on PATH: some cloud images
+# activate a virtualenv (for example /root/.venv, Python 3.11) and ship no distro
+# Python, so "command -v python3" succeeded and the version probe asked apt for
+# python3.11-venv, which Ubuntu does not publish.
+if [[ ! -x /usr/bin/python3 ]]; then
   keep_running_kernel
   DEBIAN_FRONTEND=noninteractive apt-get update -y
   DEBIAN_FRONTEND=noninteractive apt-get install -y python3
+fi
+if [[ -z "${BENCHMARK_PYTHON:-}" && -x /usr/bin/python3 ]]; then
+  export BENCHMARK_PYTHON=/usr/bin/python3
 fi
 if [[ -f benchmark_specification.json ]]; then
   workload_framework="$("${PYTHON_BOOTSTRAP:-python3}" - <<'PY'

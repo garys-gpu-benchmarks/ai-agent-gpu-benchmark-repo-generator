@@ -148,9 +148,11 @@ def main() -> int:
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
     requested = int(mem_gb * (1024 ** 3))
     if device.type == "cuda":
-        free, total = torch.cuda.mem_get_info(device)
-        target = max(requested, int(total * 0.05))
-        target = min(target, int(free * 0.50))
+        free, _total = torch.cuda.mem_get_info(device)
+        # Honor the profile's memory_size (it used to be raised to 5% of the GPU,
+        # so "--memory-size 1" allocated about 10 GB on an MI300X). Cap at half
+        # the free memory.
+        target = min(requested, int(free * 0.50))
     else:
         target = requested
     n = max(1024, target // 4)
@@ -177,13 +179,13 @@ def main() -> int:
     pass_rate = 100.0 * (loops - failed_checks) / loops if loops else 0.0
     write_csv(args.raw_file, [
         "sample_index", "status", "uncorrected_ecc_errors_count", "corrected_ecc_errors_count",
-        "hbm3_coverage_gb", "loop_verification_pass_pct",
+        "allocated_verification_buffer_gb", "loop_verification_pass_pct",
         "test_wall_clock_completion_time_s", "error_message",
     ], [{
         "status": "ok" if failed_checks == 0 else "error",
         "uncorrected_ecc_errors_count": uncorrected,
         "corrected_ecc_errors_count": corrected,
-        "hbm3_coverage_gb": coverage_gb,
+        "allocated_verification_buffer_gb": coverage_gb,
         "loop_verification_pass_pct": pass_rate,
         "test_wall_clock_completion_time_s": wall,
         "error_message": "" if failed_checks == 0 else f"{failed_checks} failed checks in {loops} loops",

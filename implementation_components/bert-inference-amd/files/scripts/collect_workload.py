@@ -75,6 +75,11 @@ def main() -> int:
     model = BertModel.from_pretrained(model_name).to(device).eval()
     if "16" in str(pv(params, "dtype", args.profile, "f16_r")).lower():
         model = model.half()
+    if device.type == "cuda":
+        # Without this reset the peak was the FP32 -> FP16 conversion at load
+        # (485951488 bytes on every profile), not the inference working set.
+        torch.cuda.synchronize()
+        torch.cuda.reset_peak_memory_stats()
     ids = torch.randint(0, 1000, (batch, seq), device=device)
     mask = torch.ones_like(ids)
     with torch.no_grad():

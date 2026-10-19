@@ -1,6 +1,6 @@
 {
   "component_id": "sdc-ecc-nvidia",
-  "description": "NVIDIA 204/404 CUDA fixed-pattern fill on device memory. Fails if nvcc/CUDA walk does not run. Does not label host RAM as hbm3_coverage_gb.",
+  "description": "NVIDIA 204/404 CUDA fixed-pattern fill on device memory. Fails if nvcc/CUDA walk does not run. Does not label host RAM as device_buffer_gib.",
   "overlay": [
     "src/ecc_walk.cu",
     "scripts/build.sh",

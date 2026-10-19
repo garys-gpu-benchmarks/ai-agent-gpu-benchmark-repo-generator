@@ -359,7 +359,7 @@ end_to_end_query_latency_retrieval_generation_ms         E2E_ms
 generation_phase_time_to_first_token_ms                  TTFT_ms
 retrieval_latency_vector_search_ms                       Ret_ms
 generation_throughput_output_tokens_s                    GenTk/s
-embedding_throughput_docs_s                              EmbDc/s
+embedding_throughput_chunks_s                            EmbCk/s
 faiss_index_ntotal                                       FAISS_N
 cuda_package_version_mismatches_count                    PkgMis
 nvidia_kernel_module_driver_version_mismatches_count     KrnMis
@@ -369,7 +369,7 @@ dmesg_nvidia_gpu_fault_xid_count                         XidFlt
 cuda_devices_visible                                     CUDADev
 peak_gpu_temperature_c                                   PkTmp_C
 gpu_system_ecc_error_count                               ECCErr
-hbm3_coverage_gb                                         Buf_GB
+device_buffer_gib                                        Buf_GB
 fixed_pattern_fill_verify_pass_rate                      Pass%
 bandwidth_h2d_gbps                                       H2DGB/s
 bandwidth_d2h_gbps                                       D2HGB/s
@@ -381,7 +381,7 @@ pinned_vs_pageable_bandwidth_ratio                       PinRat
 norm_error_2                                             L2Err
 tflops_fwd                                               TFLOPS
 solver_search_msec                                       Srch_ms
-percent_of_fp64_vector_peak                              VecPk%
+percent_of_fp64_tensor_peak                              TcPk%
 step_time_msec                                           Step_ms
 fp16_tflops                                              ModlTF
 modeled_weight_feature_traffic_gb_s                      TrfGB/s

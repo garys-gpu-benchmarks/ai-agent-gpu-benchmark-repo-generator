@@ -30,7 +30,7 @@ Each `component.json` contains:
 - `selectors` — `{field, operator, value}`; operators are `equals`, `contains`, `in`, and `prefix`. Primary components require selectors. Mixins use `apply_when` instead.
 - `overlay` — destination-relative files under the component's `files/` directory.
 
-Primary collectors are discovered from workbook fields. Mixins (`harness-self-check`, `rocm-tool-verify-build`, `rocblas-clients-build`) apply afterward when `apply_when` matches and the destination is not already owned. `scripts/init_generated_repo.py` then writes `results/overlay_lock.json` and `results/component_resolution.json`. `scripts/apply_component_gaps.py` fills `--seed-fixture`, `PyYAML`, and `thresholds:` from `gate.json`.
+Primary collectors are discovered from workbook fields. Mixins (`harness-self-check`, `rocm-tool-verify-build`, `rocblas-clients-build`) apply afterward when `apply_when` matches and the destination is not already owned. `scripts/init_generated_repo.py` then writes `results/overlay_lock.json` and `results/component_resolution.json`. The lock records the SHA-256 of the copied overlay bytes. A later smoke-breaking repair updates the template source, the sibling file, and that digest together. `scripts/apply_component_gaps.py` fills `--seed-fixture`, `PyYAML`, and `thresholds:` from `gate.json`.
 
 Smoke-check keys off resolved `contracts`, not `Framework` substrings. Framework remains install-and-verify. `gemm_per_point` is only for GEMM sweeps such as `rocblas-gemm-amd`, not `system-stress-amd`.
 

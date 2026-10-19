@@ -3,6 +3,11 @@ if grep -q $'\r' "$0"; then echo "This file has Windows (CRLF) line endings. Fix
 #
 # publish_benchmarks_to_github.sh
 #
+# It never copies anything into the run folder and has no source folders
+# built in. You fill the run folder by hand before the run; step 0 only checks
+# what you copied (every batch complete, no duplicate or out-of-range workload
+# numbers, the generator present).
+#
 # Publishes one generated run of the GPU benchmark suite to the GitHub
 # organization garys-gpu-benchmarks:
 #
@@ -10,72 +15,76 @@ if grep -q $'\r' "$0"; then echo "This file has Windows (CRLF) line endings. Fix
 #                               201-232 NVIDIA CUDA Ubuntu 24.04
 #                               301-332 AMD ROCm    Ubuntu 26.04
 #                               401-432 NVIDIA CUDA Ubuntu 26.04
-#   4 bundle repositories       bundle-<vendor>-ubuntu-<2404|2604>, each holding its 32 workloads as pinned git submodules
+#   4 bundle repositories       bundle-<vendor>-ubuntu-<2404|2604>, each holding
+#                               its 32 workloads as pinned git submodules
 #   shared-workflows            the CI every workload calls (@v1)
-#   gpu-bench-suite             operator tools (run_benchmark_suite.sh, get_remote_info.sh)
+#   gpu-bench-suite             operator tools (run_benchmark_suite.sh,
+#                               get_remote_info.sh)
 #   the generator               ai-agent-gpu-benchmark-repo-generator
 #
-# Where this script lives:
-#   The master copy is scripts/publish_benchmarks_to_github.sh in the
-#   generator (ai-agent-gpu-benchmark-repo-generator); it is published with the
-#   generator but never copied into workloads. Copy it into Publishing\ before
-#   a run (step 1 of the procedure below).
+# Changes 2026-10-19 (lab-technician review of the v1.0.14 bundles):
+#   - Bundle .gitmodules no longer carry "branch = main", so
+#     "git submodule update --remote" cannot move a workload off its pinned
+#     release.
+#   - The bundle's copy of run_benchmark_suite.sh runs only the smoke profile
+#     when no -p is given, and its --help examples use that bundle's workload
+#     numbers (the shared script's examples name 101-132 in every bundle).
+#   - Bundle README: Getting started begins with x07 (STREAM, CPU only, no
+#     GPU install or restart), then x01, x02 and x14 (host-GPU copy at
+#     256 MiB) instead of x15, whose smoke arrays fit in GPU cache.
+#   - Bundle README: the first GPU command says it is quiet for 5-20 minutes while
+#     it installs, and how to watch it (--show-output or install_status.txt).
+#   - Bundle README: smoke is a wiring check, not a number to quote; the
+#     full run is an explicit -p smoke,baseline,extended; what to do after
+#     the install restarts the machine; results that are expected to be na;
+#     Hugging Face range x23-x32; how to see which release is installed.
+#   - Step 7 stops if the suite-script edits did not apply; step 8 also checks
+#     the test clone for a branch line, the smoke default, and that every
+#     ./script.sh the README names is in the bundle.
 #
-# Sources (set under "Settings you may change"; step 0 copies them in):
+# Folder layout (the script lives in Publishing\; one dated folder per run):
 #
-#   Z:\ServersProcsMemory\Projects\
-#   ├── Project341_TEMPLATE_00_104_20261008\TEMPLATE_00_104\
-#   │   └── ai-agent-gpu-benchmark-repo-generator\  GENERATOR_SOURCE
-#   ├── Project342_101_to_132_TEMPLATE_00_104_20261010\DIRECTORIES\  101-132
-#   ├── Project343_201_to_232_TEMPLATE_00_104_20261010\DIRECTORIES\  201-232
-#   ├── Project344_301_to_332_TEMPLATE_00_104_20261010\DIRECTORIES\  301-332
-#   └── Project345_401_to_432_TEMPLATE_00_104_20261010\DIRECTORIES\  401-432
+#   Z:\ServersProcsMemory\Github_Garys_GPU_Repos\Publishing\
+#   ├── publish_benchmarks_to_github.sh                copy of this script
+#   └── 20261019_02\                                   one folder per publish run
+#       ├── src_380_381_382_383\                       RUN_FOLDER: filled by hand
+#       │   ├── 101-...\                               the 128 generated workloads
+#       │   ├── ...
+#       │   ├── 432-...\
+#       │   └── ai-agent-gpu-benchmark-repo-generator\ the generator
+#       ├── src_380_381_382_383_PubTree\               created by this script (logs in _logs\)
+#       ├── src_380_381_382_383_Bundles\               created by this script
+#       ├── shared-workflows\                          created/updated by this script
+#       └── gpu-bench-suite\                           created/updated by this script
 #
-# Folder layout (one Publish_<YYYYMMDD>_<NN> folder per publish run):
+# Procedure (Git Bash; use "/" in paths):
+#   1. Create the run folder and copy in the generator and the workloads.
+#      Take the generator from the same template as the workloads.
+#        P=/z/ServersProcsMemory/Projects
+#        R=/z/ServersProcsMemory/Github_Garys_GPU_Repos/Publishing/20261019_02/src_380_381_382_383
+#        mkdir -p $R
+#        cp -a $P/Project379_TEMPLATE_00_112_20261017/TEMPLATE_00_112/ai-agent-gpu-benchmark-repo-generator $R/
+#        cp -a $P/Project380_101_132_TEMPLATE_00_112_20261019_Cursor/TEMPLATE_00_112/1[0-9][0-9]-* $R/
+#        cp -a $P/Project381_201_232_TEMPLATE_00_112_20261019_Cursor/TEMPLATE_00_112/2[0-9][0-9]-* $R/
+#        cp -a $P/Project382_301_332_TEMPLATE_00_112_20261019_Cursor/TEMPLATE_00_112/3[0-9][0-9]-* $R/
+#        cp -a $P/Project383_401_432_TEMPLATE_00_112_20261019_Cursor/TEMPLATE_00_112/4[0-9][0-9]-* $R/
+#   2. Copy this script into Publishing\ (from the generator in the run folder)
+#      and run it from there, naming the run folder relative to Publishing\:
+#        cd /z/ServersProcsMemory/Github_Garys_GPU_Repos/Publishing
+#        cp 20261019_02/src_380_381_382_383/ai-agent-gpu-benchmark-repo-generator/scripts/publish_benchmarks_to_github.sh .
+#        ./publish_benchmarks_to_github.sh 20261019_02/src_380_381_382_383
+#   3. Check: the run ends with FINISHED (no STOPPED); then on GitHub, green CI.
 #
-#   Z:\ServersProcsMemory\Github_Garys_GPU_Repos\
-#   └── Publishing\
-#       ├── publish_benchmarks_to_github.sh          copy of this script
-#       └── 20261010_02\
-#           ├── src_342_343_344_345\                 User creates folder
-#           │   ├── 101-...\                         User copies Project342's 101_... to 132_... into directory
-#           │   ├── 102-...\                        
-#           │   ├── .......
-#           │   ├── 132-...\
-#           │   ├── 201-...\                         User copies Project343's 201_... to 232_... into directory
-#           │   ├── 202-...\                        
-#           │   ├── .......
-#           │   ├── 232-...\
-#           │   ├── 301-...\                         User copies Project344's 301_... to 332_... into directory
-#           │   ├── 302-...\                        
-#           │   ├── .......
-#           │   ├── 332-...\
-#           │   ├── 401-...\                         User copies Project345's 401_... to 432_... into directory
-#           │   ├── 402-...\                        
-#           │   ├── .......
-#           │   ├── 432-...\
-#           │   └── ai-agent-gpu-benchmark-repo-generator\ User copies from Project341
-#           │
-#           ├── src_342_343_344_345_PubTree\         created by this script (logs in _logs\)
-#           ├── src_342_343_344_345_Bundles\         created by this script
-#           ├── shared-workflows\                    created/updated by this script
-#           └── gpu-bench-suite\                     created/updated by this script
+# Do not repeat the cp commands for a run that has already started: cp -a
+# overwrites any fixes made in the run folder. To replace one workload, delete
+# it from the run folder (and from the _PubTree if step 1 already copied it),
+# copy it in again, and run again.
 #
-# Procedure (Git Bash):
-#   1. cd /z/ServersProcsMemory/Github_Garys_GPU_Repos/Publishing
-#      cp /z/ServersProcsMemory/Projects/Project341_TEMPLATE_00_104_20261008/TEMPLATE_00_104/ai-agent-gpu-benchmark-repo-generator/scripts/publish_benchmarks_to_github.sh .
-#   2. Check the source folders under "Settings you may change" below.
-#   3. ./publish_benchmarks_to_github.sh Publish_<YYYYMMDD>_<NN>/src_342_343_344_345
-#      Step 0 creates the run folder if needed and copies in every workload and
-#      the generator it does not have yet (folders already there are kept).
-#   4. Check: the run ends with FINISHED (no STOPPED); then on GitHub, green CI.
-#
-# Use "/" in paths, not "\" (Git Bash drops backslashes). shared-workflows and
-# gpu-bench-suite are built next to RUN_FOLDER from the generator inside it;
-# change them in the generator, never by hand.
+# shared-workflows and gpu-bench-suite are built next to RUN_FOLDER from the
+# generator inside it; change them in the generator, never by hand.
 #
 # Usage:    ./publish_benchmarks_to_github.sh RUN_FOLDER
-# Example:  ./publish_benchmarks_to_github.sh src_342_343_344_345
+# Example:  ./publish_benchmarks_to_github.sh 20261019_02/src_380_381_382_383
 # Help:     ./publish_benchmarks_to_github.sh --help
 # Runs on:  Git Bash on Windows (also Linux and macOS), with gh logged in.
 #
@@ -89,10 +98,14 @@ if grep -q $'\r' "$0"; then echo "This file has Windows (CRLF) line endings. Fix
 #   1  stopped on a problem (see the STOPPED line)
 #   2  usage error
 #
-# Revision: 2026-10-10b (master copy moved into the generator's scripts/;
-#           Z:\ServersProcsMemory paths; step 0 fills the run folder
-#           src_342_343_344_345 from Projects 341-345)
-# Revision: 2026-10-10 (generator repository renamed from 999-ai-agent-gpu-benchmark-repo-generator)
+# Revision: 2026-10-19 (the only publish script: the former
+#           publish_benchmarks_to_github_manual.sh, renamed; the variant that
+#           copied workloads in from fixed source folders is removed)
+#           2026-10-14 (step 0 and step 9 run the generator's own ruff lint
+#           before anything is pushed; step 9 removes __pycache__ and other
+#           Python caches from the generator copy)
+#           2026-10-13 (manual variant of publish_benchmarks_to_github.sh
+#           2026-10-10b: the run folder is filled by hand; step 0 checks it)
 
 set -uo pipefail
 set +H
@@ -115,21 +128,22 @@ readonly PERSONAL_GENERATOR="garymichaelbass/ai-agent-gpu-benchmark-repo-generat
 #   no   leave it alone and publish a fresh copy in the organization
 readonly TRANSFER_PERSONAL_GENERATOR="ask"
 
-# Sources for this run (Git Bash paths). Step 0 copies into RUN_FOLDER every
-# workload folder and the generator it does not have yet. To publish another
-# set of batches, change these and the run folder name.
-readonly PROJECTS_ROOT="/z/ServersProcsMemory/Projects"
-readonly GENERATOR_SOURCE="${PROJECTS_ROOT}/Project341_TEMPLATE_00_104_20261008/TEMPLATE_00_104/${GENREPO}"
-# One entry per batch: "<first digit of its workload numbers>:<folder holding them>".
-readonly -a WORKLOAD_SOURCES=(
-  "1:${PROJECTS_ROOT}/Project342_101_to_132_TEMPLATE_00_104_20261010/DIRECTORIES"
-  "2:${PROJECTS_ROOT}/Project343_201_to_232_TEMPLATE_00_104_20261010/DIRECTORIES"
-  "3:${PROJECTS_ROOT}/Project344_301_to_332_TEMPLATE_00_104_20261010/DIRECTORIES"
-  "4:${PROJECTS_ROOT}/Project345_401_to_432_TEMPLATE_00_104_20261010/DIRECTORIES"
-)
-# The run folder name used in the examples and messages (the folder you give
-# on the command line, inside Publish_<YYYYMMDD>_<NN>).
-readonly RUN_FOLDER_NAME="src_342_343_344_345"
+# Workloads per batch (x01 to x32).
+readonly BATCH_SIZE=32
+# What step 0 does when a batch is incomplete or missing:
+#   yes  stop unless all four batches have all ${BATCH_SIZE} workloads (default)
+#   no   only print a note, and publish what is there
+readonly REQUIRE_FULL_RUN="yes"
+
+# Run the generator's own ruff lint (the "ruff check" lines in its
+# .github/workflows/*.yml) in step 0 and again in step 9, so a lint error
+# stops the run here instead of failing the generator's CI on GitHub:
+#   yes  stop if ruff is not installed or the lint fails (default)
+#   no   skip the lint
+readonly LINT_GENERATOR="yes"
+
+# The run folder used in the examples and messages (relative to Publishing\).
+readonly RUN_FOLDER_NAME="20261019_02/src_380_381_382_383"
 
 # ------------------------------------------------------------------------------
 # Usage
@@ -145,22 +159,20 @@ Usage: ${SCRIPT_NAME} RUN_FOLDER
 
 Publishes one generated run of the GPU benchmark suite to github.com/${ORG}.
 
-RUN_FOLDER holds the 128 generated workload folders (101-..., 201-...,
-301-..., 401-...) and ${GENREPO}. Step 0 creates it if needed and
-copies in whatever it does not have yet from:
-  generator  ${GENERATOR_SOURCE}
-$(for e in "${WORKLOAD_SOURCES[@]}"; do printf '  %sxx        %s\n' "${e%%:*}" "${e#*:}"; done)
-Folders already in RUN_FOLDER are never changed. Next to it the script
-creates RUN_FOLDER_PubTree and RUN_FOLDER_Bundles, and in the folder that
-holds RUN_FOLDER it builds shared-workflows and gpu-bench-suite from the
-generator.
+RUN_FOLDER must already hold the generated workload folders (101-...,
+201-..., 301-..., 401-...) and ${GENREPO}, copied in by hand.
+This script never copies anything into it, and never changes it; step 0
+checks that every batch has all ${BATCH_SIZE} workloads, with no duplicate or
+out-of-range numbers. Next to it the script creates RUN_FOLDER_PubTree and
+RUN_FOLDER_Bundles, and in the folder that holds RUN_FOLDER it builds
+shared-workflows and gpu-bench-suite from the generator.
 
-Layout and procedure (Git Bash; use "/" in paths):
+Example (Git Bash; use "/" in paths):
   cd /z/ServersProcsMemory/Github_Garys_GPU_Repos/Publishing
-  ./${SCRIPT_NAME} Publish_20261010_02/${RUN_FOLDER_NAME}
+  ./${SCRIPT_NAME} ${RUN_FOLDER_NAME}
 
 Steps:
-  0  Preflight: tools, fill the run folder from the sources, version
+  0  Preflight: tools, check the run folder, version
   1  Copy the workloads into RUN_FOLDER_PubTree
   2  Dry run of each workload's prepare script
   3  Prepare and check each workload
@@ -177,7 +189,8 @@ RUN_FOLDER_PubTree/_logs/version.txt; edit that file before step 6 to
 choose another version.
 
 If a run stops, fix the problem and run the same command again with the same
-RUN_FOLDER; finished work is skipped.
+RUN_FOLDER; finished work is skipped. Do not repeat the cp commands that
+filled the run folder: they overwrite fixes made there.
 
 To publish one workload again after fixing it: fix it in the _PubTree copy,
 delete its line from RUN_FOLDER_PubTree/_logs/published.txt, and run again.
@@ -333,7 +346,7 @@ add_submodule() {
     [[ -f .gitmodules ]] && git add .gitmodules >/dev/null 2>&1
     git config --remove-section "submodule.${path}" >/dev/null 2>&1
     rm -rf "${path}" ".git/modules/${path}"
-    git submodule add -q -b main --name "${path}" "../${dir}.git" "${path}" && return 0
+    git submodule add -q --name "${path}" "../${dir}.git" "${path}" && return 0
     ((i < 4)) && { echo "  (failed, cleaning up and trying again in 5 seconds)"; sleep 5; }
   done
   return 1
@@ -388,6 +401,46 @@ emit_repo() {
   echo "Built ${dir} from the generator"
 }
 
+# Runs the same ruff lint as the generator's CI, in the generator folder $1,
+# without writing a .ruff_cache or __pycache__ there. The commands are read
+# from the "ruff check" lines in its .github/workflows/*.yml, so they stay in
+# step with CI. Stops the run if a command fails.
+lint_generator() {
+  local dir=$1 cmds cmd n=0
+  [[ "${LINT_GENERATOR}" == yes ]] || { echo "Lint of ${GENREPO}: skipped (LINT_GENERATOR=\"${LINT_GENERATOR}\")"; return 0; }
+  cmds=$(cat "${dir}"/.github/workflows/*.yml "${dir}"/.github/workflows/*.yaml 2>/dev/null | tr -d '\r' |
+         sed -nE 's/^[[:space:]]*(-[[:space:]]+)?(run:[[:space:]]*)?(ruff[[:space:]]+check([[:space:]].*)?)$/\3/p' | sort -u)
+  if [[ -z "${cmds}" ]]; then
+    echo "Lint of ${GENREPO}: its CI runs no ruff check, nothing to do"
+    return 0
+  fi
+  local -a RUFF=()
+  if command -v ruff >/dev/null 2>&1; then
+    RUFF=(ruff)
+  else
+    local p
+    for p in python3 python py; do
+      command -v "${p}" >/dev/null 2>&1 || continue
+      if [[ "${p}" == py ]]; then RUFF=(py -3 -m ruff); else RUFF=("${p}" -m ruff); fi
+      "${RUFF[@]}" --version >/dev/null 2>&1 && break
+      RUFF=()
+    done
+  fi
+  ((${#RUFF[@]} > 0)) || stop "ruff is needed to lint ${GENREPO} the way its CI does. Install it with:  python -m pip install ruff   (or set LINT_GENERATOR=\"no\" near the top of this file)"
+  echo "Lint of ${GENREPO} in ${dir} with $("${RUFF[@]}" --version 2>/dev/null)"
+  while IFS= read -r cmd; do
+    [[ -n "${cmd}" ]] || continue
+    n=$((n + 1))
+    echo "  ${cmd}"
+    # Replace the leading "ruff check" with this machine's ruff, keep CI's
+    # arguments, and add --no-cache so nothing is written into the folder.
+    if ! (cd "${dir}" && PYTHONDONTWRITEBYTECODE=1 eval "\"\${RUFF[@]}\" check --no-cache ${cmd#ruff*check}") </dev/null; then
+      stop "the generator fails its own ruff lint (above), so its CI on GitHub would fail. Fix it in the generator source and in ${dir}, then run again. Many problems are fixed by running the same command with --fix."
+    fi
+  done <<<"${cmds}"
+  echo "Lint of ${GENREPO}: ${n} ruff command(s) passed"
+}
+
 # Waits for the Self-test workflow run of commit $1 in $SHARED_REPO and
 # returns its result. Waits up to 3 minutes for the run to start.
 wait_self_test() {
@@ -404,6 +457,33 @@ wait_self_test() {
 
 # Prints a bundle's README.md. $1 = platform digit (1-4), $2 = bundle name,
 # $3 = number of workloads, $4 = list of workload rows (Markdown).
+# Writes a bundle's copy of run_benchmark_suite.sh: stdin -> stdout.
+# $1 = platform digit (1-4). Two changes from the shared script:
+#   - with no -p it runs the smoke profile only, so a bare
+#     ./run_benchmark_suite.sh is a short check, not a many-hour run;
+#   - the --help examples and the bad-number message use this bundle's
+#     workload numbers (the shared script names 101-132 in every bundle).
+bundle_suite_script() {
+  local s=$1
+  tr -d '\r' | sed \
+    -e 's/^profiles_arg="smoke,baseline,extended"$/profiles_arg="smoke"/' \
+    -e 's/Default: smoke,baseline,extended$/Default: smoke   (full run: -p smoke,baseline,extended)/' \
+    -e "s/Examples: 101,107,121   301-310   101-105,120\$/Examples: ${s}01,${s}07,${s}21   ${s}01-${s}10   ${s}01-${s}05,${s}20/" \
+    -e 's/^\(  \.\/\${SCRIPT_NAME}  *\)# all workloads, all 3 profiles$/\1# all workloads, smoke profile (the default)/' \
+    -e 's/^  \.\/\${SCRIPT_NAME} -p smoke  *# quick check of everything$/  .\/${SCRIPT_NAME} -p smoke,baseline,extended   # everything, all 3 profiles (many hours)/' \
+    -e "/-w 101,107,121 -p baseline\\|-w 105 -p smoke\\|use numbers like 101/s/\\b1\\([0-3][0-9]\\)\\b/${s}\\1/g"
+}
+
+# Checks a bundle copy written by bundle_suite_script. $1 = file, $2 = digit.
+check_bundle_suite_script() {
+  local f=$1 s=$2
+  grep -qx 'profiles_arg="smoke"' "${f}" || { echo "the default profile is not smoke in ${f}"; return 1; }
+  grep -q "Default: smoke   (full run" "${f}" || { echo "the --help default line was not changed in ${f}"; return 1; }
+  grep -q -- "-w ${s}01,${s}07,${s}21 -p baseline" "${f}" || { echo "the --help examples do not use ${s}NN numbers in ${f}"; return 1; }
+  grep -q "all workloads, smoke profile (the default)" "${f}" || { echo "the bare-command example was not changed in ${f}"; return 1; }
+  bash -n "${f}" || { echo "${f} is not valid bash after the edits"; return 1; }
+}
+
 bundle_readme() {
   local s=$1 bundle=$2 want=$3 rows=$4 text
   local plat vendor stack os
@@ -426,10 +506,13 @@ Use this bundle only on that platform. The others have their own bundle:
 
 - A freshly installed **Ubuntu @OS@** machine with @VENDOR@ GPUs, connected to the internet.
 - **root** access: log in as root, or run `sudo -i` first.
-- Plenty of free disk space. Each benchmark installs its own software the first
-  time it runs, and checks for at least 20 GiB free before it does. The AI
-  benchmarks also download models.
-- For the AI model benchmarks (@S@23 to @S@31): if a model's license on Hugging
+- Plenty of free disk space. Each benchmark installs its own software (its own
+  Python environment) the first time it runs, and checks for at least 20 GiB
+  free before it does. That check is per benchmark, not for the whole suite,
+  and the AI benchmarks also download models.
+- A machine where installing @STACK@ and one restart are acceptable: the first
+  run installs them.
+- For the AI model benchmarks (@S@23 to @S@32): if a model's license on Hugging
   Face requires it, accept the license there and set a token first:
   `export HF_TOKEN=hf_...`
 
@@ -445,25 +528,53 @@ cd /opt/benchmarks
 `./run_benchmark_suite.sh --list` should show all @WANT@ benchmarks as `ready`.
 Do not use GitHub's **Download ZIP**: it leaves the benchmark folders empty.
 
-## Getting started: three quick benchmarks
+## Getting started
+
+### 1. A CPU benchmark (about a minute, no GPU software)
 
 ```bash
 cd /opt/benchmarks
-./run_benchmark_suite.sh -w @S@01,@S@02,@S@15 -p smoke
+./run_benchmark_suite.sh -w @S@07 -p smoke --show-output
 ```
 
-This runs the short `smoke` profile of three benchmarks:
+@S@07 is STREAM, CPU memory bandwidth. It installs only a compiler and its own
+Python environment, not @STACK@, and does not restart the machine. It ends
+with Copy, Scale, Add and Triad rates in GB/s. Smoke uses 4 threads; the
+`baseline` profile is the figure to quote for this machine. If this run
+passes, the bundle, the suite runner, the results and the runtime ledger all
+work.
+
+### 2. The GPU software and two quick GPU checks
+
+```bash
+./run_benchmark_suite.sh -w @S@01,@S@02,@S@14 -p smoke   # first run installs @STACK@: quiet for 5-20 minutes
+```
+
+The first GPU run prints nothing while it installs. To watch it, add
+`--show-output`, or in a second window run
+`tail -f /opt/benchmarks/@S@01-*/results/install_status.txt`.
 
 | Benchmark | What it checks |
 |---|---|
-| @S@01 | the GPU software stack is installed and working |
-| @S@02 | GPU health |
-| @S@15 | GPU memory (HBM) bandwidth |
+| @S@01 | installs @STACK@, then checks the installed GPU software (the long step) |
+| @S@02 | GPU health: the GPUs are visible, with temperature and link status |
+| @S@14 | copy bandwidth between the host and the GPU, measured at 256 MiB |
 
-The first run takes much longer than later ones: it installs @STACK@ and each
-benchmark's software. The install may restart the machine once. If it does,
-log in again after the restart, wait a few minutes for setup to finish on its
-own, and run the same command again.
+**Smoke is a wiring check.** It shows that each benchmark installs, runs and
+records its results. Most smoke runs use small sizes, so their numbers are not
+for reports: for example, the @S@15 (GPU memory bandwidth) smoke arrays fit in
+GPU cache and do not measure HBM. Quote `baseline` or `extended` results.
+
+The first GPU run takes much longer than later ones: @S@01 installs @STACK@,
+and each benchmark installs its own software the first time. The install may
+restart the machine once. If it does:
+
+1. Log in again as root. Setup continues on its own after the restart.
+2. To watch it: `tail -f /opt/benchmarks/@S@01-*/results/install_status.txt`
+   (Ctrl+C stops watching, not setup).
+3. Run the same command again. If it says setup is still running, wait a few
+   minutes and run it again. Benchmarks already installed are not installed
+   again.
 
 Each run prints a short block, and the suite ends with a pass/fail summary.
 The full output is in `/opt/benchmarks/benchmark_suite_log/`.
@@ -482,8 +593,8 @@ per run with its metrics, then the mean for each profile.
 
 ```bash
 cd /opt/benchmarks
-./show_metrics.sh @S@15                # benchmark @S@15, every profile
-./show_metrics.sh @S@15 --baseline     # baseline runs only
+./show_metrics.sh @S@07                # benchmark @S@07, every profile
+./show_metrics.sh @S@07 --baseline     # baseline runs only
 ./show_metrics.sh --help             # all options
 ```
 
@@ -497,11 +608,12 @@ It takes many hours.
 ```bash
 tmux new -s bench
 cd /opt/benchmarks
-./run_benchmark_suite.sh
+./run_benchmark_suite.sh -p smoke,baseline,extended
 ```
 
 This runs all @WANT@ benchmarks with the `smoke` profile, then all with
-`baseline`, then all with `extended`. Detach with **Ctrl+B** then **D**;
+`baseline`, then all with `extended`. Without `-p`, `./run_benchmark_suite.sh`
+runs the `smoke` profile only. Detach with **Ctrl+B** then **D**;
 reattach later with `tmux attach -t bench`.
 
 Run "Getting started" first on a new machine, so the one-time install (and any
@@ -509,7 +621,7 @@ restart) happens before the long run.
 
 | Option | What it does |
 |---|---|
-| `-p smoke` | profiles to run, in order (`smoke`, `baseline`, `extended`; comma-separated) |
+| `-p baseline` | profiles to run, in order (`smoke`, `baseline`, `extended`; comma-separated). Default: `smoke` |
 | `-w @S@01,@S@07,@S@21` | only these benchmarks; ranges work too: `-w @S@01-@S@10` |
 | `-r 20` | repeat the whole set 20 times (soak test) |
 | `--fail-fast` | stop at the first failed run |
@@ -517,6 +629,20 @@ restart) happens before the long run.
 | `--list` | list the benchmarks as `ready` or `not fetched`, then exit |
 | `-n` | show what would run, without running it |
 | `--help` | all options |
+
+## Results that are expected to be `na`
+
+A metric written as `na (reason)` was not measured on this machine; it is
+never an invented number. Read the reason before reporting a fault. These are
+expected:
+
+| Benchmark | Expected result |
+|---|---|
+| @S@16 | On a machine with one GPU, the bandwidth metrics are `na (requires at least two GPUs)` and the run still passes. |
+| @S@11 | Hardware counters are `na` with the reason when `perf` is not installed for the running kernel, or when `perf_event_paranoid` denies access. |
+| @S@06 | Measures a file (`data/fio_target.bin`) on the disk that holds the benchmark, not a raw NVMe device. |
+| @S@08 | Measures the loopback path (`127.0.0.1`), not a network card. |
+| @S@30, @S@31 | The `smoke` profile may use a stand-in server; only `baseline` and `extended` measure SGLang. |
 
 ## Results
 
@@ -527,6 +653,7 @@ restart) happens before the long run.
 | Each benchmark's results | `/opt/benchmarks/<benchmark>/results/` (`raw/` and `parsed/`) |
 | One line per run (time, exit code) | `/var/opt/benchmarks/runtime_ledger.csv` |
 | One benchmark's runs and per-profile means | `./show_metrics.sh <benchmark>` |
+| Which release is installed | `git -C /opt/benchmarks describe --tags` |
 
 To copy the ledger, every benchmark's `results/` and the suite logs to your
 laptop (Git Bash on Windows), use `get_remote_info.sh` from
@@ -536,7 +663,7 @@ laptop (Git Bash on Windows), use `get_remote_info.sh` from
 ```bash
 git clone https://github.com/@ORG@/gpu-bench-suite && cd gpu-bench-suite
 ./scripts/get_remote_info.sh --host 203.0.113.10       # this machine's address; --port PORT if ssh is not on 22
-./scripts/show_metrics.sh @S@15 --host 203.0.113.10      # the same table, read over ssh
+./scripts/show_metrics.sh @S@07 --host 203.0.113.10      # the same table, read over ssh
 ```
 
 ## Update to a newer release
@@ -545,6 +672,9 @@ git clone https://github.com/@ORG@/gpu-bench-suite && cd gpu-bench-suite
 cd /opt/benchmarks
 git pull && git submodule update --init --recursive
 ```
+
+Do not use `git submodule update --remote`: it moves the benchmarks off the
+release they were tested at.
 
 Copies made before v1.0.5 keep their benchmarks in a `benchmarks/` subfolder;
 delete those and clone again as shown under Install.
@@ -572,20 +702,16 @@ README
 # STEP 0: PREFLIGHT
 # ==============================================================================
 
-[[ -n "${RUN_ARG}" ]] || { usage; echo; echo "${SCRIPT_NAME}: give the run folder, for example Publish_20261010_02/${RUN_FOLDER_NAME}" >&2; exit 2; }
+[[ -n "${RUN_ARG}" ]] || { usage; echo; echo "${SCRIPT_NAME}: give the run folder, for example ${RUN_FOLDER_NAME}" >&2; exit 2; }
 not_a_run_folder() {
   case "/${1%/}" in
     *_PubTree* | *_Bundles* | */[1-4][0-9][0-9]-* | */999-* | */"${GENREPO}") return 0 ;;
   esac
   return 1
 }
-# Checked before the folder is created, so a wrong path does not leave an
-# empty folder behind.
-not_a_run_folder "${RUN_ARG}" && stop "${RUN_ARG} is not a run folder (it is a _PubTree, _Bundles or workload folder). Give the run folder, for example Publish_20261010_02/${RUN_FOLDER_NAME}."
-if [[ ! -d "${RUN_ARG}" ]]; then
-  mkdir -p "${RUN_ARG}" || stop "cannot create the run folder ${RUN_ARG} (from $(pwd)). Use \"/\" in the path, not \"\\\"."
-  echo "Created the run folder ${RUN_ARG}"
-fi
+not_a_run_folder "${RUN_ARG}" && stop "${RUN_ARG} is not a run folder (it is a _PubTree, _Bundles or workload folder). Give the run folder, for example ${RUN_FOLDER_NAME}."
+# This script never creates or fills the run folder: that is done by hand.
+[[ -d "${RUN_ARG}" ]] || stop "the run folder ${RUN_ARG} does not exist (looked from $(pwd)). Create it and copy in the generator and the workloads first (see the top of this file), then run again. Use \"/\" in the path, not \"\\\"."
 cd "${RUN_ARG}" || stop "cannot open the run folder ${RUN_ARG} (from $(pwd)). Use \"/\" in the path, not \"\\\"."
 GEN="${PWD}"
 PUB="${GEN}_PubTree"
@@ -602,51 +728,69 @@ exec > >(tee -a "${LOG}") 2>&1
 
 step 0 "Preflight"
 
-# Fill the run folder from the sources in "Settings you may change". Only
-# folders the run folder does not have yet are copied, so a resumed run, or a
-# workload fixed in the run folder by hand, is left as it is. To take a fresh
-# copy of a workload, delete it from the run folder (and from the _PubTree if
-# step 1 already copied it) and run again.
-echo "Filling ${GEN} from the sources (folders already there are kept)"
-fill_copied=0
-for entry in "${WORKLOAD_SOURCES[@]}"; do
-  digit=${entry%%:*}
-  src=${entry#*:}
-  [[ -d "${src}" ]] || stop "the ${digit}xx workload source folder does not exist: ${src}. Fix WORKLOAD_SOURCES near the top of this file."
-  found=0
-  for d in "${src}/${digit}"[0-9][0-9]-*/; do
+# Check what was copied into the run folder by hand. Nothing is copied or
+# changed here.
+echo "Checking the run folder ${GEN} (this script copies nothing into it)"
+errors=""
+gaps=""
+for digit in 1 2 3 4; do
+  nums=""
+  count=0
+  for d in "${GEN}/${digit}"[0-9][0-9]-*/; do
     [[ -d "${d}" ]] || continue
     name=$(basename "${d}")
-    found=$((found + 1))
-    [[ -e "${GEN}/${name}" ]] && continue
-    cp -a "${d%/}" "${GEN}/" || stop "copying ${name} from ${src} failed"
-    echo "copied  ${name}"
-    fill_copied=$((fill_copied + 1))
+    nums="${nums}${name:0:3}"$'\n'
+    count=$((count + 1))
   done
-  ((found > 0)) || stop "no ${digit}01-... to ${digit}32-... workload folders in ${src}. Generate that batch first, or fix WORKLOAD_SOURCES near the top of this file."
-  ((found == 32)) || echo "NOTE: ${src} has ${found} ${digit}xx workload folders (a full batch has 32)"
-  echo "${digit}xx: ${found} in ${src}"
+  dups=$(printf '%s' "${nums}" | sort | uniq -d | tr '\n' ' ')
+  [[ -z "${dups}" ]] || errors="${errors}  ${digit}xx: more than one folder for workload ${dups}(for example a leftover *_copy folder)"$'\n'
+  outside=$(printf '%s' "${nums}" | awk -v lo=$((digit * 100 + 1)) -v hi=$((digit * 100 + BATCH_SIZE)) 'NF && ($1 + 0 < lo || $1 + 0 > hi)' | sort -u | tr '\n' ' ')
+  [[ -z "${outside}" ]] || errors="${errors}  ${digit}xx: workload numbers outside ${digit}01-${digit}$(printf '%02d' "${BATCH_SIZE}"): ${outside}"$'\n'
+  missing=""
+  for ((i = 1; i <= BATCH_SIZE; i++)); do
+    num=$(printf '%d%02d' "${digit}" "${i}")
+    grep -qx "${num}" <<<"${nums}" || missing="${missing} ${num}"
+  done
+  if ((count == 0)); then
+    gaps="${gaps}  ${digit}xx ($(platform "${digit}")): no workloads at all"$'\n'
+  elif [[ -n "${missing}" ]]; then
+    gaps="${gaps}  ${digit}xx ($(platform "${digit}")): missing${missing}"$'\n'
+  fi
+  printf '%sxx: %2d workload folders   (%s)\n' "${digit}" "${count}" "$(platform "${digit}")"
 done
-if [[ ! -d "${GEN}/${GENREPO}" && ! -d "${GEN}/${OLD_GENREPO}" ]]; then
-  [[ -d "${GENERATOR_SOURCE}" ]] || stop "the generator source folder does not exist: ${GENERATOR_SOURCE}. Fix GENERATOR_SOURCE near the top of this file."
-  cp -a "${GENERATOR_SOURCE}" "${GEN}/${GENREPO}" || stop "copying the generator from ${GENERATOR_SOURCE} failed"
-  echo "copied  ${GENREPO}   (from ${GENERATOR_SOURCE})"
-  fill_copied=$((fill_copied + 1))
+# Anything else at the top of the run folder is not published (step 1 copies
+# only workload folders), but may be a sign of a wrong cp command.
+others=$(find "${GEN}" -mindepth 1 -maxdepth 1 \
+           ! \( -type d -name '[1-4][0-9][0-9]-*' \) ! -name "${GENREPO}" ! -name "${OLD_GENREPO}" -printf '%f\n' | sort)
+if [[ -n "${others}" ]]; then
+  echo "NOTE: the run folder also holds these, which will not be published:"
+  printf '%s\n' "${others}" | head -n 20 | sed 's/^/        /'
 fi
-echo "Copied into the run folder now: ${fill_copied}"
+[[ -z "${errors}" ]] || { printf '%s' "${errors}"; stop "the run folder ${GEN} has the problems listed above. Remove the extra folders from it and run again."; }
+if [[ -n "${gaps}" ]]; then
+  printf '%s' "${gaps}"
+  if [[ "${REQUIRE_FULL_RUN}" == yes ]]; then
+    stop "the run folder ${GEN} is missing the workloads listed above. Copy them in, or set REQUIRE_FULL_RUN=\"no\" near the top of this file to publish only what is there, and run again."
+  fi
+  echo "NOTE: publishing only the workloads that are there (REQUIRE_FULL_RUN=\"no\")"
+fi
 
 N=$(find "${GEN}" -mindepth 1 -maxdepth 1 -type d -name '[1-4][0-9][0-9]-*' | wc -l)
-((N > 0)) || stop "no workload folders (101-..., 201-... and so on) in ${GEN}. Give the run folder."
+((N > 0)) || stop "no workload folders (101-..., 201-... and so on) in ${GEN}. Copy them in first (see the top of this file)."
 if [[ ! -d "${GEN}/${GENREPO}" ]]; then
   [[ -d "${GEN}/${OLD_GENREPO}" ]] && stop "the generator folder in ${GEN} has the old name ${OLD_GENREPO}. Rename it to ${GENREPO} and run again."
-  stop "${GENREPO} not found in ${GEN}"
+  stop "${GENREPO} not found in ${GEN}. Copy the generator into the run folder first (see the top of this file)."
 fi
-# The copy of this script that is running should be the one in the generator
-# being published.
-if ! cmp -s "${SCRIPT_DIR}/${SCRIPT_NAME}" "${GEN}/${GENREPO}/scripts/${SCRIPT_NAME}" 2>/dev/null; then
-  echo "NOTE: this script differs from ${GENREPO}/scripts/${SCRIPT_NAME} in the run folder (or the generator has none)."
+# The generator being published should hold the master copy of this script.
+if [[ ! -f "${GEN}/${GENREPO}/scripts/${SCRIPT_NAME}" ]]; then
+  echo "NOTE: ${GENREPO}/scripts/ has no ${SCRIPT_NAME}. Consider adding this script there as the master copy."
+elif ! cmp -s "${SCRIPT_DIR}/${SCRIPT_NAME}" "${GEN}/${GENREPO}/scripts/${SCRIPT_NAME}"; then
+  echo "NOTE: this script differs from ${GENREPO}/scripts/${SCRIPT_NAME} in the run folder."
   echo "      The generator holds the master copy; copy it over this one if it is newer."
 fi
+# The generator's CI runs ruff; catch a lint error now, before hours of
+# publishing, instead of on GitHub after step 9.
+lint_generator "${GEN}/${GENREPO}"
 # Git for Windows refuses a repository folder ($GIT_DIR) longer than 220
 # characters (PATH_MAX 260 minus 40), even with core.longpaths. The longest
 # one this run creates is a bundle's submodule store:
@@ -1028,10 +1172,20 @@ if is_done bundles; then skipped 7; else
       again git add "${dir}" || stop "git add failed for ${dir} in ${bundle}"
       rows="${rows}- **${dir:0:3}** - [${dir}](https://github.com/${ORG}/${dir})"$'\n'
     done
+    # Each workload is pinned to ${VERSION}. A "branch = main" line (bundles
+    # before 2026-10-19 have one) would let "git submodule update --remote"
+    # leave that pin, so none is kept.
+    while read -r key _; do
+      git config -f .gitmodules --unset "${key}" || stop "could not remove ${key} from .gitmodules in ${bundle}"
+    done < <(git config -f .gitmodules --get-regexp '^submodule\..*\.branch$' 2>/dev/null)
     # run.sh was folded into run_benchmark_suite.sh (--list, --show-output).
     git rm -q --ignore-unmatch run.sh >/dev/null 2>&1
     rm -f run.sh
     tr -d '\r' <"${SUITE_SCRIPT}" >run_benchmark_suite.sh
+    bundle_suite_script "${s}" <run_benchmark_suite.sh >run_benchmark_suite.sh.new &&
+      mv -f run_benchmark_suite.sh.new run_benchmark_suite.sh || stop "could not write run_benchmark_suite.sh in ${bundle}"
+    check_bundle_suite_script run_benchmark_suite.sh "${s}" ||
+      stop "the bundle copy of run_benchmark_suite.sh did not get its edits; the shared script in ${SUITE_SCRIPT} may have changed. Update bundle_suite_script() in this script."
     suite_files="run_benchmark_suite.sh"
     if [[ -f "${METRICS_SCRIPT}" ]]; then
       tr -d '\r' <"${METRICS_SCRIPT}" >show_metrics.sh
@@ -1078,6 +1232,12 @@ if is_done enduser-test; then skipped 8; else
       [[ ! -f "${WORK}/_test_clone/${f}" || -x "${WORK}/_test_clone/${f}" ]] || stop "${f} in the bundle is not executable"
     done
     [[ ! -e "${WORK}/_test_clone/run.sh" ]] || stop "the bundle still has run.sh; step 7 should have removed it"
+    ! grep -q 'branch *=' "${WORK}/_test_clone/.gitmodules" || stop "the bundle's .gitmodules still has a branch line"
+    (cd "${WORK}/_test_clone" && ./run_benchmark_suite.sh --help) | grep -q "Default: smoke   (full run" ||
+      stop "the bundle's run_benchmark_suite.sh does not default to the smoke profile"
+    for f in $(grep -o '\./[a-z_]*\.sh' "${WORK}/_test_clone/README.md" | sort -u); do
+      [[ -x "${WORK}/_test_clone/${f#./}" ]] || stop "the bundle README names ${f}, which is not in the bundle (or not executable)"
+    done
     listing=$(cd "${WORK}/_test_clone" && ./run_benchmark_suite.sh --list)
     got=$(printf '%s\n' "${listing}" | grep -c ' ready$')
     printf '%s\n' "${listing}" | head -n 3
@@ -1148,9 +1308,16 @@ if is_done generator; then skipped 9; else
     echo "copied  ${GENREPO}"
   fi
   cd "${PUB}/${GENREPO}" || stop "cannot open ${PUB}/${GENREPO}"
+  # Python caches come along with cp -a whenever the generator's scripts or
+  # tests were run before the copy. They are never published.
+  removed=$(find . -path ./.git -prune -o -type d \( -name __pycache__ -o -name .pytest_cache -o -name .ruff_cache -o -name .mypy_cache \) -prune -print -exec rm -rf {} + | wc -l)
+  removed=$((removed + $(find . -path ./.git -prune -o -type f -name '*.py[co]' -print -delete | wc -l)))
+  echo "--- Python cache folders and files removed: ${removed}"
+  # The copy is kept between runs, so lint it too: it is what gets pushed.
+  lint_generator "${PUB}/${GENREPO}"
   problems=0
   check_zero "nested *_copy and .git folders" < <(find . -mindepth 1 \( -path ./.git -prune \) -o -type d \( -name '*_copy' -o -name .git \) -print)
-  check_zero "never-publish items and generated workload folders" < <(find . -path ./.git -prune -o \( -name RESULTS -o -name runtime_ledger.csv -o -name '*.zip' -o -name .env -o -name .venv -o -type d -name '[1-4][0-9][0-9]-*' \) -print)
+  check_zero "never-publish items and generated workload folders" < <(find . -path ./.git -prune -o \( -name RESULTS -o -name runtime_ledger.csv -o -name '*.zip' -o -name .env -o -name .venv -o -name __pycache__ -o -name '*.py[co]' -o -type d -name '[1-4][0-9][0-9]-*' \) -print)
   missing=""
   for f in LICENSE legal/NOTICE .gitattributes .gitignore; do [[ -e "${f}" ]] || missing="${missing} ${f}"; done
   echo "--- files the publish doc says to keep, missing (must be none):${missing:- none}"

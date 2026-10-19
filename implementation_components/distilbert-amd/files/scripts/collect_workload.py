@@ -78,6 +78,10 @@ def main() -> int:
     mask = torch.ones_like(ids)
     labels = torch.zeros(batch, dtype=torch.long, device=device)
     model.train()
+    if device.type == "cuda":
+        # Peak memory covers the training steps, not the model load.
+        torch.cuda.synchronize()
+        torch.cuda.reset_peak_memory_stats()
     start = time.perf_counter()
     for _ in range(iters):
         opt.zero_grad(set_to_none=True)

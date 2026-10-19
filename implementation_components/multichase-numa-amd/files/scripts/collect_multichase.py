@@ -52,6 +52,20 @@ def available_numa_nodes() -> set[int]:
     return nodes
 
 
+def sysfs_numa_nodes() -> set[int]:
+    """NUMA nodes the kernel exposes in /sys, which containers often show even
+    when `numactl --hardware` says "No NUMA available"."""
+    nodes: set[int] = set()
+    for entry in Path("/sys/devices/system/node").glob("node[0-9]*"):
+        suffix = entry.name[4:]
+        if suffix.isdigit():
+            nodes.add(int(suffix))
+    return nodes
+
+
+REMOTE_BIND_DENIED = "na (expected: host has 2+ NUMA nodes but numactl cannot bind memory to a remote node here)"
+
+
 def parse_tiers(value: object) -> list[tuple[str, int]]:
     text = str(value)
     if isinstance(value, dict):
@@ -142,6 +156,18 @@ def main() -> int:
     rows = []
     for index, (tier, size) in enumerate(tiers):
         if tier == "remote_dram" and len(numa_nodes) < 2:
+            kernel_nodes = sysfs_numa_nodes()
+            if len(kernel_nodes) >= 2:
+                # numactl sees no NUMA (typical in a container) while the kernel
+                # exposes several nodes: the host has them, binding is unavailable.
+                print("[INFO] skipping remote_dram; numactl reports no NUMA but /sys shows "
+                      f"{len(kernel_nodes)} nodes", file=transcript)
+                rows.append(not_measured_row(
+                    index, tier, size, args,
+                    f"/sys shows {len(kernel_nodes)} NUMA nodes; numactl reports none",
+                    REMOTE_BIND_DENIED,
+                ))
+                continue
             print("[INFO] skipping remote_dram; host does not have a second NUMA node", file=transcript)
             rows.append(not_measured_row(
                 index, tier, size, args,
@@ -188,7 +214,8 @@ def main() -> int:
             print("[WARN] numactl bind not permitted; retrying unbound", file=transcript)
             if tier == "remote_dram":
                 print("[INFO] skipping remote_dram; membind did not succeed", file=transcript)
-                rows.append(not_measured_row(index, tier, size, args, "numactl --membind=1 not permitted"))
+                rows.append(not_measured_row(index, tier, size, args, "numactl --membind=1 not permitted",
+                                             REMOTE_BIND_DENIED))
                 continue
             cmd = [str(binary), str(size), str(args.stride), str(iters), str(warmup)]
             print("[RUN]", " ".join(cmd), file=transcript)

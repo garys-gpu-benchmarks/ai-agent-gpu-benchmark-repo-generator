@@ -90,7 +90,7 @@ int main(int argc, char **argv) {
     std::printf("peak_fp64_tflops=%.4f peak_fp64_vector_tflops=%.4f sm_arch=%d.%d sm_count=%d clock_ghz=%.3f problem_size_N=%d block_size=%d\n",
                 peak_tflops, peak_vector_tflops, prop.major, prop.minor, prop.multiProcessorCount, clock_ghz, n, nb);
     std::printf("T/V                N    NB     P     Q               Time                 Gflops\n");
-    std::printf("WR10R%dR2        %d   %d     %d     %d               %.2f              %.3e\n",
+    std::printf("WR10R%dR2        %d   %d     %d     %d               %.4f              %.3e\n",
                 pfact, n, nb, p, q, seconds, gflops);
     std::printf("Final Score:    %.4e GFLOPS\n", gflops);
     std::printf("Residual Check: %s  residual=%.3e threshold=%.3e\n", passed ? "PASSED" : "FAILED", resid, thresh);

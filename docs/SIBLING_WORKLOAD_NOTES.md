@@ -199,8 +199,10 @@ line for `memory_read_latency_ns`, not the first float (`0.00049`).
 `scripts/build.sh` is `nvcc ... src/cudnn_conv.cu -lcudnn` and fails
 with `cudnn.h: No such file or directory`. Setup now apt-installs
 `libcudnn9-*-cuda-12` and `libcudnn9-*-cuda-13` when `src/cudnn_conv.cu`
-is present (packages are `|| true` per-name). Do not rewrite locked
-`build.sh` / `cudnn_conv.cu`.
+is present (packages are `|| true` per-name). Keep the locked
+`build.sh` / `cudnn_conv.cu` pair. A smoke defect in those files is a recorded
+repair (template source, sibling, and `results/overlay_lock.json`), not a new
+build script.
 
 ## 132 / 332 — AMD RAG Linear stub
 

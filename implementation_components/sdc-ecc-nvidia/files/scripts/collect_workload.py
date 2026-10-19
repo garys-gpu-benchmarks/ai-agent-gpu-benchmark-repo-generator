@@ -130,7 +130,7 @@ def main() -> int:
     row = {
         "status": "ok" if completed.returncode == 0 and failures == 0 and loops > 0 else "error",
         **ecc_counts,
-        "hbm3_coverage_gb": coverage_gb,
+        "device_buffer_gib": coverage_gb,
         "fixed_pattern_fill_verify_pass_rate": pass_rate,
         "test_wall_clock_completion_time_s": wall,
         "error_message": "" if failures == 0 else f"{failures} mismatches in {failed_loops} of {loops} loops",
@@ -139,7 +139,7 @@ def main() -> int:
         "sample_index", "status", "uncorrected_ecc_errors_count", "corrected_ecc_errors_count",
         "uncorrected_ecc_aggregate_count", "corrected_ecc_aggregate_count",
         "uncorrected_ecc_nonzero_field_count", "corrected_ecc_nonzero_field_count",
-        "hbm3_coverage_gb", "fixed_pattern_fill_verify_pass_rate",
+        "device_buffer_gib", "fixed_pattern_fill_verify_pass_rate",
         "test_wall_clock_completion_time_s", "error_message",
     ]
     buf = io.StringIO()

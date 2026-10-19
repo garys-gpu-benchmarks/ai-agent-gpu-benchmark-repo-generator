@@ -15,6 +15,7 @@
 from __future__ import annotations
 
 import argparse
+import atexit
 import csv
 import io
 import os
@@ -23,6 +24,7 @@ import resource
 import shlex
 import shutil
 import subprocess
+import sys
 import time
 from pathlib import Path
 
@@ -122,6 +124,43 @@ def perf_paranoid() -> str:
         return "unknown"
 
 
+def _lower_perf_event_paranoid(floor: int = 2) -> str | None:
+    """Drop perf_event_paranoid to floor for this run's timed section.
+
+    Returns the previous value when this call changed it. The caller restores
+    that value when the process exits, including a failed run.
+    """
+    path = Path("/proc/sys/kernel/perf_event_paranoid")
+    try:
+        previous = path.read_text(encoding="utf-8").strip()
+        current = int(previous)
+    except (OSError, ValueError):
+        return None
+    if current <= floor:
+        return None
+    try:
+        path.write_text(f"{floor}\n", encoding="utf-8")
+    except OSError as exc:
+        print(f"[WARN] could not set perf_event_paranoid to {floor}: {exc}", file=sys.stderr, flush=True)
+        return None
+    print(f"[INFO] perf_event_paranoid {previous} -> {floor} for this run", file=sys.stderr, flush=True)
+    return previous
+
+
+def _restore_perf_event_paranoid(previous: str | None) -> None:
+    if previous is None:
+        return
+    path = Path("/proc/sys/kernel/perf_event_paranoid")
+    try:
+        path.write_text(previous + "\n", encoding="utf-8")
+    except OSError as exc:
+        print(
+            f"[WARN] could not restore perf_event_paranoid to {previous}: {exc}",
+            file=sys.stderr,
+            flush=True,
+        )
+
+
 def normalize_event(name: str) -> str:
     """cpu_core/cycles/ -> cycles, cycles:u -> cycles (hybrid CPUs and
     perf_event_paranoid user-only counting change the printed name)."""
@@ -197,7 +236,9 @@ def pick_stall_event(perf: str | None, vendor: str) -> tuple[str | None, str]:
 
 def pmu_unavailable_reason(perf: str | None, transcript: str) -> str:
     if perf is None:
-        return f"na (perf not installed for kernel {os.uname().release})"
+        # "expected:": a host without a kernel-matched perf (for example a container on
+        # an older host kernel) still passes, with empty counters, like a PMU denial.
+        return f"na (expected: perf not installed for kernel {os.uname().release})"
     lowered = transcript.lower()
     if any(token in lowered for token in ("no permission", "not permitted", "access to performance monitoring")):
         return f"na (PMU access denied: perf_event_paranoid={perf_paranoid()})"
@@ -245,6 +286,79 @@ def split_commands(raw: str, cpus: str, seconds: int) -> list[list[str]]:
     return commands
 
 
+
+def _number(value) -> float | None:
+    if isinstance(value, (int, float)):
+        return float(value)
+    try:
+        return float(str(value))
+    except ValueError:
+        return None
+
+
+def combine_rows(rows: list[dict], cpu_count: float) -> dict:
+    """One row for all workload commands: each ratio is computed from the summed
+    perf counts (total misses / total branches, total instructions / total
+    cycles), not averaged across commands. A metric that is na on any command
+    stays na, with that command's reason."""
+    def total(key: str) -> float | None:
+        values = [_number(row.get(key, "")) for row in rows]
+        return None if any(v is None for v in values) else sum(values)
+
+    def first_na(key: str) -> str | None:
+        for row in rows:
+            value = row.get(key, "")
+            if isinstance(value, str) and value.startswith("na"):
+                return value
+        return None
+
+    cycles, instructions = total("cycles"), total("instructions")
+    branches, branch_misses = total("branches"), total("branch_misses")
+    cache_misses, stall_cycles = total("cache_misses"), total("stall_cycles")
+    elapsed = sum(_number(row.get("elapsed_sec", 0)) or 0.0 for row in rows)
+    cpu_time = sum(_number(row.get("cpu_time_sec", 0)) or 0.0 for row in rows)
+    switches = sum(_number(row.get("context_switches", 0)) or 0.0 for row in rows)
+
+    def combined(key: str, num, den, scale: float):
+        reason = first_na(key)
+        if reason:
+            return reason
+        if num is None or not den:
+            return f"na ({key} counts missing for a command)"
+        return scale * num / den
+
+    running = [_number(row.get("pmu_counter_running_pct", "")) for row in rows]
+    running = [value for value in running if value is not None]
+    sources = sorted({str(row.get("pmu_source", "")) for row in rows})
+    bogo = [_number(row.get("stress_ng_bogo_ops_s", "")) for row in rows]
+    bogo = [value for value in bogo if value is not None]
+    return {
+        "status": "ok",
+        "workload_command": " ; ".join(str(row.get("workload_command", "")) for row in rows),
+        "duration_sec": sum(_number(row.get("duration_sec", 0)) or 0.0 for row in rows),
+        "elapsed_sec": round(elapsed, 6),
+        "instructions_per_cycle_ipc": combined("instructions_per_cycle_ipc", instructions, cycles, 1.0),
+        "branch_misprediction_rate": combined("branch_misprediction_rate", branch_misses, branches, 100.0),
+        "cache_misses_per_1000_instructions": combined("cache_misses_per_1000_instructions", cache_misses, instructions, 1000.0),
+        "pipeline_stall_pct": combined("pipeline_stall_pct", stall_cycles, cycles, 100.0),
+        "context_switches_during_workload_switches_s": switches / elapsed if elapsed > 0 else "na (no elapsed time)",
+        "cycles": cycles if cycles is not None else "",
+        "instructions": instructions if instructions is not None else "",
+        "branches": branches if branches is not None else "",
+        "branch_misses": branch_misses if branch_misses is not None else "",
+        "cache_misses": cache_misses if cache_misses is not None else "",
+        "stall_cycles": stall_cycles if stall_cycles is not None else "",
+        "pipeline_stall_event": rows[0].get("pipeline_stall_event", ""),
+        "pmu_counter_running_pct": min(running) if running else "",
+        "context_switches": switches,
+        "cpu_time_sec": round(cpu_time, 6),
+        "cpu_utilization_percent": 100.0 * cpu_time / (elapsed * cpu_count) if elapsed > 0 else "",
+        # Not a numbered metric: the mean of the commands' own bogo-ops/s.
+        "stress_ng_bogo_ops_s": (sum(bogo) / len(bogo)) if bogo else "",
+        "pmu_source": ",".join(s for s in sources if s),
+        "error_message": "",
+    }
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="Linux perf PMU collector (111/211/311/411).")
     parser.add_argument("--run-dir", required=True)
@@ -275,6 +389,9 @@ def main() -> int:
 
     run_dir = Path(args.run_dir)
     run_dir.mkdir(parents=True, exist_ok=True)
+    saved_paranoid = _lower_perf_event_paranoid(2)
+    if saved_paranoid is not None:
+        atexit.register(_restore_perf_event_paranoid, saved_paranoid)
     perf = resolve_perf()
     vendor = cpu_vendor()
     stall_event, stall_reason = pick_stall_event(perf, vendor)
@@ -377,6 +494,19 @@ def main() -> int:
             "error_message": "",
         })
 
+    if len(rows) > 1:
+        # Several stress commands (for example --cpu, --cache, --branch). The
+        # parser averages numbered columns across rows, which published a mean of
+        # ratios from unlike programs (25-33% "branch misprediction" that no
+        # command had). Publish one row whose ratios come from the summed counts
+        # of all commands, and keep the per-command rows in their own file.
+        detail = io.StringIO()
+        detail_writer = csv.DictWriter(detail, fieldnames=HEADER, extrasaction="ignore", lineterminator="\n")
+        detail_writer.writeheader()
+        for index, row in enumerate(rows):
+            detail_writer.writerow({"sample_index": index, **row})
+        (run_dir / "per_command_results.csv").write_text(detail.getvalue(), encoding="utf-8")
+        rows = [combine_rows(rows, cpu_count)]
     if len(rows) == 1:
         rows.append(dict(rows[0]))  # the harness requires at least two sample rows
     buf = io.StringIO()

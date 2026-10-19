@@ -192,41 +192,35 @@ config/ci_contract.yaml ──► templates/workload/.github/workflows/   ──
 
 ### Commands
 
-Publishing is done by [`scripts/publish_benchmarks_to_github.sh`](scripts/publish_benchmarks_to_github.sh). This repository holds the master copy; it is never copied into generated workloads (`init_generated_repo.py` excludes it). The source folders are set at the top of the script under "Settings you may change":
+Publishing is done by [`scripts/publish_benchmarks_to_github.sh`](scripts/publish_benchmarks_to_github.sh). This repository holds the master copy; it is never copied into generated workloads (`init_generated_repo.py` excludes it). The script has no source folders built in: you fill the run folder by hand, and step 0 only checks it (every batch has all 32 workloads, no duplicate or out-of-range numbers, the generator present).
 
-```text
-Z:\ServersProcsMemory\Projects\
-├── Project341_TEMPLATE_00_104_20261008\TEMPLATE_00_104\
-│   └── ai-agent-gpu-benchmark-repo-generator\        # GENERATOR_SOURCE
-├── Project342_101_to_132_TEMPLATE_00_104_20261010\DIRECTORIES\   # 101-132
-├── Project343_201_to_232_TEMPLATE_00_104_20261010\DIRECTORIES\   # 201-232
-├── Project344_301_to_332_TEMPLATE_00_104_20261010\DIRECTORIES\   # 301-332
-└── Project345_401_to_432_TEMPLATE_00_104_20261010\DIRECTORIES\   # 401-432
-```
-
-One folder per publish run:
+The script lives in `Publishing\`, with one dated folder per publish run:
 
 ```text
 Z:\ServersProcsMemory\Github_Garys_GPU_Repos\
 └── Publishing\
     ├── publish_benchmarks_to_github.sh             # copy of scripts/publish_benchmarks_to_github.sh
-    └── Publish_20261010_02\
-        ├── src_342_343_344_345\                    # filled by the script: the 128 workloads + ai-agent-gpu-benchmark-repo-generator
-        ├── src_342_343_344_345_PubTree\            # created by the script (logs in _logs\)
-        ├── src_342_343_344_345_Bundles\            # created by the script
+    └── 20261019_02\
+        ├── src_380_381_382_383\                    # filled by hand: the 128 workloads + ai-agent-gpu-benchmark-repo-generator
+        ├── src_380_381_382_383_PubTree\            # created by the script (logs in _logs\)
+        ├── src_380_381_382_383_Bundles\            # created by the script
         ├── shared-workflows\                       # built by the script from this generator
         └── gpu-bench-suite\                        # built by the script from this generator
 ```
 
-**1. Publish** (Git Bash; use `/` in paths):
+**1. Publish** (Git Bash; use `/` in paths). Fill the run folder with the four generated batches and the generator they were generated from, then copy the script into `Publishing\` and run it there:
 
 ```bash
-cd /z/ServersProcsMemory/Github_Garys_GPU_Repos/Publishing
-cp /z/ServersProcsMemory/Projects/Project341_TEMPLATE_00_104_20261008/TEMPLATE_00_104/ai-agent-gpu-benchmark-repo-generator/scripts/publish_benchmarks_to_github.sh .
-./publish_benchmarks_to_github.sh Publish_20261010_02/src_342_343_344_345
-```
+P=/z/ServersProcsMemory/Projects
+R=/z/ServersProcsMemory/Github_Garys_GPU_Repos/Publishing/20261019_02/src_380_381_382_383
+mkdir -p $R
+cp -a $P/Project379_TEMPLATE_00_112_20261017/TEMPLATE_00_112/ai-agent-gpu-benchmark-repo-generator $R/
+cp -a $P/Project380_101_132_TEMPLATE_00_112_20261019_Cursor/TEMPLATE_00_112/1[0-9][0-9]-* $R/   # and 2xx, 3xx, 4xx likewise
 
-Step 0 creates the run folder if needed and copies in every workload (from the four `DIRECTORIES` folders) and the generator that it does not have yet; folders already there are kept. It prints how many workloads each batch has and notes a batch with fewer than 32.
+cd /z/ServersProcsMemory/Github_Garys_GPU_Repos/Publishing
+cp 20261019_02/src_380_381_382_383/ai-agent-gpu-benchmark-repo-generator/scripts/publish_benchmarks_to_github.sh .
+./publish_benchmarks_to_github.sh 20261019_02/src_380_381_382_383
+```
 
 The script builds `shared-workflows` and `gpu-bench-suite` with `scripts/emit_shared_workflows.py` from the generator copy in the run folder, publishes `shared-workflows` first (after its Self-test passes it tags the next `v1.x.0` and moves `v1`), then the workloads, the four bundles and this generator. If it stops, fix the problem and run the same command again; finished work is skipped.
 
@@ -237,7 +231,7 @@ python3 scripts/ci_contract.py --show                                           
 python3 scripts/emit_shared_workflows.py --output-root <publish folder> --check      # what would change
 ```
 
-`<publish folder>` is the folder that holds `shared-workflows/`, for example `Publishing/Publish_20261010_02`.
+`<publish folder>` is the folder that holds `shared-workflows/`, for example `Publishing/20261019_02`.
 
 **3. Change CI later**: edit `templates/shared-workflows/` (or `config/ci_contract.yaml`) here, then publish as in step 1. A compatible change needs no workload changes; the script releases it as the next `v1.x.0` and moves `v1`.
 
@@ -282,7 +276,7 @@ The suite scripts are kept in [`templates/suite-tools/scripts/`](templates/suite
 
 `show_metrics.sh` prints one row per run in fixed 7-character metric columns, with an Exit column (ledger exit code) after Idx, at most 93 characters wide. Two sheets of `BenchmarkSpecDefinitions.xlsx` supply its text: `Metric_Short_Labels` (one row per workload metric; the column headings, at most 7 characters) and `Workload_Short_Names` (one row per workload; the Name column, at most 12 characters, for example `RAG Sweep` for "RAG Pipeline Sweep"). After changing either, run `python3 scripts/generate_show_metrics.py`; it checks both sheets against `Workload_Definitions` (metric keys from the `Metrics` column, full workload names, no short name used twice in a batch, one short name per full name) and rewrites the two tables in the script. `--check` reports drift without writing (CI runs it), and `--add-missing` adds rows for new metrics and workloads, marked `auto: review`.
 
-Generating a workload (`scripts/create_generated_repo.py`) also regenerates `show_metrics.sh` from the sheet and puts a copy of `get_remote_info.sh` and `show_metrics.sh` in the project folder, one level above the folder that holds the generator and the workloads (for example `Project347_.../get_remote_info.sh` next to `Project347_.../TEMPLATE_00_105/`). Run it from there; it writes `DIRECTORIES/` and `RUNTIME_LEDGERS/` beside itself. An existing copy that differs is kept. It is never copied into a workload, and it does not belong in `scripts/` next to `publish_benchmarks_to_github.sh`: everything in `scripts/` is copied into every workload. When a workload is loaded onto the VM, `scripts/create_one_workload.py` installs `templates/suite-tools/scripts/show_metrics.sh` at `/opt/benchmarks/show_metrics.sh`. A published bundle does the same: `scripts/publish_benchmarks_to_github.sh` copies it next to `run_benchmark_suite.sh`, so `git clone ... /opt/benchmarks` leaves it there.
+Generating a workload (`scripts/create_generated_repo.py`) also regenerates `show_metrics.sh` from the sheet and puts a copy of `get_remote_info.sh` and `show_metrics.sh` in the project folder, one level above the folder that holds the generator and the workloads (for example `Project347_.../get_remote_info.sh` next to `Project347_.../TEMPLATE_00_105/`). Run it from there; it writes `DIRECTORIES/` and `RUNTIME_LEDGERS/` beside itself. An existing copy that differs is kept. It is never copied into a workload, and it does not belong in `scripts/` next to `publish_benchmarks_to_github.sh`: everything in `scripts/` is copied into every workload. When a workload is loaded onto the VM, `scripts/create_one_workload.py` installs `templates/suite-tools/scripts/show_metrics.sh` at `/opt/benchmarks/show_metrics.sh` and `templates/suite-tools/scripts/run_benchmark_suite.sh` at `/opt/benchmarks/run_benchmark_suite.sh`. A published bundle does the same: `scripts/publish_benchmarks_to_github.sh` copies both, so `git clone ... /opt/benchmarks` leaves them there.
 
 ## Limitations and prerequisites
 

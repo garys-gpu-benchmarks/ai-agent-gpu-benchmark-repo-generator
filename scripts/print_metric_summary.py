@@ -68,6 +68,12 @@ from metric_contract import (
 )
 
 
+
+def _is_latency_metric(description: str, label: str) -> bool:
+    text = f"{description} {label}".lower()
+    return "latency" in text or "min size" in text or "min transfer" in text
+
+
 def _mask_parens(text: str) -> str:
     """Replace ';' and ',' that appear *inside* parentheses with sentinel
     tokens so a later naive split on ';'/',' never treats them as a
@@ -386,7 +392,10 @@ def main() -> int:
     point = str(metrics.get("headline_point") or "").strip()
     for number, description, label, value in resolve_metrics(items, metrics):
         shown = description
-        if point and point not in shown:
+        # headline_point names the bandwidth sample (for example "at 1024 MiB H2D").
+        # Latency metrics are taken at the minimum transfer size, so the tag would
+        # mislabel them.
+        if point and point not in shown and not _is_latency_metric(description, label):
             shown = f"{shown} [{point}]"
         if str(value) == "NOT FOUND":
             unresolved += 1

@@ -41,8 +41,8 @@ RENAMED = {
     120: {"1": "sustained_fp64_performance_across_problem_size_n_tflops"},
     203: {"1": "peak_gpu_temperature_c"},
     403: {"1": "peak_gpu_temperature_c"},
-    204: {"4": "hbm3_coverage_gb", "5": "fixed_pattern_fill_verify_pass_rate"},
-    404: {"4": "hbm3_coverage_gb", "5": "fixed_pattern_fill_verify_pass_rate"},
+    204: {"4": "device_buffer_gib", "5": "fixed_pattern_fill_verify_pass_rate"},  # 2026-10-19 key rename
+    404: {"4": "device_buffer_gib", "5": "fixed_pattern_fill_verify_pass_rate"},  # 2026-10-19 key rename
     216: {"1": "allreduce_busbw_gb_s", "2": "allreduce_algbw_gb_s", "3": "allreduce_latency_at_min_bytes_us"},
     416: {"1": "allreduce_busbw_gb_s", "2": "allreduce_algbw_gb_s", "3": "allreduce_latency_at_min_bytes_us"},
     218: {"2": "tflops_fwd", "3": "min_operand_traffic_gb_s"},
@@ -140,9 +140,9 @@ class ContractTests(unittest.TestCase):
         status, _count = publication_status([("thermal_throttle_event_count", value), ("sustained_gpu_power_w", 300.0)])
         self.assertEqual(status, "N/A-EXPECTED")
 
-    def test_missing_llc_load_counters_are_expected_na(self):
+    def test_unavailable_llc_counters_are_expected_na(self):
         value = "na (LLC load counters unavailable)"
-        self.assertEqual(classify_na("l3_miss_rate", value, {}), "expected")
+        self.assertEqual(classify_na("l3_miss_rate", value, {"profile": "baseline"}), "expected")
         status, _count = publication_status([("l3_miss_rate", value), ("giga_updates_score", 0.01)])
         self.assertEqual(status, "N/A-EXPECTED")
 

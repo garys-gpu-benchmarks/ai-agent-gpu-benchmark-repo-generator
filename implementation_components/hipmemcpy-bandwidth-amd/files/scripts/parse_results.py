@@ -9,8 +9,8 @@
 # direction. This adds bandwidth_<direction>_gbps (bandwidth at each
 # direction's max transfer_size_bytes) and latency_<direction>_us (time per
 # copy at each direction's min transfer_size_bytes; the time per 1 GB copy is
-# not a latency). The blind-mean "bandwidth_gbps"/"latency_us" summary values
-# are still written but are not workbook metrics.
+# not a latency). Numbered metrics use H2D at that max size for bandwidth_gbps,
+# H2D at the min size for latency_us, and headline_transfer_bytes for the size.
 from __future__ import annotations
 
 import argparse
@@ -303,28 +303,33 @@ def add_min_size_direction_latency(rows, metrics_summary):
             metrics_summary[f"latency_{slug}_us"] = statistics.mean(values)
 
 
-def apply_h2d_headlines(rows, metrics_summary):
-    """Numbered hipMemcpy metrics are the H2D point, not a blend of every size.
-
-    bandwidth_GBps is H2D at the largest transfer. latency_us is H2D at the
-    smallest transfer. headline_transfer_bytes is that largest size.
-    """
-    sizes = []
-    for row in rows:
-        size = to_number(row.get("transfer_size_bytes", ""))
-        if isinstance(size, (int, float)):
-            sizes.append(float(size))
+def add_h2d_headline(rows, metrics_summary):
+    """Publish the numbered H2D headline: max-size bandwidth, min-size latency, size."""
+    h2d = [row for row in rows if str(row.get("direction", "")).strip().lower() == "h2d"]
+    sizes = [to_number(row.get("transfer_size_bytes", "")) for row in h2d]
+    sizes = [size for size in sizes if isinstance(size, (int, float))]
     if not sizes:
         return
     max_size = max(sizes)
+    min_size = min(sizes)
     metrics_summary["headline_transfer_bytes"] = int(max_size)
-    if "bandwidth_h2d_gbps" in metrics_summary:
-        metrics_summary["bandwidth_gbps"] = metrics_summary["bandwidth_h2d_gbps"]
-    if "latency_h2d_us" in metrics_summary:
-        metrics_summary["latency_us"] = metrics_summary["latency_h2d_us"]
     mib = max_size / (1024.0 * 1024.0)
     mib_text = str(int(mib)) if float(mib).is_integer() else f"{mib:.3g}"
     metrics_summary["headline_point"] = f"at {mib_text} MiB H2D"
+    for row in h2d:
+        size = to_number(row.get("transfer_size_bytes", ""))
+        if size == max_size:
+            bandwidth = to_number(row.get("bandwidth_gbps", ""))
+            if isinstance(bandwidth, (int, float)):
+                metrics_summary["bandwidth_gbps"] = bandwidth
+                break
+    for row in h2d:
+        size = to_number(row.get("transfer_size_bytes", ""))
+        if size == min_size:
+            latency = to_number(row.get("latency_us", ""))
+            if isinstance(latency, (int, float)):
+                metrics_summary["latency_us"] = latency
+                break
 
 
 def main() -> int:
@@ -487,8 +492,14 @@ def main() -> int:
     metrics_summary = build_metrics_summary(metric_cols, rows, aggregates)
     add_peak_direction_bandwidth(rows, metrics_summary)
     add_min_size_direction_latency(rows, metrics_summary)
-    apply_h2d_headlines(rows, metrics_summary)
-    summary = {"sample_count": len(rows), "status": status, "metrics": metrics_summary, "run_id": run_id}
+    add_h2d_headline(rows, metrics_summary)
+    summary = {
+        "sample_count": len(rows),
+        "status": status,
+        "metrics": metrics_summary,
+        "run_id": run_id,
+        "profile": os.environ.get("BENCHMARK_PROFILE", ""),
+    }
     Path(args.summary).parent.mkdir(parents=True, exist_ok=True)
     Path(args.summary).write_text(json.dumps(summary, indent=2) + "\n", encoding="utf-8")
     if args.run_dir:

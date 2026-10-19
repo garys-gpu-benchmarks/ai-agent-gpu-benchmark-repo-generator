@@ -112,7 +112,7 @@ Read and internalize:
 14a. `docs/nvidia-pytorch-install-contract.md` when `GPU Vendor` is NVIDIA
 15. `config/hardware_profile.mi300x.yaml`
 16. `docs/SUBMISSION_CHECKLIST.md`
-17. `implementation_components/README.md` (automatic overlay discovery, mixins, `gate.json`; after init, do not rewrite `results/overlay_lock.json` files)
+17. `implementation_components/README.md` (automatic overlay discovery, mixins, `gate.json`; `results/overlay_lock.json` is a fingerprint — rewrite it only to store the SHA-256 of a deliberate repair whose sibling bytes also match `implementation_components/<id>/files/`)
 17a. `scripts/generation_host_preflight.py` before extraction; `results/component_resolution.json` after init
 
 ## Phase 2 - Generate PRD/SPEC/README

@@ -34,6 +34,7 @@ HEADER = [
 ]
 QUERY_FIELDS = "temperature.gpu,power.draw,utilization.gpu,clocks_throttle_reasons.hw_thermal_slowdown"
 ECC_FIELD = "ecc.errors.uncorrected.volatile.total"
+ECC_DISABLED = "na (expected: ECC disabled)"
 NUMBER_RE = re.compile(r"^-?[0-9]+(?:\.[0-9]+)?$")
 GPU_STRESS = Path("bin/gpu_stress")
 READY_TIMEOUT_S = 120.0
@@ -82,6 +83,12 @@ def _number(field: str) -> float | None:
     return float(text) if NUMBER_RE.match(text) else None
 
 
+def _ecc_unavailable(field: str) -> bool:
+    """nvidia-smi prints [N/A] when ECC is disabled or the GPU has no ECC counter."""
+    text = field.strip().lower().strip("[]")
+    return text in {"n/a", "na", "not supported", "not available", "disabled"}
+
+
 def _gpu_lines(text: str, width: int) -> list[list[str]]:
     """Data lines of a --format=csv,noheader,nounits query: one per GPU.
     Skips warnings and anything without the expected number of fields."""
@@ -102,7 +109,8 @@ def _thermal_active(field: str) -> bool:
 def gpu_sample(ecc_check: bool):
     """One nvidia-smi call per poll: hottest GPU temperature, highest per-GPU
     power draw, highest utilization, any hardware thermal slowdown, and the
-    uncorrectable ECC count summed over GPUs (None when disabled or [N/A])."""
+    uncorrectable ECC count summed over GPUs. Disabled ECC is the explicit
+    expected-na reason, not a blank, so the numbered metric stays present."""
     fields = QUERY_FIELDS + ("," + ECC_FIELD if ecc_check else "")
     width = 5 if ecc_check else 4
     rc, text = run_command(["nvidia-smi", f"--query-gpu={fields}", "--format=csv,noheader,nounits"])
@@ -114,9 +122,12 @@ def gpu_sample(ecc_check: bool):
     utils = [v for v in (_number(line[2]) for line in lines) if v is not None]
     thermal = any(_thermal_active(line[3]) for line in lines)
     ecc = None
-    if ecc_check:
+    if ecc_check and lines:
         counts = [v for v in (_number(line[4]) for line in lines) if v is not None]
-        ecc = float(sum(counts)) if counts else None
+        if counts:
+            ecc = float(sum(counts))
+        elif all(_ecc_unavailable(line[4]) for line in lines):
+            ecc = ECC_DISABLED
     return (
         max(temps) if temps else None,
         max(powers) if powers else None,

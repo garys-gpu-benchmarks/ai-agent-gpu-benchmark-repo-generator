@@ -317,10 +317,13 @@ class MetricFeedbackUpdateTests(unittest.TestCase):
         nvidia = source("cublas-gemm-nvidia", "scripts/collect_cublas_gemm.py")
         self.assertIn("norm_error_2", nvidia)
 
-    def test_hpl_substitute_uses_vector_peak_and_records_actual_shape(self):
+    def test_hpl_substitute_uses_tensor_peak_and_records_actual_shape(self):
+        # 2026-10-19: Dgetrf runs on the FP64 tensor cores, so percent of peak
+        # divides by the tensor-core peak (the vector peak gave 101-102%).
         text = source("linpack-hpl-nvidia", "scripts/collect_workload.py")
-        self.assertIn('"percent_of_fp64_vector_peak"', text)
-        self.assertIn("peak_fp64_vector_tflops=", text)
+        self.assertIn('"percent_of_fp64_tensor_peak"', text)
+        self.assertIn('r"peak_fp64_tflops=', text)
+        self.assertNotIn("percent_of_fp64_vector_peak", text)
         self.assertIn('"solver_implementation": "cuSOLVER_Dgetrf_Dgetrs"', text)
 
     def test_llm_decode_and_itl_exclude_prefill_and_pool_token_gaps(self):

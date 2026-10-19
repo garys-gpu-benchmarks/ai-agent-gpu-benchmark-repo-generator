@@ -315,7 +315,12 @@ def expand_generate(instruction: str, fields: dict[str, str]) -> str:
             "**`setup.sh` missing collector**\n"
             "Create cannot finish without `scripts/collect_workload.py`.\n\n"
             "**`self_check` overlay rewritten**\n"
-            "Do not overwrite files listed in `results/overlay_lock.json`.\n\n"
+            "`Locked overlay rewritten` means the sibling file and the `sha256` in "
+            "`results/overlay_lock.json` disagree. The repair is to make "
+            "`implementation_components/<component-id>/files/<path>`, the sibling path, "
+            "and that digest the same bytes, then recheck with "
+            "`create_one_workload.py --validate-only`. Do not replace the overlay with a "
+            "new collector, and do not regenerate a non-empty sibling.\n\n"
             "**Remote SSH drop during setup**\n"
             "Reconnect and resume `bash setup.sh --assume-yes`. Do not wipe `.venv` or `.cache`."
         )

@@ -388,7 +388,7 @@ def main() -> int:
         "retrieval_latency_vector_search_ms": retrieve_acc / measured,
         "faiss_index_ntotal": float(index_ntotal),
         "generation_throughput_output_tokens_s": tokens_acc / max(gen_ms_acc / 1000.0, 1e-9),
-        "embedding_throughput_docs_s": embedding_throughput,
+        "embedding_throughput_chunks_s": embedding_throughput,  # chunks embedded per second (was mislabeled docs/s)
         "index_backend": 1.0,
         "corpus_docs": float(len(contexts)),
         "chunk_count": float(len(chunks)),

@@ -27,12 +27,16 @@ def as_list(value):
     return [p.strip() for p in str(value or "").replace(";", ",").split(",") if p.strip()]
 
 
-DEFAULT_UDP_RATE = "10G"
+# "0" is iperf3's unlimited rate. A fixed cap (10G until 2026-10-19) made the UDP
+# throughput metric report the cap: 9.99 Gbit/s on every profile while TCP on
+# the same loopback reached 55 Gbit/s.
+DEFAULT_UDP_RATE = "0"
 
 
 def udp_rate(raw) -> str:
     """UDP -b target rate. iperf3 itself defaults UDP to 1 Mbit/s, which made the
-    UDP metric report that cap instead of throughput. Empty or 0 uses DEFAULT_UDP_RATE."""
+    UDP metric report that cap instead of throughput. Empty or 0 uses DEFAULT_UDP_RATE,
+    which is "0": unlimited, so the receiver-side rate is the loopback UDP throughput."""
     text = str(raw or "").strip()
     if text in {"", "0", "0M", "0K", "0G"}:
         return DEFAULT_UDP_RATE

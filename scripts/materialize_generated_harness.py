@@ -666,7 +666,13 @@ def main() -> int:
     conn.commit()
     conn.close()
     metrics_summary = build_metrics_summary(metric_cols, rows, aggregates)
-    summary = {"sample_count": len(rows), "status": status, "metrics": metrics_summary, "run_id": run_id}
+    summary = {
+        "sample_count": len(rows),
+        "status": status,
+        "metrics": metrics_summary,
+        "run_id": run_id,
+        "profile": os.environ.get("BENCHMARK_PROFILE", ""),
+    }
     Path(args.summary).parent.mkdir(parents=True, exist_ok=True)
     Path(args.summary).write_text(json.dumps(summary, indent=2) + "\\n", encoding="utf-8")
     if args.run_dir:
@@ -891,7 +897,7 @@ def main() -> int:
             resolved = resolve_metrics(items, metrics) if items else []
             pairs = [(label, value) for _number, _description, label, value in resolved]
             context = {
-                "profile": os.environ.get("BENCHMARK_PROFILE", ""),
+                "profile": os.environ.get("BENCHMARK_PROFILE", "") or str(payload.get("profile") or ""),
                 "status": payload.get("status", ""),
                 "standin": str(payload.get("status", "")).lower() in {"stub", "smoke-standin"},
                 "gpu_count": metrics.get("gpu_count", os.environ.get("GPU_COUNT", "")),

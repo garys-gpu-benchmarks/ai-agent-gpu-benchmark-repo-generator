@@ -203,7 +203,15 @@ def _write_resolution_report(repo: Path, resolved: list[dict], fields: dict[str,
     lines = [
         "# Component resolution leftover work",
         "",
-        "Locked overlay files (do not rewrite):",
+        "Locked overlay files (recorded fingerprint):",
+        "",
+        "Each path below was copied from `implementation_components/<component-id>/files/<path>`.",
+        "`self_check_generated_repo.sh` fails with `Locked overlay rewritten` when the sibling file and the `sha256` in `results/overlay_lock.json` differ. It does not open the template.",
+        "`smoke_check_generated_repo.sh` fails with `Implementation component mismatch` when the sibling bytes differ from that template source.",
+        "A smoke failure inside one of these files is repaired by writing the same bytes in three places: the template source, the sibling path, and that path's `sha256` in `results/overlay_lock.json`.",
+        "Do not replace the overlay with a new collector or parser. Do not leave the workload failed when those three copies can be made identical. Do not run `create_generated_repo.py` again on a non-empty sibling (`--force` discards it). After the three copies match, recheck with `create_one_workload.py --validate-only`.",
+        "`scripts/metric_contract.py` is not in this lock. Repair the generator `scripts/metric_contract.py` and the sibling copy, then use the same `--validate-only` recheck.",
+        "",
     ]
     lines.extend(f"- `{item}`" for item in locked or ["(none)"])
     lines.extend(["", "Mixin / materialized files:", ""])

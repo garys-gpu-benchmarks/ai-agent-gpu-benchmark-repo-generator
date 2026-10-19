@@ -214,17 +214,17 @@ def remote_copy(ssh: str, repo_dir: Path, *, reuse: bool) -> int:
         _emit(result.stdout or "")
         _emit(result.stderr or "")
         return result.returncode or 1
-    return install_remote_show_metrics(ssh)
+    return install_remote_suite_tools(ssh)
 
 
-def install_remote_show_metrics(ssh: str) -> int:
-    """Install templates/suite-tools/scripts/show_metrics.sh at /opt/benchmarks/show_metrics.sh.
+# Installed beside the workload trees, not inside them. Bundles already ship both.
+REMOTE_SUITE_SCRIPTS = ("show_metrics.sh", "run_benchmark_suite.sh")
 
-    Workload trees live in /opt/benchmarks/<repo>. The suite script stays beside
-    them, where an operator runs `bash show_metrics.sh 101`.
-    """
-    src = Path(__file__).resolve().parents[1] / "templates" / "suite-tools" / "scripts" / "show_metrics.sh"
-    dest = f"{REMOTE_ROOT}/show_metrics.sh"
+
+def install_remote_suite_script(ssh: str, name: str) -> int:
+    """Install one templates/suite-tools/scripts/<name> at /opt/benchmarks/<name>."""
+    src = Path(__file__).resolve().parents[1] / "templates" / "suite-tools" / "scripts" / name
+    dest = f"{REMOTE_ROOT}/{name}"
     if not src.is_file():
         print(f"[FAIL] {src} is missing; cannot install {dest}", flush=True)
         return 1
@@ -241,6 +241,19 @@ def install_remote_show_metrics(ssh: str) -> int:
         _emit(result.stdout or "")
         _emit(result.stderr or "")
         return result.returncode or 1
+    return 0
+
+
+def install_remote_suite_tools(ssh: str) -> int:
+    """Install show_metrics.sh and run_benchmark_suite.sh at /opt/benchmarks.
+
+    Workload trees live in /opt/benchmarks/<repo>. These two stay beside them,
+    where an operator runs `bash show_metrics.sh 101` or `bash run_benchmark_suite.sh`.
+    """
+    for name in REMOTE_SUITE_SCRIPTS:
+        rc = install_remote_suite_script(ssh, name)
+        if rc != 0:
+            return rc
     return 0
 
 

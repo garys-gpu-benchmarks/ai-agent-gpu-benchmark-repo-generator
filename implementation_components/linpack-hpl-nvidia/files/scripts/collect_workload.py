@@ -13,7 +13,7 @@ from pathlib import Path
 
 METRIC_COLUMNS = [
     "sustained_fp64_performance_across_problem_size_n_tflops",
-    "percent_of_fp64_vector_peak",
+    "percent_of_fp64_tensor_peak",
     "time_to_solution_across_problem_size_n_s",
 ]
 
@@ -30,11 +30,13 @@ def parse_score(text: str) -> dict[str, float]:
         seconds = float(match.group(1))
         if gflops is None:
             gflops = float(match.group(2))
-    match = re.search(r"peak_fp64_vector_tflops=([0-9.eE+-]+)", text)
+    # cuSOLVER Dgetrf runs on the FP64 tensor cores (Hopper: twice the vector
+    # rate), so percent of peak divides by the tensor-core peak nvhpl prints as
+    # peak_fp64_tflops. Dividing by the vector peak reported 101-102%.
+    match = re.search(r"peak_fp64_tflops=([0-9.eE+-]+)", text)
     if match:
         peak = float(match.group(1))
-    # Operator override is the non-tensor FP64 vector peak used by Dgetrf.
-    override = os.environ.get("BENCHMARK_PEAK_FP64_VECTOR_TFLOPS", "").strip()
+    override = os.environ.get("BENCHMARK_PEAK_FP64_TFLOPS", "").strip()
     if override:
         peak = float(override)
     if gflops is None or seconds is None:

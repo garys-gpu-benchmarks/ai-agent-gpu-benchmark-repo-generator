@@ -13,8 +13,8 @@ import unittest
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-PUBLISH = [ROOT / "scripts" / "publish_benchmarks_to_github.sh",
-           ROOT / "scripts" / "publish_benchmarks_to_github_manual.sh"]
+# One publish script since 2026-10-19 (the former _manual variant, renamed).
+PUBLISH = [ROOT / "scripts" / "publish_benchmarks_to_github.sh"]
 BASH = shutil.which("bash")
 
 
@@ -67,7 +67,7 @@ class BundleReadmeToolsTests(unittest.TestCase):
         readme = self.render(PUBLISH[0], "3")
         self.assertLess(readme.index("## Getting started"), readme.index("## See your results"))
         self.assertLess(readme.index("## See your results"), readme.index("## Run everything"))
-        self.assertIn("./show_metrics.sh 315 --baseline", readme)
+        self.assertIn("./show_metrics.sh 307 --baseline", readme)  # 2026-10-19: Getting started uses x07
         self.assertIn("| One benchmark's runs and per-profile means | `./show_metrics.sh <benchmark>` |", readme)
 
 

@@ -8,6 +8,7 @@ import shutil
 import re
 import subprocess
 import sys
+import threading
 import time
 from pathlib import Path
 
@@ -165,7 +166,8 @@ def gpu_metrics():
                 continue
         if not nums:
             continue
-        if "gpu use" in low or "gfx activity" in low or "gpu_busy" in low:
+        # amd-smi metric prints "GFX_ACTIVITY: 37 %" (underscore); older tools say "GPU use".
+        if "gpu use" in low or "gfx activity" in low or "gfx_activity" in low or "gpu_busy" in low:
             util = nums[0]
         if "junction" in low or "hotspot" in low:
             temp = max(temp, nums[0])
@@ -256,6 +258,95 @@ def sample_row(second):
     }
 
 
+# --- GPU load -----------------------------------------------------------------
+# The load used to be `python -c "import torch ..."`. torch is not installed in
+# this workload's environment, so the child died at once (stderr went to
+# /dev/null) and the GPU stayed idle while power and temperature were published
+# as values "under load". The load is now the repository-local rocblas-bench
+# that setup compiles; if no load runs, the two GPU metrics are published as na.
+ROCBLAS_BENCH_LOCAL = Path(__file__).resolve().parents[1] / "third_party" / "rocBLAS" / "build" / "release" / "clients" / "staging" / "rocblas-bench"
+GEMM_N = 8192
+GEMM_ITERS = 400
+
+
+def find_rocblas_bench():
+    if ROCBLAS_BENCH_LOCAL.is_file():
+        return str(ROCBLAS_BENCH_LOCAL)
+    return shutil.which("rocblas-bench")
+
+
+class GpuLoad:
+    """Runs rocblas-bench FP32 GEMMs in a duty cycle (run, then sleep so the busy
+    share is about load_pct) until the deadline. Records whether it ever ran."""
+
+    def __init__(self, seconds, load_pct, log_path):
+        self.deadline = time.time() + seconds
+        self.load_pct = max(1, min(100, load_pct))
+        self.log_path = log_path
+        self.bench = find_rocblas_bench()
+        self.ok_runs = 0
+        self.error = "" if self.bench else "rocblas-bench not found (setup did not compile it)"
+        self.proc = None
+        self.thread = threading.Thread(target=self._loop, daemon=True)
+
+    def start(self):
+        if self.bench:
+            self.thread.start()
+        return self
+
+    def _loop(self):
+        n = str(GEMM_N)
+        cmd = [self.bench, "-f", "gemm", "-r", "f32_r", "--transposeA", "N", "--transposeB", "N",
+               "-m", n, "-n", n, "-k", n, "--lda", n, "--ldb", n, "--ldc", n,
+               "-i", str(GEMM_ITERS), "-j", "1"]
+        with open(self.log_path, "a", encoding="utf-8") as log:
+            log.write("$ " + " ".join(cmd) + "\n")
+            while time.time() < self.deadline:
+                began = time.time()
+                try:
+                    self.proc = subprocess.Popen(cmd, stdout=log, stderr=subprocess.STDOUT)
+                except OSError as exc:
+                    self.error = f"rocblas-bench could not start: {exc}"
+                    return
+                while self.proc.poll() is None and time.time() < self.deadline:
+                    time.sleep(0.2)
+                if self.proc.poll() is None:
+                    self.proc.terminate()
+                    try:
+                        self.proc.wait(timeout=10)
+                    except subprocess.TimeoutExpired:
+                        self.proc.kill()
+                    if time.time() - began > 2:
+                        self.ok_runs += 1
+                    return
+                if self.proc.returncode != 0:
+                    self.error = f"rocblas-bench exited with code {self.proc.returncode} (see gpu_load.log)"
+                    return
+                self.ok_runs += 1
+                busy = time.time() - began
+                idle = busy * (100 - self.load_pct) / self.load_pct
+                time.sleep(max(0.0, min(idle, self.deadline - time.time())))
+
+    def stop(self):
+        self.deadline = 0
+        if self.proc is not None and self.proc.poll() is None:
+            self.proc.terminate()
+        if self.thread.is_alive():
+            self.thread.join(timeout=15)
+
+
+def gpu_load_failure(load, rows, profile):
+    """Return an na reason when the requested GPU load did not run, else ""."""
+    utils = [float(r["gpu_util_pct"]) for r in rows if str(r.get("gpu_util_pct", "")).replace(".", "", 1).isdigit()]
+    peak_util = max(utils) if utils else 0.0
+    if load.ok_runs > 0 and peak_util >= 10:
+        return ""
+    why = load.error or f"GPU utilization peaked at {peak_util:g}%"
+    if profile == "smoke":
+        return f"na (timed loop too short: GPU load did not reach the GPU in the smoke duration; {why})"
+    return f"na (GPU load did not run: {why})"
+
+
 def main() -> int:
     args = parse_args()
     params = load_params(args.config)
@@ -272,17 +363,7 @@ def main() -> int:
             stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
         )
     if gpu_load > 0:
-        gpu_proc = subprocess.Popen(
-            [sys.executable, "-c",
-             "import time,torch\n"
-             "d=torch.device('cuda' if torch.cuda.is_available() else 'cpu')\n"
-             "a=torch.randn(2048,2048,device=d)\n"
-             f"end=time.time()+{seconds}\n"
-             "while time.time()<end:\n"
-             "    a=a@a\n"
-             "    if d.type=='cuda': torch.cuda.synchronize()\n"],
-            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
-        )
+        gpu_proc = GpuLoad(seconds, gpu_load, Path(args.run_dir) / "gpu_load.log").start()
     header = [
         "sample_index", "second", "gpu_util_pct", "gpu_temp_c", "gpu_power_w",
         "ecc_uncorrected", "peak_gpu_junction_temp_c", "sustained_gpu_power_w",
@@ -296,7 +377,17 @@ def main() -> int:
     if stress is not None:
         stress.wait(timeout=max(5, seconds))
     if gpu_proc is not None:
-        gpu_proc.wait(timeout=max(5, seconds))
+        gpu_proc.stop()
+        reason = gpu_load_failure(gpu_proc, rows, args.profile)
+        utils = [float(r["gpu_util_pct"]) for r in rows if isinstance(r.get("gpu_util_pct"), (int, float))]
+        mean_util = sum(utils) / len(utils) if utils else 0.0
+        if reason:
+            print(f"[WARN] {reason}", file=sys.stderr)
+            for row in rows:
+                row["peak_gpu_junction_temp_c"] = reason
+                row["sustained_gpu_power_w"] = reason
+        else:
+            print(f"[INFO] GPU load observed: mean GPU utilization {mean_util:.1f}% (requested {gpu_load}%)")
     if not rows:
         rows.append(sample_row(0))
     delta = ecc_interval_delta([row["ras_uncorrectable_ecc_delta_count"] for row in rows])

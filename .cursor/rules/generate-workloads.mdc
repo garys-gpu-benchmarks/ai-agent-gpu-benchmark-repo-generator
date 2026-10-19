@@ -18,3 +18,5 @@ python3 scripts/run_from_prompt.py --prompt-file <SUBMITTED_PROMPT_FILE>
 ```
 
 Do not pass `--remote-root`, `--project-root`, or `--template-root`. Do not reimplement copy, setup, or smoke. Continue until every requested workload is recorded.
+
+A locked overlay is a fingerprint, not a ban. When smoke fails inside a file listed in `results/overlay_lock.json`, write the same bytes in `implementation_components/<component-id>/files/<path>`, the sibling path, and that path's `sha256`, then recheck with `create_one_workload.py --validate-only`. Do not leave the workload failed when those three copies can match. Do not replace the overlay with a new collector. Do not run `create_generated_repo.py` again on a non-empty sibling. `scripts/metric_contract.py` has no lock entry: repair the generator copy and the sibling copy, then use the same recheck. `Locked overlay rewritten` means the sibling and the digest disagree. `Implementation component mismatch` means the sibling and the template source disagree.

@@ -74,7 +74,7 @@ class OperatorToolTests(unittest.TestCase):
 
 
 class RemoteShowMetricsInstallTests(unittest.TestCase):
-    def test_remote_copy_installs_show_metrics_at_opt_benchmarks(self) -> None:
+    def test_remote_copy_installs_suite_tools_at_opt_benchmarks(self) -> None:
         calls: list[str] = []
 
         def fake_run(command: str, cwd=None, timeout=None):
@@ -89,16 +89,16 @@ class RemoteShowMetricsInstallTests(unittest.TestCase):
 
         with patch.object(create_one_workload, "run_host_bash", side_effect=fake_run):
             rc = create_one_workload.remote_copy(
-                "ssh -i /c/Users/gary/.ssh/gmb-amd-ssh-key root@203.0.113.10",
+                "ssh -i /path/to/.ssh/<amd_ssh_key> root@203.0.113.10",
                 Path("/tmp/101-sample"),
                 reuse=True,
             )
         self.assertEqual(rc, 0)
-        self.assertEqual(len(calls), 2)
-        install = calls[1]
-        self.assertIn("/opt/benchmarks/show_metrics.sh", install)
-        self.assertIn("chmod 755 /opt/benchmarks/show_metrics.sh", install)
-        self.assertIn("templates/suite-tools/scripts/show_metrics.sh", install.replace("\\", "/"))
+        self.assertEqual(len(calls), 3)
+        for name in ("show_metrics.sh", "run_benchmark_suite.sh"):
+            install = next(command for command in calls if f"/opt/benchmarks/{name}" in command)
+            self.assertIn(f"chmod 755 /opt/benchmarks/{name}", install)
+            self.assertIn(f"templates/suite-tools/scripts/{name}", install.replace("\\", "/"))
         publish = (ROOT / "scripts" / "publish_benchmarks_to_github.sh").read_text(encoding="utf-8")
         self.assertIn('tr -d \'\\r\' <"${METRICS_SCRIPT}" >show_metrics.sh', publish)
         self.assertIn("for f in run_benchmark_suite.sh show_metrics.sh", publish)

@@ -12,7 +12,7 @@ Mixin components (`role: mixin`) use `apply_when` and skip destinations a primar
 - `rocm-tool-verify-build` — verify-only `scripts/build.sh` when `build_policy=verify_tools`
 - `rocblas-clients-build` — protected `rocm_compile_rocblas_bench` when `compile_rocblas_bench=true`
 
-After copy, `results/overlay_lock.json` records path → component_id → sha256. Do not rewrite locked files. Read `results/component_leftover_work.md` for what the agent may still edit.
+After copy, `results/overlay_lock.json` records path → component_id → sha256 of the copied bytes. That digest is a fingerprint. A smoke failure inside a locked file is repaired by writing the same bytes in the template source, the sibling, and that `sha256`, then rechecking with `create_one_workload.py --validate-only`. Read `results/component_leftover_work.md` for the file list and for what the agent may still edit freely.
 
 The benchmark specification remains authoritative for workload identity, parameters, metrics, runtime requirements, software/framework requirements, and success criteria. Components contribute deterministic implementation assets only.
 
@@ -35,8 +35,15 @@ For Workload 124 the yaml maps slot 24 / AMD to `sdxl-diffusers-amd`. Init copie
 
 `scripts/init_generated_repo.py` copies each listed overlay from
 `implementation_components/<component-id>/files/<path>` onto
-`<generated-repo>/<path>`. After that copy, do **not** regenerate or rewrite
-those files. The overlay bytes are the known-good implementation (STREAM
+`<generated-repo>/<path>`. The lock is a fingerprint of that copy, not a ban on
+a later repair. Do **not** throw the overlay away and write a new collector or
+parser. A defect that makes smoke exit 1 is fixed by writing the same bytes in
+`implementation_components/<component-id>/files/<path>`, the sibling path, and
+the path's `sha256` in `results/overlay_lock.json`, then
+`create_one_workload.py --validate-only`. Do not run `create_generated_repo.py`
+again on a non-empty sibling. `scripts/metric_contract.py` is copied from the
+generator `scripts/` tree and has no lock entry: repair both copies, then use
+the same recheck. The overlay remains the known-good implementation (STREAM
 checksum, leftover-`benchmark.db` parse, vLLM/SGLang smoke-vs-real launch,
 AMD vLLM tokenizer slack including KV-cache, AMD SGLang import guards,
 multichase `void * volatile` chase,
