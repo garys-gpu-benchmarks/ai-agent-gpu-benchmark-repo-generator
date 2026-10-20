@@ -120,6 +120,44 @@ class AmdgpuReloadTests(unittest.TestCase):
         return self.log.read_text()
 
     # ---- success paths -------------------------------------------------
+    def _console(self, index: int, name: str, bound: str = "1") -> Path:
+        con = self.sys / "class" / "vtconsole" / f"vtcon{index}"
+        con.mkdir(parents=True)
+        (con / "name").write_text(name + "\n")
+        (con / "bind").write_text(bound + "\n")
+        return con
+
+    def test_framebuffer_console_is_released_and_bound_again(self):
+        """26.04 MI300X: the unload stalled with fbcon on amdgpu's framebuffer (rc=137)."""
+        _pci(self.sys, 2)
+        self._loaded()
+        fb = self._console(0, "(M) frame buffer device")
+        dummy = self._console(1, "(M) dummy device", "0")
+        seen = self.tmp / "bind_at_unload"
+        stub = self.bin / "modprobe"
+        stub.write_text(MODPROBE.replace(
+            'if [[ "$1" == "-r" ]]; then',
+            f'if [[ "$1" == "-r" ]]; then\n  cat "{fb}/bind" > "{seen}"', 1))
+        self.assertEqual(self._reload("firmware"), 0)
+        self.assertEqual(seen.read_text().strip(), "0")  # released during the unload
+        self.assertEqual((fb / "bind").read_text().strip(), "1")  # bound again afterwards
+        self.assertEqual((dummy / "bind").read_text().strip(), "0")  # other consoles untouched
+
+    def test_console_is_bound_again_when_the_unload_fails(self):
+        _pci(self.sys, 2)
+        self._loaded()
+        fb = self._console(0, "(M) frame buffer device")
+        self.assertEqual(self._reload("firmware", FAKE_UNLOAD="fail"), 1)
+        self.assertEqual((fb / "bind").read_text().strip(), "1")
+
+    def test_console_is_not_touched_when_amdgpu_is_in_use(self):
+        _pci(self.sys, 2)
+        self._loaded(refcnt=3)
+        fb = self._console(0, "(M) frame buffer device")
+        self.assertEqual(self._reload("firmware"), 1)
+        self.assertEqual((fb / "bind").read_text().strip(), "1")
+        self.assertNotIn("Released the framebuffer console", self.calls())
+
     def test_firmware_reload_succeeds_when_all_gpus_return(self):
         _pci(self.sys, 2)
         self._loaded()

@@ -43,6 +43,9 @@ class BundleReadmeToolsTests(unittest.TestCase):
         ])
         result = subprocess.run([BASH, "-c", program], capture_output=True, text=True, timeout=30)
         self.assertEqual(result.returncode, 0, result.stderr)
+        # A backtick left unescaped inside a double-quoted string runs as a command
+        # (2026-10-20: "With `--show-output`," printed as "With ,"); bash reports it here.
+        self.assertEqual(result.stderr, "", result.stderr)
         return result.stdout
 
     def test_ships_the_expected_scripts(self) -> None:
@@ -91,9 +94,12 @@ class BundleReadmeToolsTests(unittest.TestCase):
                 self.assertIn("what matters is `0 failed`", section)
                 self.assertIn("### 3. Smoke is a wiring check, not a measurement", section)
                 self.assertNotIn("under one minute", section)
+                self.assertNotRegex(section, r"\bWith ,")
                 if digit == "3":
+                    self.assertIn("With\n`--show-output`, the output then ends", section)
                     self.assertIn("Connection to <your-machine-address> closed by remote host.", section)
-                    self.assertIn("The machine restarts once.", section)
+                    self.assertIn("If the machine restarts.", section)
+                    self.assertIn("reloads the amdgpu\ndriver in place", section)
                 elif digit == "1":
                     self.assertIn("If the machine restarts.", section)
                     self.assertNotIn("closed by remote host", section)

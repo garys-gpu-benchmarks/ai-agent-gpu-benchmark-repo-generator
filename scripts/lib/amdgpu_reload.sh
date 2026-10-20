@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # File: scripts/lib/amdgpu_reload.sh
-# Version: 1.0.0
+# Version: 1.1.0
 # Maintainer: AI Agent GPU Benchmark Repo Generator
 # Date: 2026-10-01
 # Description: amdgpu_reload_instead_of_reboot -- after the ROCm runtime install,
@@ -31,6 +31,11 @@
 # Safety rules:
 #   * The reload is skipped (reboot instead) when no AMD GPU is on the PCI bus, when
 #     amdgpu is in use (refcnt > 0), or when modprobe is missing.
+#   * A text console drawn on a framebuffer (fbcon) is released before the unload
+#     and bound again afterwards. On the Ubuntu 26.04 MI300X VM, "modprobe -r
+#     amdgpu" with the console still on amdgpu's framebuffer did not finish in
+#     180 s (rc=137, so setup rebooted); after "echo 0 > .../vtcon0/bind" the
+#     same unload took 0.5 s (2026-10-20).
 #   * modprobe runs in the background with a deadline. A modprobe stuck in the kernel
 #     cannot hang setup; setup gives up and reboots.
 #   * Success requires every AMD GPU PCI device to show up as a KFD compute node
@@ -156,7 +161,44 @@ _amdgpu_reload_report_firmware_errors() {
     fi
 }
 
+# Framebuffer consoles this run unbound, so they can be bound again afterwards.
+_AMDGPU_RELOAD_UNBOUND=()
+
+# Unbind every bound framebuffer console (vtconsole named "frame buffer device").
+# The console falls back to the dummy device; nothing else changes.
+_amdgpu_reload_release_consoles() {
+    local con name
+    for con in "${_AMDGPU_RELOAD_SYS}"/class/vtconsole/vtcon*; do
+        [[ -r "${con}/name" && -r "${con}/bind" ]] || continue
+        name="$(<"${con}/name")"
+        [[ "${name}" == *"frame buffer"* && "$(<"${con}/bind")" == "1" ]] || continue
+        if printf '0\n' | run_noninteractive_root tee "${con}/bind" >/dev/null 2>&1; then
+            _AMDGPU_RELOAD_UNBOUND+=("${con}")
+            _amdgpu_reload_log "Released the framebuffer console ${con##*/} so amdgpu can unload."
+        else
+            _amdgpu_reload_warn "Could not release the framebuffer console ${con##*/}; the unload may stall."
+        fi
+    done
+}
+
+# Bind the consoles released above again (after the reload, or after it failed).
+_amdgpu_reload_restore_consoles() {
+    local con
+    for con in "${_AMDGPU_RELOAD_UNBOUND[@]}"; do
+        printf '1\n' | run_noninteractive_root tee "${con}/bind" >/dev/null 2>&1 ||
+            _amdgpu_reload_warn "Could not bind the console ${con##*/} again; the next boot restores it."
+    done
+    _AMDGPU_RELOAD_UNBOUND=()
+}
+
 amdgpu_reload_instead_of_reboot() {
+    local rc=0
+    _amdgpu_reload_attempt "$@" || rc=$?
+    _amdgpu_reload_restore_consoles
+    return "${rc}"
+}
+
+_amdgpu_reload_attempt() {
     local mode="${1:-firmware}"
     local pci kfd refcnt since waited=0 rc newest running
 
@@ -198,6 +240,7 @@ amdgpu_reload_instead_of_reboot() {
             _amdgpu_reload_warn "amdgpu is in use (refcnt=${refcnt}); cannot unload it. Rebooting instead."
             return 1
         fi
+        _amdgpu_reload_release_consoles
         _amdgpu_reload_log "Unloading amdgpu (modprobe -r amdgpu)."
         rc=0
         _amdgpu_reload_run_with_deadline "${AMDGPU_UNLOAD_TIMEOUT:-180}" modprobe -r amdgpu || rc=$?

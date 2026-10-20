@@ -324,14 +324,35 @@ def _remote_script(name: str, *, resume: bool, stamp: str) -> str:
     if resume:
         setup = "bash setup.sh --assume-yes --resume-auto || bash setup.sh --assume-yes"
     quoted_stamp = shlex.quote(stamp)
-    return f"""
-set -euo pipefail
-REPO={REMOTE_ROOT}/{name}
-cd "$REPO"
+    if resume:
+        # The reboot resume service may already be inside setup.sh. Wait for that
+        # process instead of exiting, then run setup --resume-auto (a no-op when
+        # SETUP complete) and continue into smoke.
+        guard = """
+if pgrep -af 'setup.sh' | grep -F "$REPO" | grep -v grep >/dev/null; then
+  echo "[INFO] setup.sh already running after reboot; waiting for it to finish"
+  deadline=$((SECONDS + 3600))
+  while pgrep -af 'setup.sh' | grep -F "$REPO" | grep -v grep >/dev/null; do
+    if [ "$SECONDS" -ge "$deadline" ]; then
+      echo "[FAIL] setup.sh still running after wait"
+      exit 1
+    fi
+    sleep 10
+  done
+fi
+"""
+    else:
+        guard = """
 if pgrep -af 'setup.sh' | grep -F "$REPO" | grep -v grep >/dev/null; then
   echo "[FAIL] setup.sh already running; not starting a second copy"
   exit 1
 fi
+"""
+    return f"""
+set -euo pipefail
+REPO={REMOTE_ROOT}/{name}
+cd "$REPO"
+{guard}
 find "$REPO" -type d -exec chmod 755 {{}} +
 find "$REPO" -type f -not -path '*/.venv/*' -not -path '*/.cache/*' -not -path '*/third_party/*' -not -path '*/bin/*' -not -path '*/build/*' -exec chmod 644 {{}} +
 export PYTHONDONTWRITEBYTECODE=1
@@ -619,27 +640,33 @@ def process_one(workload: str, args: argparse.Namespace, template_root: Path, pr
 
 
 def _stamp_generation_report(repo: Path, started: str, finished: str) -> None:
-    path = repo / "GENERATION_REPORT.md"
-    if not path.is_file():
-        return
     start_dt = datetime.fromisoformat(started.replace("Z", "+00:00"))
     end_dt = datetime.fromisoformat(finished.replace("Z", "+00:00"))
     duration = max(0, int((end_dt - start_dt).total_seconds()))
-    text = path.read_text(encoding="utf-8")
-    block = (
-        f"- generation_started_at: {started}\n"
-        f"- generation_finished_at: {finished}\n"
-        f"- generation_duration_seconds: {duration}\n"
-    )
-    updated = re.sub(
-        r"- generation_started_at:.*\n- generation_finished_at:.*\n- generation_duration_seconds:.*\n",
-        block,
-        text,
-        count=1,
-    )
-    if updated == text:
+    path = repo / "GENERATION_REPORT.md"
+    if path.is_file():
+        text = path.read_text(encoding="utf-8")
+        block = (
+            f"- generation_started_at: {started}\n"
+            f"- generation_finished_at: {finished}\n"
+            f"- generation_duration_seconds: {duration}\n"
+        )
+        updated = re.sub(
+            r"- generation_started_at:.*\n- generation_finished_at:.*\n- generation_duration_seconds:.*\n",
+            block,
+            text,
+            count=1,
+        )
+        if updated != text:
+            path.write_text(updated, encoding="utf-8", newline="\n")
+    manifest_path = repo / "results" / "generation_manifest.json"
+    if not manifest_path.is_file():
         return
-    path.write_text(updated, encoding="utf-8", newline="\n")
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    manifest["generation_started_at"] = started
+    manifest["generation_finished_at"] = finished
+    manifest["generation_duration_seconds"] = duration
+    manifest_path.write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8", newline="\n")
 
 
 def main() -> int:

@@ -263,6 +263,15 @@ again() {
   return 1
 }
 
+# Git Bash on Windows starts every command by copying bash into a new Windows
+# process. When Windows is short of memory (or antivirus holds the new process)
+# that fails with messages like these. They say nothing about the workload.
+readonly WINDOWS_PROCESS_ERROR='fork: |dofork|Bad address|cygheap|child_copy|Win32 error|Resource temporarily unavailable'
+
+windows_process_error() {
+  grep -Eq "${WINDOWS_PROCESS_ERROR}" "$1" 2>/dev/null
+}
+
 # Platform name from a workload number or its first digit.
 platform() {
   case ${1:0:1} in
@@ -336,7 +345,11 @@ tag_version() {
 add_submodule() {
   local dir=$1 path=$2 i
   for i in 1 2 3 4; do
+    # Done only with both lines in .gitmodules: in v1.0.17 Windows refused one write
+    # ("could not write config file .gitmodules: Permission denied") after path and
+    # before url, and the retry counted 417's half entry as done.
     if git config -f .gitmodules --get "submodule.${path}.path" >/dev/null 2>&1 &&
+       git config -f .gitmodules --get "submodule.${path}.url" >/dev/null 2>&1 &&
        [[ -e "${path}/.git" ]] && git ls-files --error-unmatch "${path}" >/dev/null 2>&1; then
       return 0
     fi
@@ -514,10 +527,12 @@ which closes your connection. ${restart_steps}"
       ;;
     3)
       prereq='- A machine where installing ROCm and one restart are acceptable: the first
-  run installs ROCm and restarts the machine once.'
-      restart="**The machine restarts once.** Installing ROCm on Ubuntu 26.04 restarts the
-machine, which closes your connection. With `--show-output`, the output ends
-like this (in quiet mode, only the last line appears):
+  run installs ROCm, and may restart the machine once.'
+      restart="**If the machine restarts.** After installing ROCm, setup reloads the amdgpu
+driver in place, so the machine normally keeps running. If the reload cannot be
+verified, setup restarts the machine once, which closes your connection. With
+\`--show-output\`, the output then ends like this (in quiet mode, only the last
+line appears):
 
 \`\`\`text
 Successfully installed PyYAML-6.0.3
@@ -526,7 +541,7 @@ Connection to <your-machine-address> closed by remote host.
 \`\`\`
 
 ${restart_steps}"
-      lead2="After the restart, the same command ends like this when all three pass:"
+      lead2="When all three pass, it ends like this:"
       start2="Mon Oct 19 22:27:43 UTC 2026"; end2="Mon Oct 19 22:28:18 UTC 2026"
       total2="0 hours 0 minutes 35 seconds"; stamp2="20261019_222743"
       ;;
@@ -953,9 +968,15 @@ done
 
 step 2 "Dry run of prepare_github_publish.sh"
 fails=0
+dry_run() {
+  (cd "$1" && bash scripts/prepare_github_publish.sh --dry-run) >"_logs/${1:0:3}-dry-run.log" 2>&1 </dev/null
+}
 for dir in [1-4][0-9][0-9]-*; do
   in_list "${dir}" _logs/ready.txt && continue
-  if (cd "${dir}" && bash scripts/prepare_github_publish.sh --dry-run) >"_logs/${dir:0:3}-dry-run.log" 2>&1 </dev/null; then
+  # A dry run changes nothing, so a Windows process error is simply tried again.
+  if dry_run "${dir}" ||
+     { windows_process_error "_logs/${dir:0:3}-dry-run.log" && echo "RETRY ${dir}   (Windows could not start a process)" &&
+       sleep 10 && dry_run "${dir}"; }; then
     echo "OK    ${dir}"
   else
     echo "FAIL  ${dir}   (see ${PUB}/_logs/${dir:0:3}-dry-run.log)"
@@ -975,15 +996,37 @@ done
 
 step 3 "Prepare and check each workload"
 : >_logs/not-ready.txt
+prepare_and_check() {
+  (cd "$1" && bash scripts/prepare_github_publish.sh --apply --in-place --github-owner="${ORG}" &&
+    bash scripts/check_github_publish_ready.sh --published) >"_logs/${1:0:3}.log" 2>&1 </dev/null
+}
 for dir in [1-4][0-9][0-9]-*; do
   in_list "${dir}" _logs/ready.txt && continue
-  if (cd "${dir}" && bash scripts/prepare_github_publish.sh --apply --in-place --github-owner="${ORG}" &&
-      bash scripts/check_github_publish_ready.sh --published) >"_logs/${dir:0:3}.log" 2>&1 </dev/null; then
+  log="_logs/${dir:0:3}.log"
+  ok=0
+  if prepare_and_check "${dir}"; then
+    ok=1
+  elif windows_process_error "${log}" && [[ -d "${GEN}/${dir}" ]]; then
+    # Preparing deletes and rewrites files, so a copy it stopped inside is half
+    # done. Only for a Windows process error (never for a failed check, which may
+    # follow a fix made by hand in this tree): start again from a fresh copy.
+    echo "RETRY      ${dir}   (Windows could not start a process; preparing a fresh copy)"
+    mv -f "${log}" "${log%.log}-first-attempt.log"
+    sleep 10
+    if rm -rf "${dir}" && cp -a "${GEN}/${dir}" . && rm -rf "${dir}/.git" && prepare_and_check "${dir}"; then
+      ok=1
+    fi
+  fi
+  if ((ok)); then
     echo "${dir}" >>_logs/ready.txt
     echo "READY      ${dir}"
   else
     echo "${dir}" >>_logs/not-ready.txt
     echo "NOT READY  ${dir}   (see ${PUB}/_logs/${dir:0:3}.log)"
+    if windows_process_error "${log}"; then
+      echo "           Windows could not start a process (a Git Bash fork error), not a workload problem."
+      echo "           Close memory-heavy programs, delete ${PUB}/${dir}, and run again."
+    fi
   fi
 done
 not_ready=$(wc -l <_logs/not-ready.txt)
@@ -1261,6 +1304,18 @@ if is_done bundles; then skipped 7; else
     while read -r key _; do
       git config -f .gitmodules --unset "${key}" || stop "could not remove ${key} from .gitmodules in ${bundle}"
     done < <(git config -f .gitmodules --get-regexp '^submodule\..*\.branch$' 2>/dev/null)
+    # Every submodule needs a path and a url, or a clone stops with "No url found
+    # for submodule path". Restore a missing url (always ../<workload>.git), then
+    # require one complete entry per workload.
+    while read -r key sub_path; do
+      if ! git config -f .gitmodules --get "${key%.path}.url" >/dev/null 2>&1; then
+        echo "  restoring the missing url of ${sub_path} in .gitmodules"
+        again git config -f .gitmodules "${key%.path}.url" "../${sub_path}.git" ||
+          stop "could not restore the url of ${sub_path} in .gitmodules of ${bundle}"
+      fi
+    done < <(git config -f .gitmodules --get-regexp '^submodule\..*\.path$' 2>/dev/null)
+    complete=$(git config -f .gitmodules --get-regexp '^submodule\..*\.url$' 2>/dev/null | wc -l)
+    ((complete == want)) || stop "${bundle}/.gitmodules has ${complete} complete submodule entries, expected ${want}"
     # run.sh was folded into run_benchmark_suite.sh (--list, --show-output).
     git rm -q --ignore-unmatch run.sh >/dev/null 2>&1
     rm -f run.sh
@@ -1299,36 +1354,41 @@ fi
 
 
 # ==============================================================================
-# STEP 8: TEST ONE BUNDLE LIKE AN END USER
+# STEP 8: TEST EVERY BUNDLE LIKE AN END USER
 # ==============================================================================
 
 if is_done enduser-test; then skipped 8; else
-  step 8 "Test bundle-amd-ubuntu-2404 like an end user"
-  want=$(sort -u "${PUB}/_logs/published.txt" | grep -c '^1')
-  if ((want > 0)); then
+  step 8 "Test every bundle like an end user"
+  # All four bundles: in v1.0.17 only AMD 24.04 was cloned here, so the NVIDIA
+  # 26.04 bundle's broken .gitmodules entry for 417 first showed on a lab VM.
+  for spec in "amd-ubuntu-2404:1" "nvidia-ubuntu-2404:2" "amd-ubuntu-2604:3" "nvidia-ubuntu-2604:4"; do
+    IFS=: read -r name s <<<"${spec}"
+    bundle="bundle-${name}"
+    want=$(sort -u "${PUB}/_logs/published.txt" | grep -c "^${s}")
+    ((want > 0)) || continue
+    echo "--- ${bundle}"
     rm -rf "${WORK}/_test_clone"
     git -c advice.detachedHead=false clone -q --recurse-submodules --branch "${VERSION}" \
-      "https://github.com/${ORG}/bundle-amd-ubuntu-2404.git" "${WORK}/_test_clone" </dev/null ||
-      stop "cloning bundle-amd-ubuntu-2404 at ${VERSION} failed"
-    [[ -x "${WORK}/_test_clone/run_benchmark_suite.sh" ]] || stop "run_benchmark_suite.sh in the bundle is missing or not executable"
+      "https://github.com/${ORG}/${bundle}.git" "${WORK}/_test_clone" </dev/null ||
+      stop "cloning ${bundle} at ${VERSION} failed"
+    [[ -x "${WORK}/_test_clone/run_benchmark_suite.sh" ]] || stop "run_benchmark_suite.sh in ${bundle} is missing or not executable"
     for f in run_benchmark_suite.sh show_metrics.sh; do
-      [[ ! -f "${WORK}/_test_clone/${f}" || -x "${WORK}/_test_clone/${f}" ]] || stop "${f} in the bundle is not executable"
+      [[ ! -f "${WORK}/_test_clone/${f}" || -x "${WORK}/_test_clone/${f}" ]] || stop "${f} in ${bundle} is not executable"
     done
-    [[ ! -e "${WORK}/_test_clone/run.sh" ]] || stop "the bundle still has run.sh; step 7 should have removed it"
-    ! grep -q 'branch *=' "${WORK}/_test_clone/.gitmodules" || stop "the bundle's .gitmodules still has a branch line"
+    [[ ! -e "${WORK}/_test_clone/run.sh" ]] || stop "${bundle} still has run.sh; step 7 should have removed it"
+    ! grep -q 'branch *=' "${WORK}/_test_clone/.gitmodules" || stop "${bundle}'s .gitmodules still has a branch line"
     (cd "${WORK}/_test_clone" && ./run_benchmark_suite.sh --help) | grep -q "Default: smoke   (full run" ||
-      stop "the bundle's run_benchmark_suite.sh does not default to the smoke profile"
+      stop "${bundle}'s run_benchmark_suite.sh does not default to the smoke profile"
     for f in $(grep -o '\./[a-z_]*\.sh' "${WORK}/_test_clone/README.md" | sort -u); do
-      [[ -x "${WORK}/_test_clone/${f#./}" ]] || stop "the bundle README names ${f}, which is not in the bundle (or not executable)"
+      [[ -x "${WORK}/_test_clone/${f#./}" ]] || stop "the ${bundle} README names ${f}, which is not in the bundle (or not executable)"
     done
     listing=$(cd "${WORK}/_test_clone" && ./run_benchmark_suite.sh --list)
     got=$(printf '%s\n' "${listing}" | grep -c ' ready$')
-    printf '%s\n' "${listing}" | head -n 3
     printf '%s\n' "${listing}" | tail -n 1
-    echo "Benchmarks ready in the test clone: ${got} of ${want}"
+    echo "Benchmarks ready in the ${bundle} test clone: ${got} of ${want}"
     rm -rf "${WORK}/_test_clone"
-    ((got == want)) || stop "only ${got} of ${want} benchmarks came down with the bundle"
-  fi
+    ((got == want)) || stop "only ${got} of ${want} benchmarks came down with ${bundle}"
+  done
   cd "${PUB}" || stop "cannot open ${PUB}"
   mark_done enduser-test
 fi

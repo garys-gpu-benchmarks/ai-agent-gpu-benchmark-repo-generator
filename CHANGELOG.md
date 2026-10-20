@@ -1,5 +1,50 @@
 # Changelog
 
+## 2026-10-20 — 3xx: release the framebuffer console so amdgpu reloads without a reboot
+
+- **Cause found on the Ubuntu 26.04 MI300X VM:** setup's in-place driver reload logged `modprobe -r amdgpu failed (rc=137); rebooting instead.` rc=137 is setup's own 180 s deadline: the unload never finished. Nothing held the driver (`refcnt` 0, no process on `/dev/kfd` or `/dev/dri/*`, no GPU service). The text console was bound to a framebuffer (`vtcon0: (M) frame buffer device`). After `echo 0 > /sys/class/vtconsole/vtcon0/bind`, the same `modprobe -r amdgpu` finished in 0.48 s.
+- **`scripts/lib/amdgpu_reload.sh` 1.1.0:** before `modprobe -r amdgpu`, every bound framebuffer console is unbound (the console falls back to the dummy device). They are bound again after the reload, whether it succeeded or failed. Nothing changes when amdgpu is in use (the reload is skipped as before) or when no framebuffer console is bound. If the reload still fails, setup reboots once, exactly as before.
+- **Expected effect:** 301–332 on Ubuntu 26.04 install without the restart. 24.04 already reloaded in place; the change is harmless there.
+- **AMD 26.04 bundle README (`bundle_readme()`):** "The machine restarts once" becomes "If the machine restarts": setup reloads the driver in place and restarts only if the reload cannot be verified. The restart sample and the log-in-again steps stay, as the fallback. "Before you start" says the first run *may* restart the machine once, as for 24.04.
+- **Checks:** three new tests in `tests/test_amdgpu_reload.py` (the console is released during the unload and bound again; bound again after a failed unload; untouched when amdgpu is in use); all test files pass; shellcheck passes. Not yet run on a VM.
+
+## 2026-10-20 — Publish: complete bundle .gitmodules entries, and test every bundle
+
+- **What happened in v1.0.17:** `bundle-nvidia-ubuntu-2604` was published with a `.gitmodules` entry for 417 that had `path` but no `url`. Windows refused one write during `git submodule add` (`error: could not write config file .gitmodules: Permission denied`, after the path and before the url). The retry in `add_submodule` saw the path and the gitlink and counted the entry as done. A fresh lab install (`git clone --recurse-submodules`) stopped at `fatal: No url found for submodule path '417-gpu-bench-nvidia-gemm-cublas-micro-ubu2604' in .gitmodules`. Step 8 only cloned `bundle-amd-ubuntu-2404`, so the publish reported FINISHED. Repaired by hand on GitHub (url restored, bundle tag moved).
+- **`add_submodule`:** an entry counts as done only with both `path` and `url`.
+- **Step 7:** before each bundle commit, restores any missing `url` (always `../<workload>.git`) and stops unless `.gitmodules` has exactly one complete entry per workload.
+- **Step 8:** clones all four bundles from GitHub at the release tag (it cloned only AMD 24.04) and checks each one: suite scripts executable, no `run.sh`, no `branch =` lines, smoke default, the README's scripts present, and every workload `ready`.
+- **Checks:** new `tests/test_publish_gitmodules.py` (missing url restored, wrong entry count stops, `add_submodule` requires the url, step 8 covers all four bundles); all test files pass; shellcheck and ruff pass.
+
+## 2026-10-20 — TEMPLATE_00_114: runtime retune from the v1.0.17 baselines (Project385–388)
+
+TEMPLATE_00_114 starts as a copy of TEMPLATE_00_113 (2026-10-20). Workbook changes only (`Parameters_SmokeBaselineExtend`, then `sync_matrix_profile_commands.py`; 9 command cells):
+
+| Workload | Profile | Setting | Old → new | Measured | Expected |
+|---|---|---|---|---|---|
+| 230 | baseline | `output_len` | 1650 → 1200 | 5:17 cold at 1650; 1:50 warm at 800 | ~4:50 cold, ~2:15 warm |
+| 231 | baseline | `output_len` | 3250 → 1350 | 5:14 at 3250 (8 × 3378 tokens overflowed the 16,384-token KV cache: 3 of 8 requests waited 22 s, TTFT p50 2,320 ms); 1:40 warm at 1350, TTFT p50 78 ms | ~4:05 cold |
+| 231 | extended | `output_len`, `num_prompts` | 7000 → 3900, 48 → 144 | 3:59 warm at 3900 / 48 (TTFT p50 76 ms) | ~9:40 warm, ~12:10 cold |
+| 431 | extended | `output_len`, `num_prompts` | 7000 → 3900, 48 → 112 | 5:42 warm at 3900 / 48 (TTFT p50 71 ms); 112 prompts also gives the 100 samples p99 needs | ~11:10 warm, ~12:45 cold |
+| 207 | baseline | `num_iterations` | 23280 → 18600 | 4:24, 5:19, 5:37, 4:47 | slowest ~4:30 |
+| 232 | baseline / extended | `query_count` | 13 → 70 / 40 → 220 | 0:27 / 1:35 (2.5 s per query); 0:48 on the slower 2xx host | ~3:00–4:20 / ~9:00–13:30 |
+| 432 | baseline / extended | `query_count` | 13 → 45 / 40 → 140 | 0:52 / 3:10 (5.1 s per query) | ~3:50 / ~11:55 |
+
+- **Cold and warm SGLang on the NVIDIA 24.04 VM:** the first server start on a VM captures prefill CUDA graphs for 117–164 s; later starts reuse `/root/.cache/sglang` (14–17 s). Baselines are sized so the cold first run (the one a fresh install's first baseline gets) stays under 5:00; warm repeats run shorter.
+- **Not changed: 223.** Its 6:01 baseline (3:18 the day before, same settings) came from a slower 2xx host: the CPU-sensitive results on host `3e563c` were 27–46% lower than on `3c30b2` (207 STREAM, 208 iperf3, 222/223 small-batch inference), while GPU-bound results (215, 217–219, 226–229) matched. Recheck after the VM refresh.
+- **Checks:** all 28 test files pass; `generate_workload_parameters.py --check` and `generate_show_metrics.py` pass; 207, 230, 231, 232, 431 and 432 generated locally with the new values and self-checked (only the expected "No benchmark run artifact directory exists").
+
+## 2026-10-20 — Batch repairs from Project385–388 brought into the template; publish retry; 3xx README fix
+
+The four TEMPLATE_00_113 batches (Project385–388) logged their generator repairs in `results/generator_repairs.md`. They are reconciled here.
+
+- **Remote self-check (`scripts/create_one_workload.py`):** the 2026-10-19 change that left the nested `*_copy/` folder out of the copy sent to the VM is reversed. `self_check_generated_repo.sh` on the VM requires that copy until `template_copy_removed_at` is recorded, so x01–x03 (x01–x04 on 4xx) passed smoke and then failed self-check in every batch (12 retries, about 33 minutes). The four agents repaired it four ways; this keeps the 1xx repair (send the copy again), which is the generator in the v1.0.17 publish run folder. `self_check_generated_repo.sh` is unchanged, with no host exception. Only the copy rule changed; `__pycache__` is still left out and the CR strip still touches only files with a CR.
+- **Reboot resume (`create_one_workload.py`, from the 3xx batch):** after the ROCm reboot, the resume service can still be inside `setup.sh`. The resume path now waits for it (up to an hour) and then continues into smoke, instead of failing with "setup.sh already running" (301). A first run still refuses to start a second `setup.sh`.
+- **Generation times (`create_one_workload.py`, from the 4xx batch):** `results/generation_manifest.json` in each repository gets the same start, finish and duration as `GENERATION_REPORT.md`. Before, it kept the initializer's times (duration 0) in every bundle except where an agent fixed it by hand.
+- **Publish retry (`scripts/publish_benchmarks_to_github.sh`):** 404 and 405 stopped step 3 of the v1.0.17 publish with Git Bash process errors (`fork: retry: Resource temporarily unavailable`, `Bad address`, `Win32 error 299`), which say nothing about the workload. When a workload's log shows one of these, step 3 deletes its half-prepared copy, copies it fresh from the run folder and tries once more; step 2 (dry run) simply tries again. A failed check is never retried, so a fix made by hand in the publish tree is not overwritten. If the retry also fails, the message says it is a Windows/Git Bash problem and what to do.
+- **3xx bundle README (`bundle_readme()`):** `` `--show-output` `` inside a double-quoted bash string ran as a command, so the AMD 26.04 README read "With , the output ends like this". Escaped. `tests/test_bundle_readme_tools.py` now fails on any stderr from rendering (which is how bash reports this) and checks the sentence.
+- **Checks:** `tests/test_batch_generation_tooling.py` (resume wait, first-run refusal, manifest times, the copy kept in the archive, self-check without a host exception) and new `tests/test_publish_windows_retry.py` (a fork error is retried from a fresh copy; a failed check is not); all 28 test files pass; ruff and shellcheck pass; 8 workloads across the four series generated and self-checked locally, each with a real generation duration.
+
 ## 2026-10-20 — From the v1.0.16 overnight runs (Project380–383): warm-up, AMD SGLang concurrency, one-GPU NCCL, runtime retune
 
 The four overnight ledgers (1,025 runs, TEMPLATE_00_112) had no failures and no unexpected `na`. Four changes:

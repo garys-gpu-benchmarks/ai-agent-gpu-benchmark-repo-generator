@@ -161,6 +161,61 @@ class RemoteCopy(unittest.TestCase):
             self.assertEqual(int(lf.stat().st_mtime), 1_000_000_000)
 
 
+class RebootResume(unittest.TestCase):
+    """2026-10-20, workload 301: after the amdgpu reboot the resume service was still
+    inside setup.sh, and the driver exited instead of waiting for it."""
+
+    def test_resume_waits_for_the_running_setup(self) -> None:
+        script = col._remote_script("R", resume=True, stamp="s")
+        self.assertIn("setup.sh already running after reboot; waiting for it to finish", script)
+        self.assertNotIn("not starting a second copy", script)
+        self.assertIn("bash setup.sh --assume-yes --resume-auto || bash setup.sh --assume-yes", script)
+
+    def test_first_run_still_refuses_a_second_setup(self) -> None:
+        script = col._remote_script("R", resume=False, stamp="s")
+        self.assertIn("not starting a second copy", script)
+        self.assertNotIn("waiting for it to finish", script)
+
+
+class GenerationTimes(unittest.TestCase):
+    def test_stamp_writes_report_and_manifest(self) -> None:
+        """Per-workload generation_manifest.json kept the initializer times (duration 0)."""
+        with tempfile.TemporaryDirectory() as tmp:
+            repo = Path(tmp)
+            (repo / "results").mkdir()
+            (repo / "GENERATION_REPORT.md").write_text(
+                "x\n- generation_started_at: a\n- generation_finished_at: a\n- generation_duration_seconds: 0\n",
+                encoding="utf-8",
+            )
+            manifest = repo / "results" / "generation_manifest.json"
+            manifest.write_text(json.dumps({"generation_started_at": "a", "generation_duration_seconds": 0, "keep": 1}),
+                                encoding="utf-8")
+            col._stamp_generation_report(repo, "2026-10-20T09:00:00Z", "2026-10-20T09:00:42Z")
+            data = json.loads(manifest.read_text(encoding="utf-8"))
+            self.assertEqual(data["generation_duration_seconds"], 42)
+            self.assertEqual(data["generation_finished_at"], "2026-10-20T09:00:42Z")
+            self.assertEqual(data["keep"], 1)
+            self.assertIn("- generation_duration_seconds: 42", (repo / "GENERATION_REPORT.md").read_text(encoding="utf-8"))
+
+
+class SelfCheckOnTheVm(unittest.TestCase):
+    """2026-10-20: leaving *_copy off the VM made self_check fail after a passing smoke
+    on x01-x03 of every batch. The copy goes to the VM again, and self_check keeps its
+    one rule (the copy, or template_copy_removed_at)."""
+
+    def test_remote_archive_keeps_the_copy(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            repo = Path(tmp) / "101-x"
+            (repo / "ai-agent-gpu-benchmark-repo-generator_copy").mkdir(parents=True)
+            self.assertEqual(col._copy_excludes(repo, prefix="101-x/"), "")
+
+    def test_self_check_has_no_host_exception(self) -> None:
+        text = (SCRIPTS / "self_check_generated_repo.sh").read_text(encoding="utf-8")
+        for name in ("BENCHMARK_VALIDATION_HOST", "BENCHMARK_REMOTE_VALIDATION", "/opt/benchmarks/*)"):
+            self.assertNotIn(name, text)
+        self.assertIn("does not record template_copy_removed_at", text)
+
+
 class InterpreterCaches(unittest.TestCase):
     def test_removes_caches_but_not_venv_or_model_cache(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
