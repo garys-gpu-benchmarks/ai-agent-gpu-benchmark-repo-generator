@@ -293,7 +293,14 @@ _NON_RESULT_METRIC_KEYS = {
 }
 
 
-def metric_results(summary_path: Path, items: list[tuple[str, str]]) -> list[str]:
+def metric_results(
+    summary_path: Path,
+    items: list[tuple[str, str]],
+    gpu: str = "",
+    annotated: dict | None = None,
+) -> list[str]:
+    """Ledger values for the numbered metrics. ``gpu`` is the detected GPU name (summary.json
+    has none); ``annotated``, when given, receives the annotated metrics (cache tag, headline)."""
     try:
         payload: dict[str, Any] = json.loads(summary_path.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError):
@@ -309,9 +316,11 @@ def metric_results(summary_path: Path, items: list[tuple[str, str]]) -> list[str
     try:
         from metric_contract import annotate_metrics
 
-        filtered = annotate_metrics(filtered, str(payload.get("gpu_name") or ""))
+        filtered = annotate_metrics(filtered, str(payload.get("gpu_name") or gpu or ""))
     except Exception:
         pass
+    if annotated is not None:
+        annotated.update(filtered)
     try:
         from print_metric_summary import resolve_metrics
 
@@ -929,11 +938,13 @@ def main() -> int:
     start_text = start.strftime("%Y-%m-%dT%H:%M:%SZ")
     run_id = f"{fields.get('Workload Number', '')}_{start.strftime('%Y%m%d_%H%M%S')}"
     metrics = metric_items(args.definition)[:METRIC_SLOT_COUNT]
-    results = metric_results(args.summary, metrics)
-    metric_defs = [description for _, description in metrics]
-    from metric_contract import gpu_model_note, publication_status
-
     detected_gpu = gpu_name()
+    annotated: dict = {}
+    results = metric_results(args.summary, metrics, detected_gpu, annotated)
+    metric_defs = [description for _, description in metrics]
+    from metric_contract import cache_resident_note, gpu_model_note, publication_status
+
+    cache_note = cache_resident_note(annotated, detected_gpu)
     model_note = gpu_model_note(detected_gpu, fields.get("GPU Model", ""))
     result_status, na_count = publication_status(
         list(zip(metric_defs, results)),
@@ -944,6 +955,8 @@ def main() -> int:
         notes = "stub"
     elif model_note:
         notes = "; ".join(part for part in (notes, model_note) if part)
+    if cache_note and result_status != "SMOKE-STANDIN":
+        notes = "; ".join(part for part in (notes, cache_note) if part)
     metric_defs.extend([""] * (METRIC_SLOT_COUNT - len(metric_defs)))
     results.extend([""] * (METRIC_SLOT_COUNT - len(results)))
 

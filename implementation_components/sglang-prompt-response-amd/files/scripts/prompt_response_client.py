@@ -20,6 +20,11 @@ Metrics (2026-10-01):
   is recorded as a status=error row instead of stopping the run. It used to be
   hard-coded to 100.0.
 - A value that cannot be measured is "na (<reason>)", never blank.
+- One untimed warm-up request runs first (2026-10-20). The first request after
+  the server reports ready waited 94-136 s for one-time kernel compilation, and
+  that wait was averaged into TTFT (published 11.8-17 s instead of ~45 ms). The
+  warm-up prompt shares no prefix with the timed prompts, so it does not change
+  the cache hit rate.
 """
 from __future__ import annotations
 
@@ -85,10 +90,17 @@ def _read_usage(usage: dict, rec: dict) -> None:
         rec["cached_tokens"] = int(details["cached_tokens"])
 
 
-def one_request(url: str, model_name: str, input_len: int, output_len: int, seed: int, streaming: bool) -> dict:
+def warmup_prompt(input_len: int) -> str:
+    """Same length as a timed prompt, no shared words, so nothing it caches helps a timed request."""
+    return " ".join(["warmup"] + ["primer"] * max(0, int(input_len) - 1))
+
+
+def one_request(
+    url: str, model_name: str, input_len: int, output_len: int, seed: int, streaming: bool, prompt: str | None = None
+) -> dict:
     payload = {
         "model": model_name,
-        "prompt": prompt_text(input_len, seed),
+        "prompt": prompt if prompt is not None else prompt_text(input_len, seed),
         "max_tokens": output_len,
         "temperature": 0,
         "seed": seed,
@@ -176,6 +188,7 @@ def main() -> int:
     parser.add_argument("--seed", default="42")
     parser.add_argument("--streaming", default="true")
     parser.add_argument("--output-format", default="csv")
+    parser.add_argument("--warmup-requests", default="1", help="Untimed requests before the timed ones (0 disables)")
     args = parser.parse_args()
     run_dir = Path(args.run_dir)
     run_dir.mkdir(parents=True, exist_ok=True)
@@ -184,6 +197,15 @@ def main() -> int:
     num_prompts = as_int(args.num_prompts, 2)
     streaming = str(args.streaming).lower() in {"true", "1", "yes"}
     url = args.base_url.rstrip("/") + "/v1/completions"
+    warmups = max(0, int(float(args.warmup_requests))) if str(args.warmup_requests).strip() else 0
+    for index in range(warmups):
+        began = time.perf_counter()
+        try:
+            one_request(url, args.model_name, input_len, min(output_len, 32), -1 - index, streaming,
+                        prompt=warmup_prompt(input_len))
+            print(f"[INFO] warm-up request {index + 1}/{warmups} (untimed): {time.perf_counter() - began:.1f} s", flush=True)
+        except (urllib.error.URLError, OSError, TimeoutError, ValueError) as exc:
+            print(f"[WARN] warm-up request {index + 1} failed ({type(exc).__name__}: {exc}); timing anyway", flush=True)
     rows = []
     for index in range(num_prompts):
         row = {"request_id": index + 1, "sample_index": index}

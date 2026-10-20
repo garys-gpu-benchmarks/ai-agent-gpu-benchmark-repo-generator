@@ -220,14 +220,17 @@ class MetricFeedbackUpdateTests(unittest.TestCase):
             "scripts/collect_workload.py",
             "system_config_nvidia_packages",
         )
-        self.assertEqual(
-            module.count_package_mismatches(["nvidia-smi", "cuda-toolkit"], smi_ok=True, cuda_mismatch=0),
-            0,
+        problems, _ = module.check_packages(
+            ["nvidia-smi", "cuda-toolkit"],
+            {"cuda-nvcc-12-6": "12.6.85-1", "nvidia-utils-580": "580.95.05-0ubuntu1"},
+            expected_cuda="12.8", expected_driver="580", smi_owner="nvidia-utils-580", smi_ok=True,
         )
-        self.assertEqual(
-            module.count_package_mismatches(["nvidia-smi", "cuda-toolkit"], smi_ok=False, cuda_mismatch=1),
-            2,
+        self.assertEqual(problems, [])
+        problems, _ = module.check_packages(
+            ["nvidia-smi", "cuda-toolkit"], {},
+            expected_cuda="12.8", expected_driver="580", smi_owner="", smi_ok=False,
         )
+        self.assertEqual(len(problems), 2)
         harness = (ROOT / "scripts" / "materialize_generated_harness.py").read_text(encoding="utf-8")
         self.assertIn('"compliance"', harness)
 

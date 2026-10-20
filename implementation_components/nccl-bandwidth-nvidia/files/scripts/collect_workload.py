@@ -83,7 +83,17 @@ def main() -> int:
     rounds = {"smoke": 1, "baseline": 10, "extended": 24}.get(str(args.profile), 1)
     sweep_log = run_dir / "nccl_sweep.csv"
     sweep_log.write_text("round,collective,bytes,iterations,algbw_gb_s,busbw_gb_s,latency_us\n", encoding="utf-8")
+    single_gpu_seen = False
     for round_index in range(rounds):
+        if single_gpu_seen:
+            # One GPU publishes only na; more rounds cannot change that. 216/416
+            # spent 17-21 minutes of extended repeating the same na result.
+            print(
+                f"[INFO] one GPU: stopped after round 1 of {rounds}; "
+                "every metric is na (requires at least two GPUs)",
+                flush=True,
+            )
+            break
         for name in collectives or ["all_reduce"]:
             points = []
             for nbytes in sizes:
@@ -113,6 +123,7 @@ def main() -> int:
                     "refusing to publish one-rank bandwidth or latency."
                 )
             single = used_gpus < 2
+            single_gpu_seen = single_gpu_seen or single
             rows.append({
                 "status": "ok",
                 "collective": largest.get("collective", name),

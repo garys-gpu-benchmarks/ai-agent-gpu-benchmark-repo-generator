@@ -13,6 +13,17 @@ from pathlib import Path
 
 import yaml
 
+ECC_DISABLED = "na (expected: ECC disabled)"
+ECC_NOT_REPORTED = "na (expected: nvidia-smi reports no ECC counters)"
+ECC_KEYS = (
+    "uncorrected_ecc_errors_count",
+    "corrected_ecc_errors_count",
+    "uncorrected_ecc_aggregate_count",
+    "corrected_ecc_aggregate_count",
+    "uncorrected_ecc_nonzero_field_count",
+    "corrected_ecc_nonzero_field_count",
+)
+
 
 def pv(params, key, profile, default=""):
     raw = params.get(key, default)
@@ -68,14 +79,36 @@ def sum_ecc_counters(text: str) -> dict[str, float]:
     }
 
 
+def ecc_unavailable_reason(text: str) -> str:
+    """Return an expected-na reason when nvidia-smi has no ECC counts to read, else "".
+
+    With ECC disabled every counter prints as N/A, so the integer sum above was 0 and
+    204/404 published "0 errors" for a check that measured nothing.
+    """
+    counted = re.search(r"(Uncorrectable|Correctable)\s*:\s*\d+", text, re.I)
+    if counted:
+        return ""
+    if re.search(r"^\s*Current\s*:\s*Disabled\b", text, re.I | re.M):
+        return ECC_DISABLED
+    return ECC_NOT_REPORTED
+
+
+def read_ecc_text() -> str:
+    try:
+        completed = subprocess.run(
+            ["nvidia-smi", "-q", "-d", "ECC"],
+            check=False,
+            capture_output=True,
+            text=True,
+            timeout=60,
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        return ""
+    return (completed.stdout or "") + (completed.stderr or "")
+
+
 def read_ecc_counters() -> dict[str, float]:
-    completed = subprocess.run(
-        ["nvidia-smi", "-q", "-d", "ECC"],
-        check=False,
-        capture_output=True,
-        text=True,
-    )
-    return sum_ecc_counters((completed.stdout or "") + (completed.stderr or ""))
+    return sum_ecc_counters(read_ecc_text())
 
 
 def main() -> int:
@@ -98,7 +131,9 @@ def main() -> int:
     if not Path("bin/ecc_walk").is_file():
         raise SystemExit("[FAIL] bin/ecc_walk missing; CUDA SDC walk was not built")
     n = max(1024, int(mem_gb * (1024 ** 3) / 4))
-    ecc_before = read_ecc_counters()
+    ecc_before_text = read_ecc_text()
+    (run_dir / "ecc_before.txt").write_text(ecc_before_text, encoding="utf-8")
+    ecc_before = sum_ecc_counters(ecc_before_text)
     start = time.time()
     completed = subprocess.run(
         ["bin/ecc_walk", str(n), str(seconds), str(iters)],
@@ -122,10 +157,17 @@ def main() -> int:
     failures = int(match.group(3))
     bytes_walked = int(match.group(4))
     coverage_gb = bytes_walked / (1024 ** 3)
-    ecc_after = read_ecc_counters()
-    ecc_counts = dict(ecc_after)
+    ecc_after_text = read_ecc_text()
+    (run_dir / "ecc_after.txt").write_text(ecc_after_text, encoding="utf-8")
+    ecc_after = sum_ecc_counters(ecc_after_text)
+    ecc_counts: dict[str, object] = dict(ecc_after)
     for key in ("uncorrected_ecc_errors_count", "corrected_ecc_errors_count"):
         ecc_counts[key] = float(max(0.0, ecc_after[key] - ecc_before[key]))
+    unavailable = ecc_unavailable_reason(ecc_before_text) or ecc_unavailable_reason(ecc_after_text)
+    if unavailable:
+        print(f"[INFO] ECC counters not measured: {unavailable}", flush=True)
+        for key in ECC_KEYS:
+            ecc_counts[key] = unavailable
     pass_rate = 100.0 * (loops - failed_loops) / loops if loops else 0.0
     row = {
         "status": "ok" if completed.returncode == 0 and failures == 0 and loops > 0 else "error",

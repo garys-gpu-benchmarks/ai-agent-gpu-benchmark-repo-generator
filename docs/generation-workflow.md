@@ -52,8 +52,10 @@ python3 scripts/validate_template_inputs.py \
 10. For a multi-workload chat prompt, run the entry point once. It calls the official driver for each workload in order and does not take `--remote-root`:
 
 ```bash
-python3 scripts/run_from_prompt.py --prompt-file <SUBMITTED_PROMPT_FILE>
+MSYS_NO_PATHCONV=1 python3 scripts/run_from_prompt.py --prompt-file ../AI_AGENT_PROMPT_SUBMITTED_<WORKLOADS>_<UTC_TIMESTAMP>.md
 ```
+
+Run it from the generator directory in Git Bash (Windows) or bash, exactly as written. `python3` is the interpreter that passes `scripts/generation_host_preflight.py` (Python 3.10+ with PyYAML); if a different one is first on `PATH`, put that interpreter's full path in its place (preflight prints the full command with it when it fails). `MSYS_NO_PATHCONV=1` stops Git Bash from rewriting paths. Save the prompt in the project root (the generator's parent) and pass it as the relative `../` path, never a `C:\...` or `/c/...` path.
 
 `scripts/create_one_workload.py` remains the per-workload driver. Use it directly only to retry with `--validate-only`. A single-workload invocation is:
 

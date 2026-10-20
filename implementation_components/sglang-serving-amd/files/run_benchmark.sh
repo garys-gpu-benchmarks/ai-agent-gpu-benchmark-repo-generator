@@ -175,8 +175,11 @@ PROMPT_SOURCE="$(enable_default "$(yaml_get prompt_source)" "synthetic")"
 INPUT_LEN="${INPUT_LEN:-$(yaml_get input_len)}"
 OUTPUT_LEN="${OUTPUT_LEN:-$(yaml_get output_len)}"
 MAX_TOTAL_TOKENS="${MAX_TOTAL_TOKENS:-$(yaml_get max_total_tokens)}"
-MAX_RUNNING_REQUESTS="$(enable_default "$(yaml_get max_running_requests)" "2")"
 MAX_CONCURRENCY="${CONCURRENCY:-$(yaml_get max_concurrency)}"
+# The server must admit as many requests as the client sends at once. A fixed
+# default of 2 against max_concurrency 8 (131/331) served requests in pairs, so
+# TTFT p50 was ~85 s of queue wait instead of SGLang latency.
+MAX_RUNNING_REQUESTS="$(enable_default "$(yaml_get max_running_requests)" "$(enable_default "${MAX_CONCURRENCY}" "2")")"
 REQUEST_RATE="$(enable_default "$(yaml_get request_rate)" "inf")"
 NUM_PROMPTS="${NUM_PROMPTS:-$(yaml_get num_prompts)}"
 BACKEND="$(enable_default "$(yaml_get backend)" "sglang")"

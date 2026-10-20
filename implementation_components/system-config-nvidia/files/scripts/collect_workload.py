@@ -8,6 +8,7 @@ import csv
 import io
 import os
 import re
+import shutil
 import subprocess
 from pathlib import Path
 
@@ -29,29 +30,91 @@ def run_command(command, timeout=60):
     return completed.returncode, (completed.stdout or "") + "\n" + (completed.stderr or "")
 
 
-def package_version(name):
-    completed = subprocess.run(["dpkg-query", "-W", "-f=${Version}", name], check=False, capture_output=True, text=True)
-    return (completed.stdout or "").strip() if completed.returncode == 0 else ""
+def installed_packages() -> dict[str, str]:
+    """Package name -> version for every package dpkg reports as installed."""
+    _code, text = run_command(["dpkg-query", "-W", "-f=${Package}\t${Status}\t${Version}\n"])
+    found: dict[str, str] = {}
+    for line in text.splitlines():
+        parts = line.split("\t")
+        if len(parts) == 3 and parts[1].strip() == "install ok installed":
+            found[parts[0].split(":", 1)[0].strip()] = parts[2].strip()
+    return found
 
 
-def count_package_mismatches(packages, *, smi_ok: bool, cuda_mismatch: int) -> int:
-    """Count missing dpkg names. nvidia-smi is the command, not a package.
+def dpkg_owner(command: str) -> str:
+    """dpkg package that owns the file behind a command, or "" (for example a host mount)."""
+    path = shutil.which(command)
+    if not path:
+        return ""
+    for candidate in dict.fromkeys((path, os.path.realpath(path))):
+        code, text = run_command(["dpkg", "-S", candidate])
+        if code == 0:
+            first = text.strip().splitlines()[0] if text.strip() else ""
+            return first.split(":", 1)[0].split(",", 1)[0].strip()
+    return ""
 
-    cuda-toolkit is the CUDA-major check already computed for the driver.
+
+CUDA_TOOLKIT_PACKAGE = re.compile(r"^(?:cuda-toolkit|cuda-nvcc|nvidia-cuda-toolkit)(?:-(\d+)-(\d+))?$")
+
+
+def _major(text: str) -> int | None:
+    match = re.search(r"(\d+)", text or "")
+    return int(match.group(1)) if match else None
+
+
+def check_packages(
+    packages,
+    installed: dict[str, str],
+    *,
+    expected_cuda: str,
+    expected_driver: str,
+    smi_owner: str,
+    smi_ok: bool,
+) -> tuple[list[str], list[str]]:
+    """Read the installed packages and return (problems, findings), one problem per mismatch.
+
+    cuda-toolkit: an installed cuda-toolkit / cuda-nvcc / nvidia-cuda-toolkit package whose
+    CUDA major equals the workbook major. nvidia-smi: the dpkg package that owns the binary,
+    at a version that meets the workbook driver minimum; a binary no package owns (the host
+    driver mounted into a container) counts when nvidia-smi runs. Any other name: installed.
     """
-    total = 0
+    problems: list[str] = []
+    findings: list[str] = []
+    want_cuda = _major(expected_cuda)
     for name in packages:
         normalized = name.strip().lower().replace("_", "-")
-        if normalized == "nvidia-smi":
-            if not smi_ok:
-                total += 1
-            continue
         if normalized == "cuda-toolkit":
-            total += int(cuda_mismatch)
+            versions = []
+            for package, version in sorted(installed.items()):
+                match = CUDA_TOOLKIT_PACKAGE.match(package)
+                if match:
+                    shown = f"{match.group(1)}.{match.group(2)}" if match.group(1) else version_token(version)
+                    versions.append((package, shown))
+            findings.append("cuda-toolkit: " + (", ".join(f"{p} {v}" for p, v in versions) or "not installed"))
+            if not versions:
+                problems.append("cuda-toolkit not installed")
+            elif want_cuda is not None and all(_major(v) != want_cuda for _p, v in versions):
+                problems.append(
+                    f"cuda-toolkit {', '.join(v for _p, v in versions)} installed; workbook CUDA major is {want_cuda}"
+                )
             continue
-        if not package_version(name) and not package_version(name.replace("_", "-")):
-            total += 1
-    return total
+        if normalized == "nvidia-smi":
+            if smi_owner and smi_owner in installed:
+                version = installed[smi_owner]
+                findings.append(f"nvidia-smi: {smi_owner} {version}")
+                if not version_at_least(version_token(version), expected_driver):
+                    problems.append(f"{smi_owner} {version} is below driver {expected_driver}")
+            elif smi_ok:
+                findings.append("nvidia-smi: runs, not owned by a dpkg package (host driver)")
+            else:
+                findings.append("nvidia-smi: not installed")
+                problems.append("nvidia-smi not installed")
+            continue
+        version = installed.get(name.strip()) or installed.get(normalized)
+        findings.append(f"{name.strip()}: {version or 'not installed'}")
+        if not version:
+            problems.append(f"{name.strip()} not installed")
+    return problems, findings
 
 
 def version_token(text):
@@ -162,13 +225,24 @@ def main() -> int:
     # Compare the loaded nvidia module, nvidia-smi, and libcuda SONAME with each other.
     # A userspace 595 build against a 580 module is a mismatch even when uname contains 580.
     stack_mismatches = stack_mismatch_count(module_ver, version_token(driver_ver), soname_ver)
-    driver_meets_minimum = version_at_least(version_token(driver_ver), expected_driver)
     cuda_line = re.search(r"CUDA Version\s*:\s*([0-9.]+)", smi + smi_q) or re.search(r"release\s*([0-9.]+)", nvcc)
     cuda_ver = cuda_line.group(1) if cuda_line else ""
     # nvidia-smi "CUDA Version" is the newest CUDA the driver supports.
     # A driver that reports 13.2 satisfies a workbook major of 12.
     cuda_mismatch = 0 if cuda_driver_supports(expected_cuda, cuda_ver) else 1
-    package_mismatch = count_package_mismatches(packages, smi_ok=(smi_code == 0), cuda_mismatch=cuda_mismatch)
+    package_problems, package_findings = check_packages(
+        packages,
+        installed_packages(),
+        expected_cuda=expected_cuda,
+        expected_driver=expected_driver,
+        smi_owner=dpkg_owner("nvidia-smi"),
+        smi_ok=(smi_code == 0),
+    )
+    package_mismatch = len(package_problems)
+    (run_dir / "package_check.txt").write_text(
+        "\n".join(package_findings + [f"MISMATCH: {item}" for item in package_problems]) + "\n",
+        encoding="utf-8",
+    )
     vbios = ""
     match = re.search(r"VBIOS Version\s*:\s*(\S+)", smi_q)
     if match:
@@ -185,11 +259,11 @@ def main() -> int:
         for node in nodes:
             if not os.access(node, os.R_OK | os.W_OK):
                 permission_errors += 1
-    compliance_checks = [
-        driver_meets_minimum,
-        bool(module_ver and version_token(driver_ver) == module_ver),
-        bool(soname_ver and version_token(driver_ver) == soname_ver),
-    ]
+    # Driver version compliance: the share of the three driver components (loaded kernel
+    # module, nvidia-smi/NVML, libcuda) whose version meets the workbook driver minimum.
+    # Whether they agree with each other is metric #2, so it is not repeated here.
+    driver_components = [module_ver, version_token(driver_ver), soname_ver]
+    compliance_checks = [bool(item) and version_at_least(item, expected_driver) for item in driver_components]
     driver_compliance = 100.0 * sum(compliance_checks) / len(compliance_checks)
     header = [
         "sample_index", "status",

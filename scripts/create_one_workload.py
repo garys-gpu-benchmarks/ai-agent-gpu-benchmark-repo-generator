@@ -120,10 +120,37 @@ def record(
         if isinstance(loaded, dict):
             batch = loaded
     batch.setdefault("schema_version", "1.0.0")
+    previous = [row for row in batch.get("repositories", []) if str(row.get("workload")) == workload]
     batch["repositories"] = [row for row in batch.get("repositories", []) if str(row.get("workload")) != workload]
     code = 0 if status == "passed" else 1
     if return_code is not None:
         code = int(return_code)
+    # Keep every attempt. The top-level fields describe the latest attempt only.
+    attempts: list[dict[str, object]] = []
+    for row in previous:
+        if isinstance(row.get("attempts"), list):
+            attempts.extend(row["attempts"])
+        elif row.get("create_start_time"):
+            attempts.append(
+                {
+                    "status": row.get("status"),
+                    "return_code": row.get("return_code"),
+                    "start": row.get("create_start_time"),
+                    "end": row.get("create_end_time"),
+                    "total_time": row.get("create_total_time"),
+                    "reason": row.get("reason", ""),
+                }
+            )
+    attempts.append(
+        {
+            "status": status,
+            "return_code": code,
+            "start": started,
+            "end": finished,
+            "total_time": _duration(started, finished),
+            "reason": note[:300] if note else "",
+        }
+    )
     entry: dict[str, object] = {
         "workload": workload,
         "status": status,
@@ -131,6 +158,8 @@ def record(
         "create_start_time": started,
         "create_end_time": finished,
         "create_total_time": _duration(started, finished),
+        "attempt_count": len(attempts),
+        "attempts": attempts,
     }
     if repo_name and repo_name != "unknown":
         entry["repo_name"] = repo_name
@@ -143,7 +172,7 @@ def record(
         entry["reason"] = note[:300]
     batch.setdefault("repositories", []).append(entry)
     path.write_text(json.dumps(batch, indent=2) + "\n", encoding="utf-8", newline="\n")
-    print(f"[RECORD] {workload} {status} {_duration(started, finished)}", flush=True)
+    print(f"[RECORD] {workload} {status} {_duration(started, finished)} (attempt {len(attempts)})", flush=True)
 
 
 def ssh_run(ssh: str, script: str, *, timeout: int = 7200) -> subprocess.CompletedProcess[str]:
@@ -180,6 +209,18 @@ def remote_setup_running(ssh: str, name: str) -> bool:
     return bool((result.stdout or "").strip())
 
 
+def _copy_excludes(repo_dir: Path, *, prefix: str) -> str:
+    """Keep the nested template copy in the VM tree.
+
+    Remote ``self_check_generated_repo.sh`` requires that copy until
+    ``template_copy_removed_at`` is recorded. Excluding it fails validation
+    after a successful smoke run. ``repo_dir`` and ``prefix`` stay in the
+    signature so callers can pass the archive root they are packing.
+    """
+    del repo_dir, prefix
+    return ""
+
+
 def remote_copy(ssh: str, repo_dir: Path, *, reuse: bool) -> int:
     name = repo_dir.name
     gitkeep = (
@@ -198,14 +239,22 @@ def remote_copy(ssh: str, repo_dir: Path, *, reuse: bool) -> int:
             f"-xf - -C {REMOTE_ROOT}/{name} && "
             f"find {REMOTE_ROOT}/{name} -type d -exec chmod 755 {{}} + && {gitkeep} && echo {COPY_OK}"
         )
-        command = f"tar -cf - --exclude=.venv --exclude=.cache . | {normalize_ssh_command(ssh)} {shlex.quote(remote)}"
+        excludes = _copy_excludes(repo_dir, prefix="./")
+        command = (
+            f"tar -cf - --exclude=.venv --exclude=.cache --exclude=__pycache__{excludes} . | "
+            f"{normalize_ssh_command(ssh)} {shlex.quote(remote)}"
+        )
         cwd = repo_dir
     else:
         remote = (
             f"rm -rf {REMOTE_ROOT}/{name} && mkdir -p {REMOTE_ROOT} && tar --no-same-owner -xf - -C {REMOTE_ROOT} && "
             f"find {REMOTE_ROOT}/{name} -type d -exec chmod 755 {{}} + && {gitkeep} && echo {COPY_OK}"
         )
-        command = f"tar -cf - {shlex.quote(name)} | {normalize_ssh_command(ssh)} {shlex.quote(remote)}"
+        excludes = _copy_excludes(repo_dir, prefix=f"{name}/")
+        command = (
+            f"tar -cf - --exclude=__pycache__{excludes} {shlex.quote(name)} | "
+            f"{normalize_ssh_command(ssh)} {shlex.quote(remote)}"
+        )
         cwd = repo_dir.parent
     print(f"[INFO] remote copy reuse={reuse} {name}", flush=True)
     result = run_host_bash(command, cwd=cwd, timeout=1800)
@@ -285,7 +334,9 @@ if pgrep -af 'setup.sh' | grep -F "$REPO" | grep -v grep >/dev/null; then
 fi
 find "$REPO" -type d -exec chmod 755 {{}} +
 find "$REPO" -type f -not -path '*/.venv/*' -not -path '*/.cache/*' -not -path '*/third_party/*' -not -path '*/bin/*' -not -path '*/build/*' -exec chmod 644 {{}} +
-find "$REPO" -type f \\( -name '*.sh' -o -name '*.py' -o -name '*.md' -o -name '*.yaml' -o -name '*.json' -o -name '*.txt' -o -name '*.toml' \\) ! -path '*/third_party/*' ! -path '*/.venv/*' ! -path '*/.cache/*' -print0 | xargs -0 sed -i 's/\\r$//'
+export PYTHONDONTWRITEBYTECODE=1
+# Rewrite only files that actually contain a CR, so unchanged files keep their mtime.
+{{ find "$REPO" -type f \\( -name '*.sh' -o -name '*.py' -o -name '*.md' -o -name '*.yaml' -o -name '*.json' -o -name '*.txt' -o -name '*.toml' \\) ! -path '*/third_party/*' ! -path '*/.venv/*' ! -path '*/.cache/*' -print0 | xargs -0 grep -lZ $'\\r' || true; }} | xargs -0 -r sed -i 's/\\r$//'
 find "$REPO" -type f -name '*.sh' ! -path '*/.venv/*' -exec chmod +x {{}} +
 chmod +x "$REPO"/*.sh "$REPO"/scripts/*.sh "$REPO"/scripts/lib/*.sh 2>/dev/null || true
 mkdir -p "$REPO/results/raw" "$REPO/results/parsed" "$REPO/tests/fixtures"

@@ -22,6 +22,20 @@ def run_command(command, timeout=60):
     return completed.returncode, (completed.stdout or "") + "\n" + (completed.stderr or "")
 
 
+# The driver logs a GPU fault as "NVRM: Xid (PCI:0000:01:00): 79, pid=..., ...".
+# Counting every "xid" word in dmesg also counted unrelated lines that mention one.
+XID_LINE = re.compile(r"\bNVRM:\s*Xid\b", re.I)
+DMESG_UNREADABLE = "na (expected: dmesg not readable)"
+
+
+def xid_count(returncode: int, dmesg: str):
+    """Number of NVRM Xid lines, or an expected na when dmesg could not be read."""
+    lines = [line for line in dmesg.splitlines() if XID_LINE.search(line)]
+    if returncode != 0 and not lines:
+        return DMESG_UNREADABLE
+    return float(len(lines))
+
+
 def first_float(pattern, text, default=0.0):
     match = re.search(pattern, text, re.I)
     if not match:
@@ -36,7 +50,7 @@ def sample(run_dir: Path, index: int) -> dict:
     smi = run_command(["nvidia-smi", "--query-gpu=temperature.gpu,count,pcie.link.width.current,pcie.link.gen.current", "--format=csv,noheader,nounits"])[1]
     smi_q = run_command(["nvidia-smi", "-q"])[1]
     listed = run_command(["nvidia-smi", "-L"])[1]
-    dmesg = run_command(["dmesg"])[1]
+    dmesg_rc, dmesg = run_command(["dmesg"])
     (run_dir / f"health_{index}.txt").write_text(smi + "\n" + smi_q, encoding="utf-8")
     gpus = float(len(re.findall(r"^GPU \d+:", listed, re.M)) or 0)
     if gpus <= 0:
@@ -65,7 +79,7 @@ def sample(run_dir: Path, index: int) -> dict:
         speed = first_float(r"PCIe Generation\s*\n\s*Max\s*:[^\n]*\n\s*Current\s*:\s*([0-9.]+)", smi_q, 0.0)
     # Report GT/s (as the AMD twin does), not the bare PCIe generation number.
     speed = {1: 2.5, 2: 5.0, 3: 8.0, 4: 16.0, 5: 32.0, 6: 64.0}.get(int(speed or 0), speed)
-    xids = float(len(re.findall(r"\bxid\b", dmesg, re.I)))
+    xids = xid_count(dmesg_rc, dmesg)
     return {
         "status": "ok",
         "dmesg_nvidia_gpu_fault_xid_count": xids,

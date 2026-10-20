@@ -37,7 +37,9 @@ def nvidia_vram_used_gb():
     if not lines:
         return ""
     try:
-        return float(lines[0].split()[0]) / 1024.0
+        # nvidia-smi nounits memory.used is MiB. The metric is decimal GB (the JAX path
+        # divides bytes by 1e9); dividing by 1024 gave GiB under a GB label.
+        return float(lines[0].split()[0]) * 1024**2 / 1e9
     except (ValueError, IndexError):
         return ""
 

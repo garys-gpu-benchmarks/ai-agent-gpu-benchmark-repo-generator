@@ -86,8 +86,8 @@ def main() -> int:
     array_count = float(pv(params, "array_size", args.profile, "1048576") or 1048576)
     working_set = int(array_count) * 8 * 3
     try:
-        from metric_contract import lookup_device
-        _label, spec = lookup_device("")
+        from metric_contract import detect_gpu_name, lookup_device
+        _label, spec = lookup_device(detect_gpu_name())
         peak_gbps = float(spec["hbm_gbps"]) if spec else None
     except Exception:
         peak_gbps = None

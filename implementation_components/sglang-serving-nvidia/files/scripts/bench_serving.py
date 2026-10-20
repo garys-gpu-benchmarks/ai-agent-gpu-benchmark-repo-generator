@@ -149,12 +149,31 @@ def main() -> int:
     parser.add_argument("--backend", default="sglang")
     parser.add_argument("--dataset-name", default="synthetic")
     parser.add_argument("--seed", default="42")
+    parser.add_argument("--warmup-requests", default="", help="Untimed requests sent together before timing (default: one per concurrent slot; 0 disables)")
     args = parser.parse_args()
     run_dir = Path(args.run_dir)
     run_dir.mkdir(parents=True, exist_ok=True)
     concurrency = max(1, int(float(args.max_concurrency))) if str(args.max_concurrency).lower() not in {"true", "yes"} else 2
     num_prompts = max(1, int(float(args.num_prompts))) if str(args.num_prompts).lower() not in {"true", "yes"} else 2
     url = args.base_url.rstrip("/") + "/v1/completions"
+    # One untimed round at full concurrency first. The first wave after the server
+    # reported ready waited ~110 s for one-time kernel compilation (131/331 baseline),
+    # and that wait landed in TTFT and end-to-end latency.
+    raw_warmups = str(args.warmup_requests).strip()
+    warmups = concurrency if raw_warmups == "" else max(0, int(float(raw_warmups)))
+    if warmups:
+        began = time.perf_counter()
+        try:
+            with ThreadPoolExecutor(max_workers=warmups) as pool:
+                for fut in as_completed([
+                    pool.submit(one_request, url, args.model_name, int(args.input_len),
+                                min(int(args.output_len), 32), -1 - index)
+                    for index in range(warmups)
+                ]):
+                    fut.result()
+            print(f"[INFO] warm-up: {warmups} untimed request(s) in {time.perf_counter() - began:.1f} s", flush=True)
+        except Exception as exc:  # noqa: BLE001 - a failed warm-up must not stop the timed run
+            print(f"[WARN] warm-up failed ({type(exc).__name__}: {exc}); timing anyway", flush=True)
     results = []
     wall_start = time.perf_counter()
     with ThreadPoolExecutor(max_workers=concurrency) as pool:
@@ -216,7 +235,9 @@ def main() -> int:
     summary_metrics["tpot_p99_ms"] = summary_metrics["time_per_output_token_tpot_p99_msec"]
     summary_metrics["latency_sample_count"] = len(results)
     apply_itl_contract(summary_metrics)
-    identity = " ".join(str(item.get("server_identity", "")) for item in results)
+    # Label each value so is_standin_text() sees "server_identity" next to "stub" even
+    # when BENCHMARK_SERVER_KIND is not exported (a bare "stub stub" was not detected).
+    identity = " ".join(f"server_identity={item.get('server_identity', '')}" for item in results)
     if os.environ.get("BENCHMARK_SERVER_KIND", "").lower() == "stub":
         identity += " server_identity=stub"
     summary_metrics, serve_status = finalize_serving_publication(summary_metrics, identity)

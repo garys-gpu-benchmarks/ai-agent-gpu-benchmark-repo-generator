@@ -19,8 +19,10 @@ When the Cursor workspace is this generator folder, attach `@docs/AI_AGENT_INSTR
 Save that chat text as the submitted-prompt artifact, then run this from the generator directory. This is the only generation action. Do not pass `--remote-root`, `--project-root`, or `--template-root`, and do not reimplement copy, setup, or smoke:
 
 ```bash
-python3 scripts/run_from_prompt.py --prompt-file <SUBMITTED_PROMPT_FILE>
+MSYS_NO_PATHCONV=1 python3 scripts/run_from_prompt.py --prompt-file ../AI_AGENT_PROMPT_SUBMITTED_<WORKLOADS>_<UTC_TIMESTAMP>.md
 ```
+
+Run it from the generator directory in Git Bash (Windows) or bash, exactly as written. `python3` is the interpreter that passes `scripts/generation_host_preflight.py` (Python 3.10+ with PyYAML); if a different one is first on `PATH`, put that interpreter's full path in its place (preflight prints the full command with it when it fails). `MSYS_NO_PATHCONV=1` stops Git Bash from rewriting paths. Save the prompt in the project root (the generator's parent) and pass it as the relative `../` path, never a `C:\...` or `/c/...` path.
 
 `scripts/run_from_prompt.py` resolves the template from its own file location, writes each repository in the parent of this generator, and calls `scripts/create_one_workload.py` for the whole list in order. Repositories are created in that parent even when Cursor's open folder is this generator.
 
@@ -68,7 +70,7 @@ Do not leave world-writable `/opt/benchmarks/<Workload Number>-<Repo Name>` tree
 
 7. Determine the parent project root as the parent of the source template directory. Before Phase 0, save the exact received prompt in that project root as `AI_AGENT_PROMPT_SUBMITTED_<WORKLOADS>_<UTC_TIMESTAMP>.md`. Use `ALL` when every workbook workload was requested, compact `starttoend` tokens for ranges, and underscore-separated tokens for non-contiguous lists. Do not overwrite an existing artifact; append a numeric collision suffix if necessary. Append traceability metadata as an HTML comment without writing private-key contents.
 
-8. Before Phase 0 extraction, run `python3 scripts/generation_host_preflight.py --template-root <source-template>`. The host needs Python 3.10+, PyYAML, and (on the validation VM) `rg`. Write every generated `.sh` / `.py` / `.md` / `.yaml` / `.json` / `.txt` as LF, including the nested `*_copy/` tree. Do not start a second overlapping `setup.sh` on the remote VM.
+8. Before Phase 0 extraction, run `python3 scripts/generation_host_preflight.py --template-root <source-template>`. When it fails it prints the exact start command with the interpreter it ran under. The host needs Python 3.10+, PyYAML, and (on the validation VM) `rg`. Write every generated `.sh` / `.py` / `.md` / `.yaml` / `.json` / `.txt` as LF, including the nested `*_copy/` tree. Do not start a second overlapping `setup.sh` on the remote VM.
 
 ## Required gated workflow
 
@@ -112,8 +114,10 @@ Imperative rules:
 3. Call the chatbox entry point once for the full list. It invokes `create_one_workload.py`, which creates, remote-validates, and records one workload at a time. Do not reinvent copy/setup/smoke helpers, and do not pass `--remote-root`:
 
    ```bash
-   python3 scripts/run_from_prompt.py --prompt-file <SUBMITTED_PROMPT_FILE>
+   MSYS_NO_PATHCONV=1 python3 scripts/run_from_prompt.py --prompt-file ../AI_AGENT_PROMPT_SUBMITTED_<WORKLOADS>_<UTC_TIMESTAMP>.md
    ```
+
+   Use the exact start command from "Minimal operator prompt" above.
 
    `create_one_workload.py` catches per-workload failures as `Exception`/`RuntimeError` (not `SystemExit`) and records `failed` before continuing. Do not call it with a separate `--workload` list unless retrying with `--validate-only`.
 
@@ -126,6 +130,15 @@ Imperative rules:
 10. Refresh a supplied remote validation VM at most once before the first workload in the batch (only with explicit user confirmation). Reuse that same VM sequentially for later workloads.
 11. A user status question, progress check, or "what are you waiting on?" is **not** a stop signal and does **not** require the user to tell the agent to resume. Answer in a few sentences, then immediately continue implementing the current unfinished workload in the same turn. Do not end a turn after a status answer while a workload is still unfinished and its 60-minute calendar clock is still running. The only reasons to stop work on the current workload are: it finished (`passed`), failed with user notification, was abandoned with user notification, or timed out.
 12. Finishing the current workload is **not** permission to end the turn. After recording `passed` / `failed` / `abandoned` / `timed_out`, immediately start the next remaining requested workload in the **same turn**. Do not wait for the user to prompt again. The only reasons to end a multi-workload generation turn are: every requested workload is recorded, the user explicitly cancelled the batch, or the agent is blocked on a required user decision (for example a destructive VM refresh).
+
+13. **Log every generator repair.** Any change to a file in this generator during a batch (an overlay under `implementation_components/`, `scripts/metric_contract.py`, a template, the workbook) is logged with one line per file before the recheck:
+
+    ```bash
+    python3 scripts/log_generator_repair.py --workload <N> --file <generator-relative path> --reason "<what failed and what changed>"
+    ```
+
+    The log is `results/generator_repairs.md` in this generator (ignored by git). `run_from_prompt.py` prints the entries added during the batch at the end of its summary, and the batch report ends with that list (or `Generator repairs: none`).
+14. **Counters the host does not have.** When a collector cannot read a counter because the host does not have it (no ECC, no second GPU, no second NUMA node, PMU access denied, a stub server), the collector writes `na (expected: <reason>)` for that metric, for example `na (expected: ECC disabled)`. `scripts/metric_contract.py` already accepts that form. Do not add new string matches to `classify_na` for a new reason; fix the collector to emit `na (expected: <reason>)` and log the repair (rule 13). A plain `na` stays unexpected and blocks `PASS`.
 
 ## Generated repository location
 
@@ -211,7 +224,9 @@ When `REMOTE_VALIDATION_COMMAND` contains an IPv4 address, wait for the VM to be
 
 After `create_generated_repo.py` / init, read `results/component_resolution.json`, `results/overlay_lock.json`, and `results/component_leftover_work.md`. A locked overlay is a recorded fingerprint. When smoke fails inside one of those files, write the same bytes in `implementation_components/<component-id>/files/<path>`, the sibling path, and that path's `sha256` in `results/overlay_lock.json`, then recheck with `create_one_workload.py --validate-only`. `self_check_generated_repo.sh` reports `Locked overlay rewritten` only when the sibling and that digest differ. `smoke_check_generated_repo.sh` reports `Implementation component mismatch` when the sibling and the template source differ. Do not replace the overlay with a new collector or parser. Do not leave the workload failed when those three copies can match. Do not run `create_generated_repo.py` again on a non-empty sibling; `--force` discards it. `scripts/metric_contract.py` has no lock entry: repair the generator copy and the sibling copy, then use the same recheck. Treat Framework as install-and-verify. Apply GEMM runner/parser tokens only when a resolved component sets `contracts.gemm_per_point` (for example `rocblas-gemm-amd`). Workload 103 / `system-stress-amd` compiles and verifies `rocblas-bench` at `<repo>/third_party/rocBLAS/build/release/clients/staging`; it is not a GEMM sweep. For 101 / `system-config-amd`, do not map list intent to `rvs -l`. Use `rvs --version` or `rvs -g`. Prefer each component `gate.json` over rediscovering contracts from `AGENTS.md`.
 
-After the full requested list is processed, print a Markdown table with one row per requested workload containing the workload number, status, and `create_total_time`, followed by the cumulative creation time for all repository creation work in the current prompt. This cumulative value excludes remote refresh time.
+Each `batch_generation_manifest.json` entry keeps every attempt in `attempts` (status, start, end, total time, reason) and `attempt_count`; the top-level times describe the latest attempt. Retrying a workload appends an attempt and never erases a failed one.
+
+After the full requested list is processed, print a Markdown table with one row per requested workload containing the workload number, status, attempt count, and `create_total_time`, followed by two totals for the current prompt: **Successful time** (the passing attempt of each passed workload) and **Time including failed attempts** (every recorded attempt). Both exclude remote refresh time. `run_from_prompt.py` prints this table and both totals and writes them to the batch manifest as `generation_successful_seconds` and `generation_seconds_including_failed_attempts`.
 
 The final report must include:
 
@@ -220,6 +235,10 @@ Generation start time: <generation_started_at>
 Generation stop time: <generation_finished_at>
 Generation elapsed time: <generation_duration_seconds> sec
 ```
+
+End the report with the generator repairs made during the batch, one line per file with the reason (from `results/generator_repairs.md`), or `Generator repairs: none`.
+
+Run generation with `PYTHONDONTWRITEBYTECODE=1` (the start command's children already have it). `run_from_prompt.py` removes leftover `__pycache__`, `.pytest_cache`, `.ruff_cache`, and `.mypy_cache` folders from the generator and the generated repositories at the end of the batch; it never touches `.venv` or `.cache`.
 
 ## Post-generation root cleanup
 

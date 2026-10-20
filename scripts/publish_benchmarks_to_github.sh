@@ -488,8 +488,55 @@ bundle_readme() {
   local s=$1 bundle=$2 want=$3 rows=$4 text
   local plat vendor stack os
   plat=$(platform "$s")
-  case $s in 1 | 3) vendor=AMD; stack="ROCm" ;; *) vendor=NVIDIA; stack="the NVIDIA driver and CUDA" ;; esac
+  local prereq restart lead2 start2 end2 total2 stamp2
+  # NVIDIA setup installs CUDA and checks nvidia-smi; it never installs the driver
+  # or restarts. ROCm setup may restart on 24.04 and does restart on 26.04.
+  case $s in 1 | 3) vendor=AMD; stack="ROCm" ;; *) vendor=NVIDIA; stack="CUDA" ;; esac
   case $s in 1 | 2) os=24.04 ;; *) os=26.04 ;; esac
+  local restart_steps='This is planned, not a failure:
+
+1. Log in again as root after a few minutes. Setup continues on its own after
+   the restart.
+2. To watch it: `tail -f /opt/benchmarks/@S@01-*/results/install_status.txt`
+   (Ctrl+C stops watching, not setup).
+3. Run the same command again. If it says setup is still running, wait a few
+   minutes and run it again. Benchmarks already installed are not installed
+   again.'
+  start2="Mon Oct 19 22:07:13 UTC 2026"; end2="Mon Oct 19 22:13:14 UTC 2026"
+  total2="0 hours 6 minutes 1 seconds"; stamp2="20261019_220713"
+  lead2="When all three pass, it ends like this:"
+  case $s in
+    1)
+      prereq='- A machine where installing ROCm and one restart are acceptable: the first
+  run installs ROCm, and may restart the machine once.'
+      restart="**If the machine restarts.** Installing ROCm may restart the machine once,
+which closes your connection. ${restart_steps}"
+      ;;
+    3)
+      prereq='- A machine where installing ROCm and one restart are acceptable: the first
+  run installs ROCm and restarts the machine once.'
+      restart="**The machine restarts once.** Installing ROCm on Ubuntu 26.04 restarts the
+machine, which closes your connection. With `--show-output`, the output ends
+like this (in quiet mode, only the last line appears):
+
+\`\`\`text
+Successfully installed PyYAML-6.0.3
+[WARN] Setup is awaiting reboot-resume completion. Rerun bash run_benchmark.sh after setup completes.
+Connection to <your-machine-address> closed by remote host.
+\`\`\`
+
+${restart_steps}"
+      lead2="After the restart, the same command ends like this when all three pass:"
+      start2="Mon Oct 19 22:27:43 UTC 2026"; end2="Mon Oct 19 22:28:18 UTC 2026"
+      total2="0 hours 0 minutes 35 seconds"; stamp2="20261019_222743"
+      ;;
+    *)
+      prereq='- The NVIDIA driver already installed: `nvidia-smi` lists the GPUs. The first
+  run installs CUDA; it does not install the driver or restart the machine.'
+      restart="@S@01 installs CUDA only. It does not install the NVIDIA driver and does not
+restart the machine."
+      ;;
+  esac
   text=$(cat <<'README'
 # @PLATFORM@ benchmark bundle
 
@@ -510,8 +557,7 @@ Use this bundle only on that platform. The others have their own bundle:
   Python environment) the first time it runs, and checks for at least 20 GiB
   free before it does. That check is per benchmark, not for the whole suite,
   and the AI benchmarks also download models.
-- A machine where installing @STACK@ and one restart are acceptable: the first
-  run installs them.
+@PREREQ@
 - For the AI model benchmarks (@S@23 to @S@32): if a model's license on Hugging
   Face requires it, accept the license there and set a token first:
   `export HF_TOKEN=hf_...`
@@ -530,6 +576,11 @@ Do not use GitHub's **Download ZIP**: it leaves the benchmark folders empty.
 
 ## Getting started
 
+Each command below ends with a summary like the samples shown. Your times,
+host name and log file name will differ; what matters is `0 failed`. If a run
+fails, the summary names it under `Failed runs:`; open the log file named on
+the summary's last line.
+
 ### 1. A CPU benchmark (about a minute, no GPU software)
 
 ```bash
@@ -542,16 +593,31 @@ Python environment, not @STACK@, and does not restart the machine. It ends
 with Copy, Scale, Add and Triad rates in GB/s. Smoke uses 4 threads; the
 `baseline` profile is the figure to quote for this machine. If this run
 passes, the bundle, the suite runner, the results and the runtime ledger all
-work.
+work. It ends like this:
 
-### 2. The GPU software and two quick GPU checks
-
-```bash
-./run_benchmark_suite.sh -w @S@01,@S@02,@S@14 -p smoke   # first run installs @STACK@: quiet for 5-20 minutes
+```text
+======================================================================
+SUMMARY: 1 of 1 runs finished: 1 passed, 0 failed
+Started:       Mon Oct 19 22:03:51 UTC 2026
+Completed:     Mon Oct 19 22:04:35 UTC 2026
+Total runtime: 0 hours 0 minutes 44 seconds
+Log file:      /opt/benchmarks/benchmark_suite_log/run_benchmark_suite_<host>_20261019_220351.log
+======================================================================
 ```
 
-The first GPU run prints nothing while it installs. To watch it, add
-`--show-output`, or in a second window run
+To see that run in the runtime ledger: `./show_metrics.sh @S@07`
+
+### 2. The GPU software and two quick GPU checks (5 to 20 minutes the first time)
+
+The first time, @S@01 installs @STACK@, which takes 5 to 20 minutes. Run it
+either way:
+
+```bash
+./run_benchmark_suite.sh -w @S@01,@S@02,@S@14 -p smoke --show-output   # shows progress while @STACK@ installs
+./run_benchmark_suite.sh -w @S@01,@S@02,@S@14 -p smoke                 # quiet: prints nothing for 5 to 20 minutes
+```
+
+In quiet mode, watch progress from a second window with
 `tail -f /opt/benchmarks/@S@01-*/results/install_status.txt`.
 
 | Benchmark | What it checks |
@@ -560,26 +626,36 @@ The first GPU run prints nothing while it installs. To watch it, add
 | @S@02 | GPU health: the GPUs are visible, with temperature and link status |
 | @S@14 | copy bandwidth between the host and the GPU, measured at 256 MiB |
 
-**Smoke is a wiring check.** It shows that each benchmark installs, runs and
-records its results. Most smoke runs use small sizes, so their numbers are not
-for reports: for example, the @S@15 (GPU memory bandwidth) smoke arrays fit in
-GPU cache and do not measure HBM. Quote `baseline` or `extended` results.
+@RESTART@
 
-The first GPU run takes much longer than later ones: @S@01 installs @STACK@,
-and each benchmark installs its own software the first time. The install may
-restart the machine once. If it does:
+@SAMPLE2_LEAD@
 
-1. Log in again as root. Setup continues on its own after the restart.
-2. To watch it: `tail -f /opt/benchmarks/@S@01-*/results/install_status.txt`
-   (Ctrl+C stops watching, not setup).
-3. Run the same command again. If it says setup is still running, wait a few
-   minutes and run it again. Benchmarks already installed are not installed
-   again.
+```text
+======================================================================
+SUMMARY: 3 of 3 runs finished: 3 passed, 0 failed
+Started:       @SAMPLE2_START@
+Completed:     @SAMPLE2_END@
+Total runtime: @SAMPLE2_TOTAL@
+Log file:      /opt/benchmarks/benchmark_suite_log/run_benchmark_suite_<host>_@SAMPLE2_STAMP@.log
+======================================================================
+```
 
-Each run prints a short block, and the suite ends with a pass/fail summary.
-The full output is in `/opt/benchmarks/benchmark_suite_log/`.
+### 3. Smoke is a wiring check, not a measurement
 
-To run a single benchmark with its output on screen:
+Smoke shows that each benchmark installs, runs and records its results. Most
+smoke runs use small sizes, so their numbers are not for reports: for example,
+the @S@15 (GPU memory bandwidth) smoke arrays fit in GPU cache and do not
+measure HBM. Quote `baseline` or `extended` results. Smoke is short for most
+benchmarks, but the AI benchmarks (@S@23 to @S@32) download models the first
+time, so their first smoke run takes longer.
+
+### 4. Run one benchmark
+
+Each benchmark installs its own software the first time it runs, so a first
+run takes longer than later ones. Each run prints a short block, and the suite
+ends with the summary shown above. The full output is in
+`/opt/benchmarks/benchmark_suite_log/`. To run a single benchmark with its
+output on screen:
 
 ```bash
 ./run_benchmark_suite.sh -w @S@05 -p smoke --show-output      # benchmark @S@05, smoke profile
@@ -684,6 +760,13 @@ delete those and clone again as shown under Install.
 @ROWS@
 README
 )
+  text=${text//@PREREQ@/"${prereq}"}
+  text=${text//@RESTART@/"${restart}"}
+  text=${text//@SAMPLE2_LEAD@/"${lead2}"}
+  text=${text//@SAMPLE2_START@/"${start2}"}
+  text=${text//@SAMPLE2_END@/"${end2}"}
+  text=${text//@SAMPLE2_TOTAL@/"${total2}"}
+  text=${text//@SAMPLE2_STAMP@/"${stamp2}"}
   text=${text//@PLATFORM@/"${plat}"}
   text=${text//@VENDOR@/"${vendor}"}
   text=${text//@STACK@/"${stack}"}

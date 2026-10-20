@@ -348,7 +348,61 @@ def lookup_device(gpu_name: str) -> tuple[str, dict]:
             return "H100 PCIe", dict(DEVICE_SPECS["H100 PCIe"])
         if "sxm" in tokens:
             return "H100 SXM", dict(DEVICE_SPECS["H100 SXM"])
+        # nvidia-smi names the SXM part "NVIDIA H100 80GB HBM3" with no form word.
+        # PCIe and NVL always name their form ("H100 PCIe", "H100 NVL").
+        compact = (gpu_name or "").lower().replace(" ", "")
+        if "hbm3" in compact or "80gb" in compact:
+            return "H100 SXM", dict(DEVICE_SPECS["H100 SXM"])
     return "", {}
+
+
+def detect_gpu_name() -> str:
+    """One line naming GPU 0, from nvidia-smi, amd-smi, or rocminfo. Empty when none answers.
+
+    summary.json carries no GPU name, so callers that annotate metrics probe here
+    instead of passing "" (which fell back to generic cache sizes and skipped the
+    peak-bandwidth check).
+    """
+    import subprocess
+
+    def run(command: list[str]) -> str:
+        try:
+            completed = subprocess.run(command, check=False, capture_output=True, text=True, timeout=20)
+        except (OSError, subprocess.TimeoutExpired):
+            return ""
+        return completed.stdout or ""
+
+    for line in run(["nvidia-smi", "--query-gpu=name", "--format=csv,noheader"]).splitlines():
+        if line.strip() and "fail" not in line.lower():
+            return line.strip()
+    for command, label in (
+        (["amd-smi", "static", "--asic"], "market_name"),
+        (["amd-smi", "static"], "market_name"),
+        (["rocminfo"], "marketing name"),
+    ):
+        for line in run(command).splitlines():
+            key, sep, value = line.partition(":")
+            value = value.strip()
+            if sep and key.strip().lower() == label and value and value.upper() != "N/A":
+                if command[0] != "rocminfo" or "instinct" in value.lower() or "mi" in value.lower():
+                    return value
+    return ""
+
+
+def cache_resident_note(metrics: dict, gpu_name: str = "") -> str:
+    """Ledger note for a working set that fits in the GPU (or CPU) cache, else ""."""
+    if not metrics.get("cache_resident"):
+        return ""
+    size = _as_float(metrics.get("working_set_bytes"))
+    label, _spec = lookup_device(gpu_name)
+    domain = str(metrics.get("memory_domain") or "hbm")
+    cache = _cache_bytes(domain, gpu_name)
+    where = label or "unrecognized GPU, generic size"
+    shown = f"{size / 1024**2:.0f} MiB" if size is not None else "working set"
+    return (
+        f"cache-resident at smoke size: {shown} working set is under {CACHE_LLC_MULTIPLE}x "
+        f"the {cache // 1024**2} MiB cache ({where})"
+    )
 
 
 def fp64_matrix_peak(gpu_name: str) -> object:
@@ -426,7 +480,12 @@ def annotate_metrics(metrics: dict, gpu_name: str = "") -> dict:
 
 
 def classify_na(metric_key: str, reason: str, context: dict) -> str:
-    """Return 'expected' or 'unexpected' for one explicit na value."""
+    """Return 'expected' or 'unexpected' for one explicit na value.
+
+    A collector reports a counter the host does not have as ``na (expected: <reason>)``,
+    which is accepted below. Do not add new string matches here for a new reason; make
+    the collector emit that form instead (AGENTS.md, Batch Generation).
+    """
     text = reason.lower()
     if "stub server" in text:
         return "expected"

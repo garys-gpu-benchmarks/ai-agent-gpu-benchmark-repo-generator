@@ -14,9 +14,13 @@ This generator tree is the only template. Do not read or copy any other `TEMPLAT
 The only generation action is to save the chat text as the submitted-prompt artifact, then run from this generator directory:
 
 ```bash
-python3 scripts/run_from_prompt.py --prompt-file <SUBMITTED_PROMPT_FILE>
+MSYS_NO_PATHCONV=1 python3 scripts/run_from_prompt.py --prompt-file ../AI_AGENT_PROMPT_SUBMITTED_<WORKLOADS>_<UTC_TIMESTAMP>.md
 ```
+
+Run it from the generator directory in Git Bash (Windows) or bash, exactly as written. `python3` is the interpreter that passes `scripts/generation_host_preflight.py` (Python 3.10+ with PyYAML); if a different one is first on `PATH`, put that interpreter's full path in its place (preflight prints the full command with it when it fails). `MSYS_NO_PATHCONV=1` stops Git Bash from rewriting paths. Save the prompt in the project root (the generator's parent) and pass it as the relative `../` path, never a `C:\...` or `/c/...` path.
 
 Do not pass `--remote-root`, `--project-root`, or `--template-root`. Do not reimplement copy, setup, or smoke. Continue until every requested workload is recorded.
 
 A locked overlay is a fingerprint, not a ban. When smoke fails inside a file listed in `results/overlay_lock.json`, write the same bytes in `implementation_components/<component-id>/files/<path>`, the sibling path, and that path's `sha256`, then recheck with `create_one_workload.py --validate-only`. Do not leave the workload failed when those three copies can match. Do not replace the overlay with a new collector. Do not run `create_generated_repo.py` again on a non-empty sibling. `scripts/metric_contract.py` has no lock entry: repair the generator copy and the sibling copy, then use the same recheck. `Locked overlay rewritten` means the sibling and the digest disagree. `Implementation component mismatch` means the sibling and the template source disagree.
+
+Log every change to a generator file during a batch with `python3 scripts/log_generator_repair.py --workload <N> --file <path> --reason "<why>"`. The batch summary ends with that list. A collector reports a counter the host does not have as `na (expected: <reason>)`; do not add new `classify_na` matches.

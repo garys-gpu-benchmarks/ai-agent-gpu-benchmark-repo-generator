@@ -312,6 +312,9 @@ def main() -> int:
     delta = ecc_interval_delta([row["gpu_system_ecc_error_count"] for row in rows])
     for row in rows:
         row["gpu_system_ecc_error_count"] = delta
+        # The summary averages samples. A running total averaged over samples turned
+        # one late event into a fraction, so every sample carries the run's total.
+        row["thermal_throttle_event_count"] = float(throttle_events)
 
     buf = io.StringIO()
     writer = csv.DictWriter(buf, fieldnames=HEADER, extrasaction="ignore", lineterminator=chr(10))

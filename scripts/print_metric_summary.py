@@ -59,6 +59,7 @@ from pathlib import Path
 
 from metric_contract import (
     annotate_metrics,
+    detect_gpu_name,
     apply_storage_aliases,
     is_blank,
     is_explicit_na,
@@ -380,6 +381,8 @@ def main() -> int:
     if not isinstance(metrics, dict):
         metrics = {}
     gpu_name = str(summary.get("gpu_name") or metrics.get("gpu_name") or "")
+    if not gpu_name and "working_set_bytes" in metrics:
+        gpu_name = detect_gpu_name()
     metrics = annotate_metrics(metrics, gpu_name)
     status = str(summary.get("status") or metrics.get("workload_kind") or "")
     if status.lower() in {"stub", "smoke-standin", "standin"} or any(

@@ -2,7 +2,11 @@
 # File: scripts/install_sdxl_python.sh
 # Description: Install Diffusers/Transformers and optionally prefetch SDXL weights.
 # Execution: bash scripts/install_sdxl_python.sh [--prefetch]
-# Smoke must not pass --prefetch. Baseline/extended prefetch stabilityai/stable-diffusion-xl-base-1.0.
+# run_benchmark.sh passes --prefetch on every profile, smoke included (smoke loads real SDXL).
+# The download is resumable: partial files stay in the Hugging Face cache and the next
+# attempt continues them. Each attempt has a time limit (SDXL_PREFETCH_TIMEOUT_SEC,
+# default 1800) and a stalled read fails after HF_HUB_DOWNLOAD_TIMEOUT seconds (default 60).
+# A failed or timed-out attempt is retried (SDXL_PREFETCH_ATTEMPTS, default 2).
 # Prefetch downloads only the fp16 Diffusers files that from_pretrained(variant="fp16")
 # loads. The full Hub snapshot also contains a 6.9 GiB checkpoint plus ONNX,
 # OpenVINO, Flax, and duplicate fp32 weights. That snapshot fills the disk and
@@ -79,8 +83,13 @@ else
   fi
 fi
 
-echo "[RUN] prefetch ${SDXL_HF_ID} fp16 Diffusers files into ${HF_HOME} (Xet disabled)"
-SDXL_HF_ID="${SDXL_HF_ID}" "${PYTHON_BIN}" - <<'PY'
+PREFETCH_TIMEOUT_SEC="${SDXL_PREFETCH_TIMEOUT_SEC:-1800}"
+PREFETCH_ATTEMPTS="${SDXL_PREFETCH_ATTEMPTS:-2}"
+export HF_HUB_DOWNLOAD_TIMEOUT="${HF_HUB_DOWNLOAD_TIMEOUT:-60}"
+export HF_HUB_ETAG_TIMEOUT="${HF_HUB_ETAG_TIMEOUT:-30}"
+PREFETCH_PY="$(mktemp)"
+trap 'rm -f "${PREFETCH_PY}"' EXIT
+cat > "${PREFETCH_PY}" <<'PY'
 import os
 from huggingface_hub import snapshot_download
 
@@ -100,8 +109,32 @@ patterns = [
     "vae/diffusion_pytorch_model.fp16.safetensors",
 ]
 print(f"[INFO] snapshot_download({repo}) allow_patterns={len(patterns)} HF_HUB_DISABLE_XET=1")
+# Never force_download: partial *.incomplete blobs from an earlier attempt are resumed.
 snapshot_download(repo_id=repo, allow_patterns=patterns)
 print("[PASS] SDXL weights cached")
 PY
+prefetch_ok=0
+for ((attempt = 1; attempt <= PREFETCH_ATTEMPTS; attempt++)); do
+  echo "[RUN] prefetch ${SDXL_HF_ID} fp16 Diffusers files into ${HF_HOME} (Xet disabled; attempt ${attempt}/${PREFETCH_ATTEMPTS}; limit ${PREFETCH_TIMEOUT_SEC}s)"
+  rc=0
+  SDXL_HF_ID="${SDXL_HF_ID}" timeout -k 30 "${PREFETCH_TIMEOUT_SEC}" "${PYTHON_BIN}" "${PREFETCH_PY}" || rc=$?
+  if [[ "${rc}" -eq 0 ]]; then
+    prefetch_ok=1
+    break
+  fi
+  partial_kib="$({ find "${HF_HOME}/hub" -name '*.incomplete' -printf '%k\n' 2>/dev/null || true; } | awk '{s+=$1} END {print s+0}')"
+  if [[ "${rc}" -eq 124 || "${rc}" -eq 137 ]]; then
+    echo "[WARN] SDXL prefetch attempt ${attempt} hit the ${PREFETCH_TIMEOUT_SEC}s limit; keeping ${partial_kib} KiB of partial files to resume." >&2
+  else
+    echo "[WARN] SDXL prefetch attempt ${attempt} exited ${rc}; keeping ${partial_kib} KiB of partial files to resume." >&2
+  fi
+  if (( attempt < PREFETCH_ATTEMPTS )); then
+    sleep 10
+  fi
+done
+if [[ "${prefetch_ok}" -ne 1 ]]; then
+  echo "[FAIL] SDXL prefetch did not finish after ${PREFETCH_ATTEMPTS} attempt(s). Partial files are kept in ${HF_HOME}; rerun to resume." >&2
+  exit 1
+fi
 mkdir -p "${REPO_ROOT}/.cache"
 printf 'ok\n' > "${REPO_ROOT}/.cache/sdxl_prefetch.ok"

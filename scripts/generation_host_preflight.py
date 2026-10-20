@@ -8,11 +8,38 @@ import shutil
 import sys
 from pathlib import Path
 
+PROMPT_PLACEHOLDER = "../AI_AGENT_PROMPT_SUBMITTED_<WORKLOADS>_<UTC_TIMESTAMP>.md"
+
+
+def start_command(prompt_file: str = "") -> str:
+    """The one supported start command, run from the generator directory in Git Bash or bash.
+
+    It names this interpreter, disables Git Bash path conversion, and passes the prompt
+    as a path relative to the generator (the prompt is saved in the project root).
+    """
+    python = sys.executable or "python3"
+    if os.name == "nt":
+        try:
+            from host_exec import to_git_bash_path
+
+            python = to_git_bash_path(python)
+        except Exception:  # noqa: BLE001 - fall back to the native path
+            python = python.replace("\\", "/")
+    prompt = prompt_file or PROMPT_PLACEHOLDER
+    if prompt_file:
+        try:
+            prompt = os.path.relpath(Path(prompt_file).resolve(), Path(__file__).resolve().parents[1]).replace("\\", "/")
+        except ValueError:
+            prompt = prompt_file.replace("\\", "/")
+    quoted = f'"{python}"' if " " in python else python
+    return f"MSYS_NO_PATHCONV=1 {quoted} scripts/run_from_prompt.py --prompt-file {prompt}"
+
 
 def main() -> int:
     parser = argparse.ArgumentParser(description="Check generation-host prerequisites")
     parser.add_argument("--template-root", default=".")
     parser.add_argument("--ssh-target", default="", help="Optional host for ssh -o BatchMode reachability")
+    parser.add_argument("--prompt-file", default="", help="Saved prompt; fills the printed start command")
     args = parser.parse_args()
     errors: list[str] = []
     warnings: list[str] = []
@@ -61,11 +88,17 @@ def main() -> int:
     print("[INFO] Do not start a second overlapping setup.sh on the remote VM.")
     for warning in warnings:
         print(f"[WARN] {warning}")
+    command = start_command(args.prompt_file)
     if errors:
         for error in errors:
             print(f"[FAIL] {error}")
+        print("[FAIL] Fix the items above, then start generation from the generator directory with exactly:")
+        print(f"  {command}")
         return 1
     print("[PASS] Generation-host preflight succeeded")
+    if args.prompt_file:
+        print("[INFO] Start generation from the generator directory with exactly:")
+        print(f"  {command}")
     return 0
 
 

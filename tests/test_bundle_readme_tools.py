@@ -70,6 +70,41 @@ class BundleReadmeToolsTests(unittest.TestCase):
         self.assertIn("./show_metrics.sh 307 --baseline", readme)  # 2026-10-19: Getting started uses x07
         self.assertIn("| One benchmark's runs and per-profile means | `./show_metrics.sh <benchmark>` |", readme)
 
+    def test_getting_started_shows_success_and_restart(self) -> None:
+        """2026-10-19 technician review: show what success looks like, a watched and a
+        quiet command for the long install, and the 26.04 ROCm restart."""
+        for digit in "1234":
+            readme = self.render(PUBLISH[0], digit)
+            section = readme[readme.index("## Getting started"):readme.index("## See your results")]
+            with self.subTest(platform=digit):
+                # Every sample summary sits in a fenced block; bare "=====" lines under
+                # text render as Markdown headings on GitHub.
+                fenced = re.findall(r"```text\n(.*?)```", section, re.S)
+                self.assertEqual(sum("SUMMARY: " in block for block in fenced), 2)
+                outside = re.sub(r"```.*?```", "", section, flags=re.S)
+                self.assertNotIn("=====", outside)
+                self.assertIn("SUMMARY: 1 of 1 runs finished: 1 passed, 0 failed", section)
+                self.assertIn("SUMMARY: 3 of 3 runs finished: 3 passed, 0 failed", section)
+                self.assertIn(f"-w {digit}01,{digit}02,{digit}14 -p smoke --show-output", section)
+                self.assertIn(f"-w {digit}01,{digit}02,{digit}14 -p smoke                 # quiet", section)
+                self.assertNotIn("quiet for 5-20 minutes", section)
+                self.assertIn("what matters is `0 failed`", section)
+                self.assertIn("### 3. Smoke is a wiring check, not a measurement", section)
+                self.assertNotIn("under one minute", section)
+                if digit == "3":
+                    self.assertIn("Connection to <your-machine-address> closed by remote host.", section)
+                    self.assertIn("The machine restarts once.", section)
+                elif digit == "1":
+                    self.assertIn("If the machine restarts.", section)
+                    self.assertNotIn("closed by remote host", section)
+                else:
+                    self.assertIn("does not restart the machine", section)
+                    self.assertNotIn("Log in again as root", section)
+                    self.assertIn("`nvidia-smi` lists the GPUs", readme)
+                # The restart steps come before the step-2 success sample.
+                if digit in "13":
+                    self.assertLess(section.index("Log in again as root"), section.index("SUMMARY: 3 of 3"))
+
 
 if __name__ == "__main__":
     unittest.main()
