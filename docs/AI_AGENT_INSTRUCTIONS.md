@@ -274,3 +274,12 @@ Every completed workload repository is an independent GitHub repository candidat
 5. Run `bash scripts/check_github_publish_ready.sh` from the generated workload root and require it to pass.
 6. The published workload must not require the ignored nested template copy for setup, benchmark execution, parsing, validation, documentation, CI, or legal compliance.
 
+### Clean-image acceptance before publishing an NVIDIA batch
+
+Remote validation on a VM that already has a CUDA toolkit does not exercise the install path. The TEMPLATE_00_114 Ubuntu 24.04 batch passed on a VM with `nvcc` 12.6 already on `PATH`, then failed setup on all 32 workloads from a fresh clone. Before publishing an NVIDIA batch, on a freshly provisioned image of the workload's Ubuntu release with the NVIDIA driver present and no `nvcc` (`command -v nvcc` prints nothing):
+
+1. Clone the bundle fresh and run each distinct setup path as the **first** workload on its own clean image: the skeleton (x01) and each overlay (x27, x28, x29, x30), with `./run_benchmark_suite.sh -w <N> --smoke`. A setup that passes only after another workload installed CUDA is a failure.
+2. Then run the full suite once on a clean image: `./run_benchmark_suite.sh --smoke`. Every row must finish with exit code 0.
+3. Do this for Ubuntu 24.04 and Ubuntu 26.04. Include one container image with the host driver bind-mounted (the case that breaks dpkg when Ubuntu driver packages are installed).
+4. Record the image, the driver version, and the result in the batch notes. Do not publish a batch that has not passed this gate.
+

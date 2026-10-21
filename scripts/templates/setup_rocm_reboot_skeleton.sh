@@ -534,7 +534,7 @@ if [[ "${SKIP_ROCM}" != 1 ]]; then
     if [[ -f "${RUNTIME_STAGE_FILE}" && "${ROCM_REBOOT_PENDING:-0}" == 1 ]]; then
       GPU_CHECKS_AFTER_REBOOT=1
       export BENCHMARK_GPU_CHECKS_AFTER_REBOOT=1
-      install_status_log_phase "amdgpu could not be reloaded in place; installing everything now and rebooting once at the end"
+      install_status_log_phase "amdgpu could not be reloaded in place (${AMDGPU_RELOAD_REASON:-reason not recorded}); installing everything now and rebooting once at the end"
       log_resume_event "Runtime reboot postponed until the rest of setup is installed"
     elif [[ -f "${RUNTIME_STAGE_FILE}" ]]; then
       # An immediate reboot was requested (ROCM_DEFER_REBOOT=0). Do not advance

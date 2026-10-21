@@ -90,7 +90,12 @@ apt_install() {
     fi
     log_status "STEP|SETUP apt-get install ${pkg}"
     record_cmd "DEBIAN_FRONTEND=noninteractive apt-get install -y ${pkg}"
-    DEBIAN_FRONTEND=noninteractive apt-get install -y "${pkg}"
+    if ! DEBIAN_FRONTEND=noninteractive apt-get install -y "${pkg}"; then
+      nvidia_dpkg_consistent "apt-get install ${pkg}" || exit 1
+      echo "[WARN] apt-get install ${pkg} failed." >&2
+      return 1
+    fi
+    nvidia_dpkg_consistent "apt-get install ${pkg}" || exit 1
   done
 }
 
@@ -104,12 +109,16 @@ verify_cmd() {
   log_status "PASS|SETUP verified ${name}"
 }
 
+# shellcheck disable=SC1091
+source "${REPO_ROOT}/scripts/lib/nvidia_cuda_toolkit.sh"
+
 if [[ "${ASSUME_YES}" -ne 1 ]]; then
   echo "setup.sh will install Ubuntu packages and create ${REPO_ROOT}/.venv."
   read -r -p "Press Enter to continue or Ctrl-C to abort. "
 fi
 
 log_status "PHASE|SETUP start ${REPO_NAME}"
+nvidia_pin_host_driver
 record_cmd "DEBIAN_FRONTEND=noninteractive apt-get update -y"
 DEBIAN_FRONTEND=noninteractive apt-get update -y
 
@@ -146,31 +155,14 @@ apt_install \
   wget \
   ca-certificates
 
-if is_ubuntu_2604; then
-  if ! command -v nvcc >/dev/null 2>&1 || ! nvcc --version 2>/dev/null | grep -q "release 13.3"; then
-    if [[ ! -f /usr/share/keyrings/cuda-archive-keyring.gpg ]]; then
-      log_status "STEP|SETUP add NVIDIA CUDA Ubuntu 26.04 repository"
-      wget -q "https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2604/x86_64/cuda-keyring_1.1-1_all.deb" \
-        -O /tmp/cuda-keyring_1.1-1_all.deb
-      dpkg -i /tmp/cuda-keyring_1.1-1_all.deb
-    fi
-    record_cmd "DEBIAN_FRONTEND=noninteractive apt-get update -y"
-    DEBIAN_FRONTEND=noninteractive apt-get update -y
-    log_status "STEP|SETUP apt-get install cuda-toolkit-13-3"
-    DEBIAN_FRONTEND=noninteractive apt-get install -y cuda-toolkit-13-3
-  fi
-  export PATH="/usr/local/cuda/bin:/usr/local/cuda-13.3/bin:${PATH}"
-  if ! command -v dcgmi >/dev/null 2>&1; then
-    apt_install datacenter-gpu-manager-4-cuda13 || apt_install datacenter-gpu-manager-4 || true
-  fi
-else
-  if ! command -v nvcc >/dev/null 2>&1; then
-    apt_install cuda-nvcc-12-8 cuda-cudart-dev-12-8 nvidia-cuda-toolkit || apt_install cuda-nvcc-12-6 cuda-cudart-dev-12-6 nvidia-cuda-toolkit || true
-  fi
-  export PATH="/usr/local/cuda/bin:/usr/local/cuda-12.8/bin:/usr/local/cuda-12.6/bin:${PATH}"
-  if ! command -v dcgmi >/dev/null 2>&1; then
-    apt_install datacenter-gpu-manager || apt_install datacenter-gpu-manager-4 || true
-  fi
+# Same toolkit as every other NVIDIA workload on this Ubuntu release
+# (24.04: CUDA 12.8 for the cu128 wheels, 26.04: CUDA 13.3 for cu130).
+# See scripts/lib/nvidia_cuda_toolkit.sh.
+install_nvidia_cuda_toolkit
+export PATH="/usr/local/cuda/bin:/usr/local/cuda-${NVIDIA_CUDA_VERSION}/bin:${PATH}"
+if ! command -v dcgmi >/dev/null 2>&1; then
+  DCGM_PACKAGE="$(nvidia_dcgm_package)"
+  apt_install "${DCGM_PACKAGE}" || log_status "WARN|SETUP ${DCGM_PACKAGE} not installed; dcgmi checks will be skipped"
 fi
 if ! command -v nvcc >/dev/null 2>&1; then
   echo "[FAIL] NVCC is required and was not found after CUDA toolkit install." >&2

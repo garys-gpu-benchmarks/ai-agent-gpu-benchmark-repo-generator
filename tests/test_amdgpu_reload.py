@@ -88,10 +88,17 @@ class AmdgpuReloadTests(unittest.TestCase):
     def tearDown(self):
         shutil.rmtree(self.tmp, ignore_errors=True)
 
-    def _loaded(self, refcnt: int = 0) -> None:
+    def _loaded(self, refcnt: int = 0, started: int | None = None) -> None:
+        """amdgpu loaded; by default it started every PCI GPU (one KFD compute node each)."""
         mod = self.sys / "module" / "amdgpu"
         mod.mkdir(parents=True)
         (mod / "refcnt").write_text(f"{refcnt}\n")
+        devices = self.sys / "bus" / "pci" / "devices"
+        gpus = sum(1 for d in devices.glob("*") if (d / "class").read_text().startswith(("0x03", "0x12"))) if devices.is_dir() else 0
+        nodes = self.sys / "class" / "kfd" / "kfd" / "topology" / "nodes"
+        for i in range(1, (gpus if started is None else started) + 1):
+            (nodes / str(i)).mkdir(parents=True)
+            (nodes / str(i) / "properties").write_text("cpu_cores_count 0\nsimd_count 1216\n")
 
     def _run(self, script: str, **env) -> subprocess.CompletedProcess:
         full_env = {
@@ -157,6 +164,17 @@ class AmdgpuReloadTests(unittest.TestCase):
         self.assertEqual(self._reload("firmware"), 1)
         self.assertEqual((fb / "bind").read_text().strip(), "1")
         self.assertNotIn("Released the framebuffer console", self.calls())
+
+    def test_half_started_driver_is_not_unloaded(self):
+        """26.04: amdgpu failed GPU init at boot; unloading it crashed the kernel."""
+        _pci(self.sys, 1)
+        self._loaded(started=0)
+        fb = self._console(0, "(M) frame buffer device")
+        result = self._run('if amdgpu_reload_instead_of_reboot dkms; then echo RC=0; else echo "RC=1 REASON=${AMDGPU_RELOAD_REASON}"; fi')
+        self.assertIn("RC=1", result.stdout, result.stderr)
+        self.assertIn("started only 0 of 1 AMD GPU(s)", result.stdout)
+        self.assertNotIn("modprobe", self.calls())
+        self.assertEqual((fb / "bind").read_text().strip(), "1")
 
     def test_firmware_reload_succeeds_when_all_gpus_return(self):
         _pci(self.sys, 2)

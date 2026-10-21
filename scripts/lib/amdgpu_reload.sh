@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # File: scripts/lib/amdgpu_reload.sh
-# Version: 1.1.0
+# Version: 1.2.0
 # Maintainer: AI Agent GPU Benchmark Repo Generator
 # Date: 2026-10-01
 # Description: amdgpu_reload_instead_of_reboot -- after the ROCm runtime install,
@@ -36,6 +36,15 @@
 #     amdgpu" with the console still on amdgpu's framebuffer did not finish in
 #     180 s (rc=137, so setup rebooted); after "echo 0 > .../vtcon0/bind" the
 #     same unload took 0.5 s (2026-10-20).
+#   * No unload when amdgpu is loaded but never started the GPU (fewer KFD
+#     compute nodes than AMD GPUs on the PCI bus). The Ubuntu 26.04 image boots
+#     kernel 7.0 without the MI300X firmware ("Fatal error during GPU init"), and
+#     "modprobe -r amdgpu" on that half-started driver crashed in the kernel
+#     (UBSAN invalid-load in kfd_device.c, fault in amdgpu_fence_driver_sw_fini),
+#     so setup waited out the 180 s deadline and rebooted anyway. Such a GPU
+#     needs the reboot; it now happens without the crash or the wait.
+#   * The last reason the reload was refused is kept in AMDGPU_RELOAD_REASON, so
+#     setup can write it to results/install_status.txt.
 #   * modprobe runs in the background with a deadline. A modprobe stuck in the kernel
 #     cannot hang setup; setup gives up and reboots.
 #   * Success requires every AMD GPU PCI device to show up as a KFD compute node
@@ -51,6 +60,8 @@ _amdgpu_reload_log() {
     if declare -f _rocm_log >/dev/null 2>&1; then _rocm_log "$*"; else echo "[amdgpu_reload] $*"; fi
 }
 _amdgpu_reload_warn() {
+    # shellcheck disable=SC2034  # read by setup_rocm_reboot_skeleton.sh
+    AMDGPU_RELOAD_REASON="$*"
     if declare -f _rocm_warn >/dev/null 2>&1; then _rocm_warn "$*"; else echo "[amdgpu_reload] WARN: $*" >&2; fi
 }
 
@@ -235,6 +246,11 @@ _amdgpu_reload_attempt() {
     fi
 
     if _amdgpu_reload_module_loaded; then
+        kfd="$(amdgpu_kfd_gpu_count)"
+        if (( kfd < pci )); then
+            _amdgpu_reload_warn "amdgpu is loaded but started only ${kfd} of ${pci} AMD GPU(s) at boot (often missing firmware for this kernel); unloading a half-started amdgpu can crash the kernel. Rebooting instead."
+            return 1
+        fi
         refcnt="$(cat "${_AMDGPU_RELOAD_SYS}/module/amdgpu/refcnt" 2>/dev/null || echo 0)"
         if [[ "${refcnt}" != "0" ]]; then
             _amdgpu_reload_warn "amdgpu is in use (refcnt=${refcnt}); cannot unload it. Rebooting instead."

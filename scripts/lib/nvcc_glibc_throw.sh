@@ -118,7 +118,19 @@ nvcc_header_probe() {
 #include <cmath>
 __global__ void cuda_header_probe(double* out) { *out = rsqrt(2.0); }
 CU
-  nvcc -std=c++17 -c -o "${dir}/probe.o" "${dir}/probe.cu"
+  # Keep the compiler's messages for nvcc_unsupported_host_compiler; still show them.
+  if ! nvcc -std=c++17 -c -o "${dir}/probe.o" "${dir}/probe.cu" 2> "${dir}/probe.err"; then
+    cat "${dir}/probe.err" >&2
+    return 1
+  fi
+  cat "${dir}/probe.err" >&2
+}
+
+# nvcc refuses a host GCC newer than its toolkit supports (for example CUDA 12.0
+# with Ubuntu 24.04's GCC 13). No header repair can fix that, so name it and stop.
+nvcc_unsupported_host_compiler() {
+  local err="${REPO_ROOT}/build/cuda-header-probe/probe.err"
+  [[ -f "${err}" ]] && grep -q "unsupported GNU version" "${err}"
 }
 
 nvcc_write_local_fix() {
@@ -151,6 +163,10 @@ nvcc_glibc_prepare() {
     nvcc_write_env
     echo "[PASS] CUDA header probe compiled with $(command -v nvcc)" >&2
     return 0
+  fi
+  if nvcc_unsupported_host_compiler; then
+    echo "[FAIL] $(command -v nvcc) (CUDA $(nvcc_release_string)) does not support the host compiler $(gcc -dumpfullversion 2>/dev/null || echo unknown): unsupported GNU version. The rsqrt header repair cannot fix this. Install the CUDA toolkit for this Ubuntu release from NVIDIA's CUDA repository (24.04: 12.8, 26.04: 13.3; scripts/lib/nvidia_cuda_toolkit.sh)." >&2
+    return 1
   fi
   echo "[WARN] CUDA header probe failed. Writing a repo-local rsqrt repair. Not editing ${CUDA_HOME}." >&2
   nvcc_write_local_fix || return 1

@@ -73,8 +73,8 @@ git clone --recurse-submodules https://github.com/{{CI Owner}}/{{CI Bundle Repo}
 Every line in `./run_benchmark_suite.sh --list` should show `ready`; it exits with an error if any workload is not fetched. The commands are joined with `&&`, so if the clone, the list or the smoke run fails, the chain stops there, and the closing message appears only when everything succeeded. The chain ends in `{{CI Install Root}}`, where the suite runner is. For more extensive testing:
 
 ```bash
-./run_benchmark_suite.sh -p smoke                 # smoke test of all 32 workloads
-./run_benchmark_suite.sh -w {{CI Bundle Example Workload}} -p baseline       # workload {{CI Bundle Example Workload}}, baseline profile
+./run_benchmark_suite.sh --smoke                  # smoke test of all 32 workloads
+./run_benchmark_suite.sh -w {{CI Bundle Example Workload}} --baseline        # workload {{CI Bundle Example Workload}}, baseline profile
 ./run_benchmark_suite.sh --help                   # all options
 ```
 
@@ -97,8 +97,8 @@ Three operator scripts from [`{{CI Owner}}/{{CI Suite Tools Repo}}`](https://git
   ```bash
   cd {{CI Install Root}}
   ./run_benchmark_suite.sh --dry-run                    # list what would run
-  ./run_benchmark_suite.sh -w {{Workload Number}} -p smoke,baseline   # just this workload
-  ./run_benchmark_suite.sh -p smoke                     # every workload, smoke profile
+  ./run_benchmark_suite.sh -w {{Workload Number}} --smoke --baseline  # just this workload
+  ./run_benchmark_suite.sh --smoke                      # every workload, smoke profile
   ./run_benchmark_suite.sh -r 20                        # soak: everything, 20 times
   ```
 - **`get_remote_info.sh`** (on your laptop; Git Bash on Windows) — over one SSH connection, copies the runtime ledger and every workload's `results/raw`, `results/parsed` and suite logs into `RUNTIME_LEDGERS/` and `DIRECTORIES/`.

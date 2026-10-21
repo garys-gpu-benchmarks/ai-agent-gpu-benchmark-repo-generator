@@ -9,6 +9,7 @@ from __future__ import annotations
 import re
 import shutil
 import subprocess
+import tempfile
 import unittest
 from pathlib import Path
 
@@ -47,6 +48,28 @@ class BundleReadmeToolsTests(unittest.TestCase):
         # (2026-10-20: "With `--show-output`," printed as "With ,"); bash reports it here.
         self.assertEqual(result.stderr, "", result.stderr)
         return result.stdout
+
+    def test_bundle_suite_script_edits_apply(self) -> None:
+        """Step 7 rewrites the shared run_benchmark_suite.sh for each bundle with sed and
+        stops the publish if an edit misses; run those functions on the real script here."""
+        text = PUBLISH[0].read_text(encoding="utf-8")
+        suite = ROOT / "templates" / "suite-tools" / "scripts" / "run_benchmark_suite.sh"
+        for digit in "1234":
+            program = "\n".join([
+                "set -u", "cd \"$1\"",
+                function_source(text, "bundle_suite_script"),
+                function_source(text, "check_bundle_suite_script"),
+                f'bundle_suite_script {digit} <"$2" >bundle_copy.sh && check_bundle_suite_script bundle_copy.sh {digit}'
+                ' && bash bundle_copy.sh --help',
+            ])
+            with self.subTest(platform=digit), tempfile.TemporaryDirectory() as tmp:
+                result = subprocess.run([BASH, "-c", program, "bash", tmp, str(suite)],
+                                        capture_output=True, text=True, timeout=30)
+                self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+                self.assertIn("Default: --smoke   (full run: --smoke --baseline --extended)", result.stdout)
+                self.assertIn("--smoke --baseline --extended    # everything, all 3 profiles", result.stdout)
+                self.assertIn(f"-w {digit}01,{digit}07,{digit}21 --baseline", result.stdout)
+                self.assertIn(f"-w {digit}05 --smoke --show-output", result.stdout)
 
     def test_ships_the_expected_scripts(self) -> None:
         for script in PUBLISH:
@@ -88,18 +111,18 @@ class BundleReadmeToolsTests(unittest.TestCase):
                 self.assertNotIn("=====", outside)
                 self.assertIn("SUMMARY: 1 of 1 runs finished: 1 passed, 0 failed", section)
                 self.assertIn("SUMMARY: 3 of 3 runs finished: 3 passed, 0 failed", section)
-                self.assertIn(f"-w {digit}01,{digit}02,{digit}14 -p smoke --show-output", section)
-                self.assertIn(f"-w {digit}01,{digit}02,{digit}14 -p smoke                 # quiet", section)
+                self.assertIn(f"-w {digit}01,{digit}02,{digit}14 --smoke --show-output", section)
+                self.assertIn(f"-w {digit}01,{digit}02,{digit}14 --smoke                 # quiet", section)
                 self.assertNotIn("quiet for 5-20 minutes", section)
                 self.assertIn("what matters is `0 failed`", section)
                 self.assertIn("### 3. Smoke is a wiring check, not a measurement", section)
                 self.assertNotIn("under one minute", section)
                 self.assertNotRegex(section, r"\bWith ,")
                 if digit == "3":
-                    self.assertIn("With\n`--show-output`, the output then ends", section)
+                    self.assertIn("With `--show-output`, the output ends like this", section)
                     self.assertIn("Connection to <your-machine-address> closed by remote host.", section)
-                    self.assertIn("If the machine restarts.", section)
-                    self.assertIn("reloads the amdgpu\ndriver in place", section)
+                    self.assertIn("The machine restarts once.", section)
+                    self.assertIn("cannot start the MI300X", section)
                 elif digit == "1":
                     self.assertIn("If the machine restarts.", section)
                     self.assertNotIn("closed by remote host", section)

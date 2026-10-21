@@ -145,7 +145,9 @@ if [[ "${PHASE}" != "3" && "${PHASE}" != "4" ]]; then
   bash scripts/ensure_setup.sh
 fi
 mark_benchmark_measure_start
-export PATH="/usr/local/cuda-12.6/bin:/usr/local/cuda-12.8/bin:/usr/local/cuda/bin:${PATH}"
+# /usr/local/cuda first: it is the toolkit setup.sh installed and recorded. A
+# leftover /usr/local/cuda-12.6 ahead of it would run a different nvcc.
+export PATH="/usr/local/cuda/bin:/usr/local/cuda-12.8/bin:/usr/local/cuda-13.3/bin:/usr/local/cuda-12.6/bin:${PATH}"
 PYTHON_BIN="${REPO_ROOT}/.venv/bin/python"
 [[ -x "${PYTHON_BIN}" ]] || die "Missing ${PYTHON_BIN}; run setup.sh first."
 

@@ -23,7 +23,7 @@ lspci | grep -iE 'vga|3d|display'               # AMD (Instinct MI-series) or NV
 apt-get update && apt-get install -y git tmux
 git clone --recurse-submodules https://github.com/garys-gpu-benchmarks/bundle-amd-ubuntu-2404 /opt/benchmarks
 cd /opt/benchmarks && ./run_benchmark_suite.sh --list
-./run_benchmark_suite.sh -w 101,102,115 -p smoke
+./run_benchmark_suite.sh -w 101,102,115 --smoke
 ```
 
 ### NVIDIA · Ubuntu 24.04 — workloads 201–232
@@ -32,7 +32,7 @@ cd /opt/benchmarks && ./run_benchmark_suite.sh --list
 apt-get update && apt-get install -y git tmux
 git clone --recurse-submodules https://github.com/garys-gpu-benchmarks/bundle-nvidia-ubuntu-2404 /opt/benchmarks
 cd /opt/benchmarks && ./run_benchmark_suite.sh --list
-./run_benchmark_suite.sh -w 201,202,215 -p smoke
+./run_benchmark_suite.sh -w 201,202,215 --smoke
 ```
 
 ### AMD · Ubuntu 26.04 — workloads 301–332
@@ -41,7 +41,7 @@ cd /opt/benchmarks && ./run_benchmark_suite.sh --list
 apt-get update && apt-get install -y git tmux
 git clone --recurse-submodules https://github.com/garys-gpu-benchmarks/bundle-amd-ubuntu-2604 /opt/benchmarks
 cd /opt/benchmarks && ./run_benchmark_suite.sh --list
-./run_benchmark_suite.sh -w 301,302,315 -p smoke
+./run_benchmark_suite.sh -w 301,302,315 --smoke
 ```
 
 ### NVIDIA · Ubuntu 26.04 — workloads 401–432
@@ -50,7 +50,7 @@ cd /opt/benchmarks && ./run_benchmark_suite.sh --list
 apt-get update && apt-get install -y git tmux
 git clone --recurse-submodules https://github.com/garys-gpu-benchmarks/bundle-nvidia-ubuntu-2604 /opt/benchmarks
 cd /opt/benchmarks && ./run_benchmark_suite.sh --list
-./run_benchmark_suite.sh -w 401,402,415 -p smoke
+./run_benchmark_suite.sh -w 401,402,415 --smoke
 ```
 
 The first run takes much longer than later ones: it installs the ROCm or CUDA stack and each workload's software. **On AMD, setup may restart the machine once.** If it does, log back in, wait a few minutes for setup to finish on its own, then run the same `./run_benchmark_suite.sh` line again.
@@ -65,12 +65,12 @@ All commands run from `/opt/benchmarks`. Each command prints full usage with `--
 
 | Task | Command |
 |---|---|
-| Smoke test every workload (installs each on first use) | `./run_benchmark_suite.sh -p smoke` |
-| One workload, baseline profile (example: 107) | `./run_benchmark_suite.sh -w 107 -p baseline` |
-| A range of workloads | `./run_benchmark_suite.sh -w 101-110 -p smoke` |
-| One workload with its output on screen | `./run_benchmark_suite.sh -w 105 -p smoke --show-output` |
+| Smoke test every workload (installs each on first use) | `./run_benchmark_suite.sh --smoke` |
+| One workload, baseline profile (example: 107) | `./run_benchmark_suite.sh -w 107 --baseline` |
+| A range of workloads | `./run_benchmark_suite.sh -w 101-110 --smoke` |
+| One workload with its output on screen | `./run_benchmark_suite.sh -w 105 --smoke --show-output` |
 | Check that every workload is installed | `./run_benchmark_suite.sh --list` |
-| Everything, all three profiles (many hours) | `tmux new -s bench` then `./run_benchmark_suite.sh` |
+| Everything, all three profiles (many hours) | `tmux new -s bench` then `./run_benchmark_suite.sh --smoke --baseline --extended` |
 | Soak test: everything, 20 times | `./run_benchmark_suite.sh -r 20` |
 | Preview what would run | `./run_benchmark_suite.sh --dry-run` |
 | Update to the newest release | `git pull && git submodule update --init --recursive` |

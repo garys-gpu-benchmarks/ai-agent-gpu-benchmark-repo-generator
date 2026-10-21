@@ -49,6 +49,11 @@ COMMANDS_FILE="${REPO_ROOT}/results/install_commands.txt"
 log_status() { printf '%s  %s\n' "$(date -u +'%Y-%m-%d %H:%M:%S')" "$1" | tee -a "${STATUS_FILE}"; }
 record_cmd() { printf '%s\n' "$1" >> "${COMMANDS_FILE}"; }
 
+# Returns 1 when apt fails, so "apt_install a || apt_install b" can fall back and
+# a bare call stops setup. An explicit return is needed: bash ignores set -e inside
+# a function called on the left of ||. A dpkg database left inconsistent is fatal
+# (exit, not return) even for an optional package, because every later apt-get
+# install on this host would fail.
 apt_install() {
   local pkg
   for pkg in "$@"; do
@@ -58,7 +63,12 @@ apt_install() {
     fi
     log_status "STEP|SETUP apt-get install ${pkg}"
     record_cmd "DEBIAN_FRONTEND=noninteractive apt-get install -y ${pkg}"
-    DEBIAN_FRONTEND=noninteractive apt-get install -y "${pkg}" || true
+    if ! DEBIAN_FRONTEND=noninteractive apt-get install -y "${pkg}"; then
+      nvidia_dpkg_consistent "apt-get install ${pkg}" || exit 1
+      echo "[WARN] apt-get install ${pkg} failed." >&2
+      return 1
+    fi
+    nvidia_dpkg_consistent "apt-get install ${pkg}" || exit 1
   done
 }
 
@@ -132,6 +142,8 @@ BENCHMARK_INSTALL_IPERF="${BENCHMARK_INSTALL_IPERF:-0}"
 BENCHMARK_INSTALL_NCCL="${BENCHMARK_INSTALL_NCCL:-0}"
 # shellcheck disable=SC1091
 source "${REPO_ROOT}/scripts/lib/align_nvidia_userspace.sh"
+# shellcheck disable=SC1091
+source "${REPO_ROOT}/scripts/lib/nvidia_cuda_toolkit.sh"
 
 if [[ "${ASSUME_YES}" -ne 1 ]]; then
   echo "setup.sh will install Ubuntu packages and create ${REPO_ROOT}/.venv."
@@ -142,6 +154,7 @@ log_status "PHASE|SETUP start ${REPO_NAME}"
 # shellcheck disable=SC1091
 source "${REPO_ROOT}/scripts/lib/keep_running_kernel.sh"
 keep_running_kernel
+nvidia_pin_host_driver
 record_cmd "DEBIAN_FRONTEND=noninteractive apt-get update -y"
 DEBIAN_FRONTEND=noninteractive apt-get update -y
 
@@ -170,42 +183,23 @@ apt_install \
 # 13.3, and scripts/build.sh then links the venv cu13 wheel. Installing
 # libcudnn9-cuda-12 here made that build exit before compile.
 
-# Ubuntu 26.04: every repo uses CUDA 13.3, the same toolkit the SGLang setups
-# (430/431) install. If an earlier repo recorded 13.1 and a later setup installs
-# 13.3, /usr/local/cuda moves and the earlier repo refuses to run
-# ("nvcc release changed from 13.1 to 13.3 since setup").
-NVIDIA_SKELETON_OS_ID=""
-if [[ -r /etc/os-release ]]; then
-  NVIDIA_SKELETON_OS_ID="$(. /etc/os-release && echo "${VERSION_ID:-}")"
-fi
-if [[ "${NVIDIA_SKELETON_OS_ID}" == 26.04* ]]; then
-  if ! command -v nvcc >/dev/null 2>&1 || ! nvcc --version 2>/dev/null | grep -q "release 13.3"; then
-    if [[ ! -f /usr/share/keyrings/cuda-archive-keyring.gpg ]]; then
-      log_status "STEP|SETUP add NVIDIA CUDA Ubuntu 26.04 repository"
-      curl -fsSL "https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2604/x86_64/cuda-keyring_1.1-1_all.deb" \
-        -o /tmp/cuda-keyring_1.1-1_all.deb
-      dpkg -i /tmp/cuda-keyring_1.1-1_all.deb
-      record_cmd "DEBIAN_FRONTEND=noninteractive apt-get update -y"
-      DEBIAN_FRONTEND=noninteractive apt-get update -y
-    fi
-    log_status "STEP|SETUP apt-get install cuda-toolkit-13-3"
-    record_cmd "DEBIAN_FRONTEND=noninteractive apt-get install -y cuda-toolkit-13-3"
-    DEBIAN_FRONTEND=noninteractive apt-get install -y cuda-toolkit-13-3
-  fi
-  export PATH="/usr/local/cuda-13.3/bin:${PATH}"
-elif ! command -v nvcc >/dev/null 2>&1; then
-  apt_install cuda-nvcc-12-8 cuda-cudart-dev-12-8 nvidia-cuda-toolkit || true
-  apt_install cuda-nvcc-12-6 cuda-cudart-dev-12-6 || true
-  apt_install cuda-nvcc-13-1 cuda-cudart-dev-13-1 nvidia-cuda-toolkit || true
-fi
-export PATH="/usr/local/cuda/bin:/usr/local/cuda-13.3/bin:/usr/local/cuda-12.8/bin:/usr/local/cuda-12.6/bin:${PATH}"
+# One CUDA toolkit per Ubuntu release, from NVIDIA's CUDA apt repository:
+# 24.04 -> 12.8, 26.04 -> 13.3 (scripts/lib/nvidia_cuda_toolkit.sh). This skeleton
+# and the vLLM/SGLang overlays call the same function, so a later workload cannot
+# move /usr/local/cuda under an earlier one ("nvcc release changed ... since
+# setup"). Ubuntu's nvidia-cuda-toolkit is never installed: it pulls
+# libnvidia-compute-*, which collides with a bind-mounted host driver and leaves
+# dpkg half-configured for every later workload.
+install_nvidia_cuda_toolkit
+export PATH="/usr/local/cuda/bin:/usr/local/cuda-${NVIDIA_CUDA_VERSION}/bin:${PATH}"
 if ! command -v nvcc >/dev/null 2>&1; then
   echo "[FAIL] NVCC is required and was not found after CUDA toolkit install." >&2
   exit 1
 fi
 align_nvidia_userspace
 if ! command -v dcgmi >/dev/null 2>&1; then
-  apt_install datacenter-gpu-manager datacenter-gpu-manager-4 || true
+  DCGM_PACKAGE="$(nvidia_dcgm_package)"
+  apt_install "${DCGM_PACKAGE}" || log_status "WARN|SETUP ${DCGM_PACKAGE} not installed; dcgmi checks will be skipped"
 fi
 
 PYTHON_BIN="${BENCHMARK_PYTHON:-python3}"

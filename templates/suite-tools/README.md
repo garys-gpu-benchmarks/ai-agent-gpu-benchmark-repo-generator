@@ -37,10 +37,10 @@ cd __SUITE_INSTALL_ROOT__
 ./run_benchmark_suite.sh --list                   # every workload should show "ready"
 
 ./run_benchmark_suite.sh --dry-run                # what would run
-./run_benchmark_suite.sh -p smoke                 # quick check of everything
-./run_benchmark_suite.sh -w 101,107,121 -p baseline
-./run_benchmark_suite.sh -w 101-110 -p smoke,baseline
-./run_benchmark_suite.sh -w 105 -p smoke --show-output   # one workload, output on screen
+./run_benchmark_suite.sh --smoke                  # quick check of everything
+./run_benchmark_suite.sh -w 101,107,121 --baseline
+./run_benchmark_suite.sh -w 101-110 --smoke --baseline   # smoke, then baseline
+./run_benchmark_suite.sh -w 105 --smoke --show-output    # one workload, output on screen
 ./run_benchmark_suite.sh -r 20                    # soak test: everything, 20 times
 
 # Later: move to the newest published release

@@ -50,6 +50,7 @@ required_paths=(
   "scripts/lib/rocm_install_24_04.sh"
   "scripts/lib/rocm_install_26_04.sh"
   "scripts/lib/keep_running_kernel.sh"
+  "scripts/lib/nvidia_cuda_toolkit.sh"
   "results/generation_manifest.json"
   "results/raw/.gitkeep"
   "results/parsed/.gitkeep"
@@ -112,6 +113,22 @@ if grep -REq 'ruff[^|]*\|\|[[:space:]]*true' .github/workflows; then
     exit 1
 fi
 echo "[PASS] CI callers match the shared-workflows contract"
+
+# NVIDIA setup.sh installs one CUDA toolkit per Ubuntu release from NVIDIA's CUDA
+# repository (scripts/lib/nvidia_cuda_toolkit.sh). Ubuntu's nvidia-cuda-toolkit
+# pulls libnvidia-compute-*, which cannot unpack over a bind-mounted host driver
+# and leaves dpkg half-configured for every later workload on that host.
+if grep -q 'align_nvidia_userspace' setup.sh; then
+    if grep -Eq '^[^#]*(apt_install|apt-get install)[^#]*nvidia-cuda-toolkit' setup.sh; then
+        echo "[FAIL] setup.sh installs Ubuntu's nvidia-cuda-toolkit. Call install_nvidia_cuda_toolkit (scripts/lib/nvidia_cuda_toolkit.sh) instead." >&2
+        exit 1
+    fi
+    if ! grep -Eq '^[[:space:]]*install_nvidia_cuda_toolkit[[:space:]]*$' setup.sh; then
+        echo "[FAIL] NVIDIA setup.sh must call install_nvidia_cuda_toolkit (scripts/lib/nvidia_cuda_toolkit.sh)." >&2
+        exit 1
+    fi
+    echo "[PASS] NVIDIA setup.sh installs the CUDA toolkit through scripts/lib/nvidia_cuda_toolkit.sh"
+fi
 
 readme_lines="$(wc -l < README.md | tr -d ' ')"
 if [[ "${readme_lines}" -lt 80 ]]; then

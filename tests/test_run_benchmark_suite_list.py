@@ -80,20 +80,20 @@ class SuiteListTests(unittest.TestCase):
     def test_unfetched_single_workload_is_a_usage_error(self) -> None:
         self.workload("101-alpha")
         self.workload("102-beta", exit_code=None)
-        result = self.suite("-w", "102", "-p", "smoke")
+        result = self.suite("-w", "102", "--smoke")
         self.assertEqual(result.returncode, 2)
         self.assertIn("workload 102 is not fetched yet", result.stderr)
 
     def test_missing_workload_in_list_is_a_usage_error(self) -> None:
         self.workload("101-alpha")
-        result = self.suite("-w", "101,999", "-p", "smoke")
+        result = self.suite("-w", "101,999", "--smoke")
         self.assertEqual(result.returncode, 2)
         self.assertIn("workload 999 is not installed", result.stderr)
 
     def test_output_goes_to_log_only_by_default(self) -> None:
         self.workload("101-alpha")
         log = self.root / "suite.log"
-        result = self.suite("-w", "101", "-p", "smoke", "-o", str(log))
+        result = self.suite("-w", "101", "--smoke", "-o", str(log))
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertNotIn("OUTPUT-OF-101-alpha", result.stdout)
         self.assertIn("OUTPUT-OF-101-alpha --smoke", log.read_text(encoding="utf-8"))
@@ -101,23 +101,61 @@ class SuiteListTests(unittest.TestCase):
     def test_show_output_prints_and_logs(self) -> None:
         self.workload("101-alpha")
         log = self.root / "suite.log"
-        result = self.suite("-w", "101", "-p", "smoke", "--show-output", "-o", str(log))
+        result = self.suite("-w", "101", "--smoke", "--show-output", "-o", str(log))
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertIn("OUTPUT-OF-101-alpha --smoke", result.stdout)
         self.assertIn("OUTPUT-OF-101-alpha --smoke", log.read_text(encoding="utf-8"))
 
     def test_show_output_keeps_the_exit_code(self) -> None:
         self.workload("101-alpha", exit_code=3)
-        result = self.suite("-w", "101", "-p", "smoke", "--show-output", "-o", str(self.root / "suite.log"))
+        result = self.suite("-w", "101", "--smoke", "--show-output", "-o", str(self.root / "suite.log"))
         self.assertEqual(result.returncode, 1)
         self.assertIn("with exit code 3", result.stdout)
         self.assertIn("1 failed", result.stdout)
+
+    def dry_run(self, *args: str) -> str:
+        result = self.suite("-n", *args)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        # the would-be log name carries the time, which can tick between runs
+        return "\n".join(line for line in result.stdout.splitlines() if not line.startswith("Log file would be:"))
+
+    def test_profile_flags_choose_the_profiles(self) -> None:
+        """2026-10-20: profiles are named with --smoke/--baseline/--extended, as in run_benchmark.sh."""
+        self.workload("101-alpha")
+        self.assertIn("Profiles:  baseline\n", self.dry_run("--baseline") + "\n")
+        self.assertIn("Profiles:  baseline extended\n", self.dry_run("--baseline", "--extended") + "\n")
+        self.assertIn("Profiles:  extended smoke\n", self.dry_run("--extended", "--smoke") + "\n")  # order as typed
+        self.assertIn("Profiles:  smoke baseline extended\n", self.dry_run() + "\n")  # the default
+
+    def test_profile_flags_run_in_the_order_given(self) -> None:
+        self.workload("101-alpha")
+        log = self.root / "suite.log"
+        result = self.suite("-w", "101", "--extended", "--smoke", "-o", str(log))
+        self.assertEqual(result.returncode, 0, result.stderr)
+        text = log.read_text(encoding="utf-8")
+        self.assertLess(text.index("OUTPUT-OF-101-alpha --extended"), text.index("OUTPUT-OF-101-alpha --smoke"))
+        self.assertIn("2 passed, 0 failed", result.stdout)
+
+    def test_removed_p_option_names_the_new_flags(self) -> None:
+        """-p/--profiles was removed on 2026-10-20; an old command gets a pointer, not just 'unknown option'."""
+        self.workload("101-alpha")
+        for args in (("-p", "smoke"), ("--profiles", "baseline,extended")):
+            with self.subTest(args=args):
+                result = self.suite("-n", *args)
+                self.assertEqual(result.returncode, 2)
+                self.assertIn("was removed", result.stderr)
+                self.assertIn("--smoke, --baseline, --extended", result.stderr)
 
     def test_help_lists_new_options(self) -> None:
         result = subprocess.run([BASH, str(SUITE), "--help"], capture_output=True, text=True, timeout=30)
         self.assertEqual(result.returncode, 0)
         self.assertIn("-l, --list", result.stdout)
         self.assertIn("--show-output", result.stdout)
+        for flag in ("--smoke  ", "--baseline  ", "--extended  "):
+            self.assertIn(f"      {flag}", result.stdout)
+        self.assertIn("-w 101,107,121 --baseline", result.stdout)
+        self.assertNotIn("-p,", result.stdout)
+        self.assertNotIn("--profiles", result.stdout)
 
 
 class RunShRetiredTests(unittest.TestCase):

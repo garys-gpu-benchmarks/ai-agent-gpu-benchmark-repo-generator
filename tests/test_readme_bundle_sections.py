@@ -46,7 +46,7 @@ class ReadmeBundleSectionTests(unittest.TestCase):
                 self.assertIn("apt-get update && apt-get install -y git\ngit clone --recurse-submodules", flat)
                 self.assertIn("  && bash run_benchmark.sh --profile smoke --validate \\\n  && cd /opt/benchmarks \\\n  && echo \"Done:", flat)
                 self.assertIn(f"{number}-{repo} smoke run passed", flat)
-                self.assertIn(f"./run_benchmark_suite.sh -w {example} -p baseline", flat)
+                self.assertIn(f"./run_benchmark_suite.sh -w {example} --baseline", flat)
                 self.assertIn(f"workload {example}, baseline profile", flat)
                 for line in flat.splitlines():
                     self.assertEqual(line, line.rstrip(), f"trailing whitespace: {line!r}")

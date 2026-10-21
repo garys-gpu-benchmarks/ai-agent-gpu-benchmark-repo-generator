@@ -6,7 +6,7 @@
 # Description: Idempotent local NVIDIA setup for workload 229.
 # Execution: bash setup.sh --assume-yes
 # Options: --assume-yes, --help
-# Requirements: Ubuntu 24.04, bash, apt, NVIDIA driver, CUDA toolkit
+# Requirements: Ubuntu 24.04 or 26.04, bash, apt, NVIDIA driver, CUDA toolkit
 # Environment: Local benchmark host only. Remote SSH execution is not supported.
 # Dependencies: python3-venv, sqlite3, g++, NVCC, nvidia-smi
 # Variables: BENCHMARK_PYTHON, CUDA_HOME
@@ -29,7 +29,7 @@ fi
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_NAME="$(basename "${REPO_ROOT}")"
 cd "${REPO_ROOT}"
-export PATH="/usr/local/cuda/bin:/usr/local/cuda-12.6/bin:${PATH}"
+export PATH="/usr/local/cuda/bin:/usr/local/cuda-12.8/bin:${PATH}"
 export CUDA_HOME="${CUDA_HOME:-/usr/local/cuda}"
 export LD_LIBRARY_PATH="${CUDA_HOME}/lib64:${LD_LIBRARY_PATH:-}"
 
@@ -78,7 +78,12 @@ apt_install() {
     fi
     log_status "STEP|SETUP apt-get install ${pkg}"
     record_cmd "DEBIAN_FRONTEND=noninteractive apt-get install -y ${pkg}"
-    DEBIAN_FRONTEND=noninteractive apt-get install -y "${pkg}"
+    if ! DEBIAN_FRONTEND=noninteractive apt-get install -y "${pkg}"; then
+      nvidia_dpkg_consistent "apt-get install ${pkg}" || exit 1
+      echo "[WARN] apt-get install ${pkg} failed." >&2
+      return 1
+    fi
+    nvidia_dpkg_consistent "apt-get install ${pkg}" || exit 1
   done
 }
 
@@ -92,12 +97,16 @@ verify_cmd() {
   log_status "PASS|SETUP verified ${name}"
 }
 
+# shellcheck disable=SC1091
+source "${REPO_ROOT}/scripts/lib/nvidia_cuda_toolkit.sh"
+
 if [[ "${ASSUME_YES}" -ne 1 ]]; then
   echo "setup.sh will install Ubuntu packages and create ${REPO_ROOT}/.venv."
   read -r -p "Press Enter to continue or Ctrl-C to abort. "
 fi
 
 log_status "PHASE|SETUP start ${REPO_NAME}"
+nvidia_pin_host_driver
 record_cmd "DEBIAN_FRONTEND=noninteractive apt-get update -y"
 DEBIAN_FRONTEND=noninteractive apt-get update -y
 
@@ -133,17 +142,18 @@ apt_install \
   curl \
   ca-certificates
 
-if ! command -v nvcc >/dev/null 2>&1; then
-  apt_install cuda-nvcc-12-6 cuda-cudart-dev-12-6 nvidia-cuda-toolkit || true
-fi
-export PATH="/usr/local/cuda/bin:/usr/local/cuda-12.6/bin:${PATH}"
+# Same toolkit as every other NVIDIA workload on this Ubuntu release
+# (24.04: CUDA 12.8, 26.04: CUDA 13.3). See scripts/lib/nvidia_cuda_toolkit.sh.
+install_nvidia_cuda_toolkit
+export PATH="/usr/local/cuda/bin:/usr/local/cuda-${NVIDIA_CUDA_VERSION}/bin:${PATH}"
 if ! command -v nvcc >/dev/null 2>&1; then
   echo "[FAIL] NVCC is required and was not found after CUDA toolkit install." >&2
   exit 1
 fi
 
 if ! command -v dcgmi >/dev/null 2>&1; then
-  apt_install datacenter-gpu-manager || apt_install datacenter-gpu-manager-4 || true
+  DCGM_PACKAGE="$(nvidia_dcgm_package)"
+  apt_install "${DCGM_PACKAGE}" || log_status "WARN|SETUP ${DCGM_PACKAGE} not installed; dcgmi checks will be skipped"
 fi
 
 # shellcheck disable=SC1091
@@ -167,19 +177,26 @@ if ! "${REPO_ROOT}/.venv/bin/python" -c "import transformers" >/dev/null 2>&1; t
   "${REPO_ROOT}/.venv/bin/python" -m pip install transformers
 fi
 if ! "${REPO_ROOT}/.venv/bin/python" -c "import torch; assert torch.cuda.is_available()" >/dev/null 2>&1; then
-  log_status "STEP|SETUP pip install torch cu126"
-  record_cmd "${REPO_ROOT}/.venv/bin/python -m pip install torch torchvision --index-url https://download.pytorch.org/whl/cu126"
-  "${REPO_ROOT}/.venv/bin/python" -m pip install torch torchvision --index-url https://download.pytorch.org/whl/cu126
+  log_status "STEP|SETUP pip install torch cu128"
+  record_cmd "${REPO_ROOT}/.venv/bin/python -m pip install torch torchvision --index-url https://download.pytorch.org/whl/cu128"
+  "${REPO_ROOT}/.venv/bin/python" -m pip install torch torchvision --index-url https://download.pytorch.org/whl/cu128
 fi
 if ! "${REPO_ROOT}/.venv/bin/python" -c "import torchvision" >/dev/null 2>&1; then
-  log_status "STEP|SETUP pip install torchvision cu126"
-  "${REPO_ROOT}/.venv/bin/python" -m pip install torchvision --index-url https://download.pytorch.org/whl/cu126
+  log_status "STEP|SETUP pip install torchvision cu128"
+  "${REPO_ROOT}/.venv/bin/python" -m pip install torchvision --index-url https://download.pytorch.org/whl/cu128
 fi
 log_status "STEP|SETUP pin torchaudio to match torch CUDA"
-TORCH_CUDA="$("${REPO_ROOT}/.venv/bin/python" -c "import torch; print((torch.version.cuda or '12.6').replace('.',''))" || echo 126)"
+TORCH_CUDA="$("${REPO_ROOT}/.venv/bin/python" -c "import torch; print((torch.version.cuda or '12.8').replace('.',''))" || echo 128)"
 AUDIO_TAG="cu${TORCH_CUDA:0:3}"
-"${REPO_ROOT}/.venv/bin/python" -m pip install --force-reinstall "torchaudio" --index-url "https://download.pytorch.org/whl/${AUDIO_TAG}" || \
-  "${REPO_ROOT}/.venv/bin/python" -m pip install --force-reinstall --no-deps "torchaudio==2.11.0+cu126" --index-url https://download.pytorch.org/whl/cu126
+# torchaudio 2.11.0 is the last torchaudio release. It is built against PyTorch's
+# stable ABI and supports torch 2.11 and every later torch (vLLM 0.31 installs
+# torch 2.13.0+cu130), so pin it on the CUDA tag of the installed torch.
+# --no-deps: a --force-reinstall that resolves torch again can move torch off the
+# version vLLM installed.
+record_cmd "${REPO_ROOT}/.venv/bin/python -m pip install --force-reinstall --no-deps torchaudio==2.11.0+${AUDIO_TAG} --index-url https://download.pytorch.org/whl/${AUDIO_TAG}"
+"${REPO_ROOT}/.venv/bin/python" -m pip install --force-reinstall --no-deps \
+  "torchaudio==2.11.0+${AUDIO_TAG}" \
+  --index-url "https://download.pytorch.org/whl/${AUDIO_TAG}"
 
 verify_cmd "Bash" bash --version
 verify_cmd "SQLite" sqlite3 --version

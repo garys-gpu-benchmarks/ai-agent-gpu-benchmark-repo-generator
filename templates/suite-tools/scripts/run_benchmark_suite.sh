@@ -36,7 +36,9 @@ readonly RULE_RUN="=============================================================
 # Defaults (each can be changed with an option)
 # ------------------------------------------------------------------------------
 root_dir=""
+# Used when no --smoke/--baseline/--extended is given.
 profiles_arg="smoke,baseline,extended"
+declare -a profile_flags=()
 workloads_arg=""
 repeat_count=1
 log_file=""
@@ -67,8 +69,12 @@ all workloads with the first profile, then all with the next, and so on.
 The whole set is repeated --repeat times.
 
 Options:
-  -p, --profiles LIST    Profiles to run, comma-separated, in order.
-                         Default: smoke,baseline,extended
+      --smoke            Run the smoke profile (a short wiring check).
+      --baseline         Run the baseline profile (the standard figures).
+      --extended         Run the extended profile (longer runs).
+                         Give more than one to run them in the order given,
+                         e.g. --baseline --extended.
+                         Default: --smoke --baseline --extended
   -w, --workloads LIST   Workloads to run, by number, comma-separated.
                          Ranges are allowed. Default: every workload found.
                          Examples: 101,107,121   301-310   101-105,120
@@ -93,9 +99,9 @@ Times are shown in the system time zone. To use another, set TZ, e.g.
 
 Examples:
   ./${SCRIPT_NAME}                                  # all workloads, all 3 profiles
-  ./${SCRIPT_NAME} -p smoke                         # quick check of everything
-  ./${SCRIPT_NAME} -w 101,107,121 -p baseline       # three workloads, baseline only
-  ./${SCRIPT_NAME} -w 105 -p smoke --show-output    # one workload, output on screen
+  ./${SCRIPT_NAME} --smoke                          # quick check of everything
+  ./${SCRIPT_NAME} -w 101,107,121 --baseline        # three workloads, baseline only
+  ./${SCRIPT_NAME} -w 105 --smoke --show-output     # one workload, output on screen
   ./${SCRIPT_NAME} -r 20                            # soak test: everything, 20 times
   ./${SCRIPT_NAME} --list                           # every workload should be ready
 EOF
@@ -140,7 +146,9 @@ has_workload_folders() {
 parse_args() {
   while (($# > 0)); do
     case "$1" in
-      -p | --profiles)  [[ $# -ge 2 ]] || die_usage "$1 needs a value"; profiles_arg=$2; shift 2 ;;
+      -p | --profiles)  die_usage "$1 was removed; name the profiles instead: --smoke, --baseline, --extended (for example --baseline --extended)" ;;
+      --smoke | --baseline | --extended)
+                        profile_flags+=("${1#--}"); shift ;;
       -w | --workloads) [[ $# -ge 2 ]] || die_usage "$1 needs a value"; workloads_arg=$2; shift 2 ;;
       -r | --repeat)    [[ $# -ge 2 ]] || die_usage "$1 needs a value"; repeat_count=$2; shift 2 ;;
       -d | --root)      [[ $# -ge 2 ]] || die_usage "$1 needs a value"; root_dir=$2; shift 2 ;;
@@ -155,6 +163,11 @@ parse_args() {
   done
 
   [[ "${repeat_count}" =~ ^[1-9][0-9]*$ ]] || die_usage "--repeat must be a whole number of 1 or more"
+
+  # --smoke/--baseline/--extended, in the order given; none given: the default.
+  if ((${#profile_flags[@]} > 0)); then
+    profiles_arg=$(IFS=','; echo "${profile_flags[*]}")
+  fi
 }
 
 resolve_root() {
@@ -184,7 +197,7 @@ resolve_root() {
 resolve_profiles() {
   local item valid ok
   IFS=',' read -r -a profiles <<<"${profiles_arg}"
-  ((${#profiles[@]} > 0)) || die_usage "--profiles is empty"
+  ((${#profiles[@]} > 0)) || die_usage "no profile to run"
   for item in "${profiles[@]}"; do
     ok=false
     for valid in "${VALID_PROFILES[@]}"; do [[ "${item}" == "${valid}" ]] && ok=true; done

@@ -257,8 +257,8 @@ Each bundle repository holds one platform's 32 workloads as git submodules, with
 git clone --recurse-submodules https://github.com/garys-gpu-benchmarks/bundle-amd-ubuntu-2404 /opt/benchmarks
 cd /opt/benchmarks
 ./run_benchmark_suite.sh --list                   # all 32 should show "ready"
-./run_benchmark_suite.sh -p smoke                 # every workload, smoke profile
-./run_benchmark_suite.sh -w 101,107,121 -p baseline
+./run_benchmark_suite.sh --smoke                  # every workload, smoke profile
+./run_benchmark_suite.sh -w 101,107,121 --baseline
 ```
 
 The other bundles are `bundle-nvidia-ubuntu-2404`, `bundle-amd-ubuntu-2604` and `bundle-nvidia-ubuntu-2604`. To update a host later: `git -C /opt/benchmarks pull && git -C /opt/benchmarks submodule update --init --recursive`.

@@ -27,7 +27,7 @@ if grep -q $'\r' "$0"; then echo "This file has Windows (CRLF) line endings. Fix
 #     "git submodule update --remote" cannot move a workload off its pinned
 #     release.
 #   - The bundle's copy of run_benchmark_suite.sh runs only the smoke profile
-#     when no -p is given, and its --help examples use that bundle's workload
+#     when no profile option is given, and its --help examples use that bundle's workload
 #     numbers (the shared script's examples name 101-132 in every bundle).
 #   - Bundle README: Getting started begins with x07 (STREAM, CPU only, no
 #     GPU install or restart), then x01, x02 and x14 (host-GPU copy at
@@ -35,7 +35,7 @@ if grep -q $'\r' "$0"; then echo "This file has Windows (CRLF) line endings. Fix
 #   - Bundle README: the first GPU command says it is quiet for 5-20 minutes while
 #     it installs, and how to watch it (--show-output or install_status.txt).
 #   - Bundle README: smoke is a wiring check, not a number to quote; the
-#     full run is an explicit -p smoke,baseline,extended; what to do after
+#     full run is an explicit --smoke --baseline --extended; what to do after
 #     the install restarts the machine; results that are expected to be na;
 #     Hugging Face range x23-x32; how to see which release is installed.
 #   - Step 7 stops if the suite-script edits did not apply; step 8 also checks
@@ -472,7 +472,7 @@ wait_self_test() {
 # $3 = number of workloads, $4 = list of workload rows (Markdown).
 # Writes a bundle's copy of run_benchmark_suite.sh: stdin -> stdout.
 # $1 = platform digit (1-4). Two changes from the shared script:
-#   - with no -p it runs the smoke profile only, so a bare
+#   - with no profile option it runs the smoke profile only, so a bare
 #     ./run_benchmark_suite.sh is a short check, not a many-hour run;
 #   - the --help examples and the bad-number message use this bundle's
 #     workload numbers (the shared script names 101-132 in every bundle).
@@ -480,19 +480,19 @@ bundle_suite_script() {
   local s=$1
   tr -d '\r' | sed \
     -e 's/^profiles_arg="smoke,baseline,extended"$/profiles_arg="smoke"/' \
-    -e 's/Default: smoke,baseline,extended$/Default: smoke   (full run: -p smoke,baseline,extended)/' \
+    -e 's/Default: --smoke --baseline --extended$/Default: --smoke   (full run: --smoke --baseline --extended)/' \
     -e "s/Examples: 101,107,121   301-310   101-105,120\$/Examples: ${s}01,${s}07,${s}21   ${s}01-${s}10   ${s}01-${s}05,${s}20/" \
     -e 's/^\(  \.\/\${SCRIPT_NAME}  *\)# all workloads, all 3 profiles$/\1# all workloads, smoke profile (the default)/' \
-    -e 's/^  \.\/\${SCRIPT_NAME} -p smoke  *# quick check of everything$/  .\/${SCRIPT_NAME} -p smoke,baseline,extended   # everything, all 3 profiles (many hours)/' \
-    -e "/-w 101,107,121 -p baseline\\|-w 105 -p smoke\\|use numbers like 101/s/\\b1\\([0-3][0-9]\\)\\b/${s}\\1/g"
+    -e 's/^  \.\/\${SCRIPT_NAME} --smoke  *# quick check of everything$/  .\/${SCRIPT_NAME} --smoke --baseline --extended    # everything, all 3 profiles (many hours)/' \
+    -e "/-w 101,107,121 --baseline\\|-w 105 --smoke\\|use numbers like 101/s/\\b1\\([0-3][0-9]\\)\\b/${s}\\1/g"
 }
 
 # Checks a bundle copy written by bundle_suite_script. $1 = file, $2 = digit.
 check_bundle_suite_script() {
   local f=$1 s=$2
   grep -qx 'profiles_arg="smoke"' "${f}" || { echo "the default profile is not smoke in ${f}"; return 1; }
-  grep -q "Default: smoke   (full run" "${f}" || { echo "the --help default line was not changed in ${f}"; return 1; }
-  grep -q -- "-w ${s}01,${s}07,${s}21 -p baseline" "${f}" || { echo "the --help examples do not use ${s}NN numbers in ${f}"; return 1; }
+  grep -q "Default: --smoke   (full run" "${f}" || { echo "the --help default line was not changed in ${f}"; return 1; }
+  grep -q -- "-w ${s}01,${s}07,${s}21 --baseline" "${f}" || { echo "the --help examples do not use ${s}NN numbers in ${f}"; return 1; }
   grep -q "all workloads, smoke profile (the default)" "${f}" || { echo "the bare-command example was not changed in ${f}"; return 1; }
   bash -n "${f}" || { echo "${f} is not valid bash after the edits"; return 1; }
 }
@@ -527,12 +527,11 @@ which closes your connection. ${restart_steps}"
       ;;
     3)
       prereq='- A machine where installing ROCm and one restart are acceptable: the first
-  run installs ROCm, and may restart the machine once.'
-      restart="**If the machine restarts.** After installing ROCm, setup reloads the amdgpu
-driver in place, so the machine normally keeps running. If the reload cannot be
-verified, setup restarts the machine once, which closes your connection. With
-\`--show-output\`, the output then ends like this (in quiet mode, only the last
-line appears):
+  run installs ROCm and restarts the machine once.'
+      restart="**The machine restarts once.** The Ubuntu 26.04 image cannot start the MI300X
+until ROCm's firmware is installed, so the first install ends with one restart,
+which closes your connection. With \`--show-output\`, the output ends like this
+(in quiet mode, only the last line appears):
 
 \`\`\`text
 Successfully installed PyYAML-6.0.3
@@ -541,7 +540,7 @@ Connection to <your-machine-address> closed by remote host.
 \`\`\`
 
 ${restart_steps}"
-      lead2="When all three pass, it ends like this:"
+      lead2="After the restart, the same command ends like this when all three pass:"
       start2="Mon Oct 19 22:27:43 UTC 2026"; end2="Mon Oct 19 22:28:18 UTC 2026"
       total2="0 hours 0 minutes 35 seconds"; stamp2="20261019_222743"
       ;;
@@ -600,7 +599,7 @@ the summary's last line.
 
 ```bash
 cd /opt/benchmarks
-./run_benchmark_suite.sh -w @S@07 -p smoke --show-output
+./run_benchmark_suite.sh -w @S@07 --smoke --show-output
 ```
 
 @S@07 is STREAM, CPU memory bandwidth. It installs only a compiler and its own
@@ -628,8 +627,8 @@ The first time, @S@01 installs @STACK@, which takes 5 to 20 minutes. Run it
 either way:
 
 ```bash
-./run_benchmark_suite.sh -w @S@01,@S@02,@S@14 -p smoke --show-output   # shows progress while @STACK@ installs
-./run_benchmark_suite.sh -w @S@01,@S@02,@S@14 -p smoke                 # quiet: prints nothing for 5 to 20 minutes
+./run_benchmark_suite.sh -w @S@01,@S@02,@S@14 --smoke --show-output   # shows progress while @STACK@ installs
+./run_benchmark_suite.sh -w @S@01,@S@02,@S@14 --smoke                 # quiet: prints nothing for 5 to 20 minutes
 ```
 
 In quiet mode, watch progress from a second window with
@@ -673,8 +672,8 @@ ends with the summary shown above. The full output is in
 output on screen:
 
 ```bash
-./run_benchmark_suite.sh -w @S@05 -p smoke --show-output      # benchmark @S@05, smoke profile
-./run_benchmark_suite.sh -w @S@05 -p baseline --show-output   # the standard profile
+./run_benchmark_suite.sh -w @S@05 --smoke --show-output      # benchmark @S@05, smoke profile
+./run_benchmark_suite.sh -w @S@05 --baseline --show-output   # the standard profile
 ```
 
 ## See your results
@@ -699,20 +698,20 @@ It takes many hours.
 ```bash
 tmux new -s bench
 cd /opt/benchmarks
-./run_benchmark_suite.sh -p smoke,baseline,extended
+./run_benchmark_suite.sh --smoke --baseline --extended
 ```
 
 This runs all @WANT@ benchmarks with the `smoke` profile, then all with
-`baseline`, then all with `extended`. Without `-p`, `./run_benchmark_suite.sh`
-runs the `smoke` profile only. Detach with **Ctrl+B** then **D**;
-reattach later with `tmux attach -t bench`.
+`baseline`, then all with `extended`. With no profile option,
+`./run_benchmark_suite.sh` runs the `smoke` profile only. Detach with
+**Ctrl+B** then **D**; reattach later with `tmux attach -t bench`.
 
 Run "Getting started" first on a new machine, so the one-time install (and any
 restart) happens before the long run.
 
 | Option | What it does |
 |---|---|
-| `-p baseline` | profiles to run, in order (`smoke`, `baseline`, `extended`; comma-separated). Default: `smoke` |
+| `--baseline` | profile to run: `--smoke`, `--baseline` or `--extended`; give more than one to run them in that order. Default: `--smoke` |
 | `-w @S@01,@S@07,@S@21` | only these benchmarks; ranges work too: `-w @S@01-@S@10` |
 | `-r 20` | repeat the whole set 20 times (soak test) |
 | `--fail-fast` | stop at the first failed run |
@@ -1377,7 +1376,7 @@ if is_done enduser-test; then skipped 8; else
     done
     [[ ! -e "${WORK}/_test_clone/run.sh" ]] || stop "${bundle} still has run.sh; step 7 should have removed it"
     ! grep -q 'branch *=' "${WORK}/_test_clone/.gitmodules" || stop "${bundle}'s .gitmodules still has a branch line"
-    (cd "${WORK}/_test_clone" && ./run_benchmark_suite.sh --help) | grep -q "Default: smoke   (full run" ||
+    (cd "${WORK}/_test_clone" && ./run_benchmark_suite.sh --help) | grep -q "Default: --smoke   (full run" ||
       stop "${bundle}'s run_benchmark_suite.sh does not default to the smoke profile"
     for f in $(grep -o '\./[a-z_]*\.sh' "${WORK}/_test_clone/README.md" | sort -u); do
       [[ -x "${WORK}/_test_clone/${f#./}" ]] || stop "the ${bundle} README names ${f}, which is not in the bundle (or not executable)"
