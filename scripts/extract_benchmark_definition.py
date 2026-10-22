@@ -384,11 +384,15 @@ def _extract_profile_parameter_values(
             parameter = _row_cell(row, param_idx)
             if not parameter:
                 continue
+            # Every cell goes through _strip_profile_cell: a TEMPLATE_00_<n>
+            # authoring note in any of them is copied into
+            # benchmark_specification.json and fails self_check (207 and 416
+            # in the TEMPLATE_00_116 batches).
             values[parameter] = {
-                "smoke": _row_cell(row, smoke_idx),
-                "baseline": _row_cell(row, baseline_idx),
-                "extended": _row_cell(row, extended_idx),
-                "notes": _row_cell(row, notes_idx),
+                "smoke": _strip_profile_cell(_row_cell(row, smoke_idx)),
+                "baseline": _strip_profile_cell(_row_cell(row, baseline_idx)),
+                "extended": _strip_profile_cell(_row_cell(row, extended_idx)),
+                "notes": _strip_profile_cell(_row_cell(row, notes_idx)),
             }
         return sheet.name, values
     return "Parameters_SmokeBaselineExtend", {}
@@ -422,6 +426,17 @@ def _strip_template_notes(value: str) -> str:
     # slug such as "(failure_count)". Stripping ")" made extract drop the
     # closer and print_metric_summary treat the last item as NOT FOUND.
     return re.sub(r"\s{2,}", " ", without_notes).strip(" ;.")
+
+
+def _strip_profile_cell(value: str) -> str:
+    """Strip TEMPLATE_00_<n> notes from a Parameters_SmokeBaselineExtend cell.
+
+    A cell without the tag is returned unchanged, so parameter values keep
+    their exact text (no trimming of a leading "." or doubled spaces).
+    """
+    if "template_00_" not in value.lower():
+        return value
+    return _strip_template_notes(value)
 
 
 def _clean_value(value: str) -> str:

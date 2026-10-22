@@ -18,6 +18,8 @@ mkdir -p "$OUTPUT_DIR"
 # so without this the probes record FAILED instead of the installed versions.
 # The collector lives in <repo>/scripts/, so the virtualenv is <repo>/.venv.
 COLLECTOR_REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." 2>/dev/null && pwd)"
+# Exported so the release commands (git describe) in each child bash see it.
+export COLLECTOR_REPO_ROOT
 if [[ -n "$COLLECTOR_REPO_ROOT" && -x "$COLLECTOR_REPO_ROOT/.venv/bin/python3" ]]; then
     export VIRTUAL_ENV="$COLLECTOR_REPO_ROOT/.venv"
     export PATH="$VIRTUAL_ENV/bin:$PATH"
@@ -227,6 +229,8 @@ COMMAND_DATA=$(cat <<'__COMMAND_DATA__'
 137	nVidia-only	hardware	ZG1lc2cgfCBncmVwIC1FaSAnbnZpZGlhfG52cm18eGlkJw==	blZpZGlhIGtlcm5lbCBtZXNzYWdlcyAoUnVucG9kIHBlcm1pc3Npb24gZmFpbCk=
 138	nVidia-only	hardware	bHNwY2kgLXZ2IC1zICQobnZpZGlhLXNtaSAtLXF1ZXJ5LWdwdT1wY2kuYnVzX2lkIC0tZm9ybWF0PWNzdixub2hlYWRlcik=	blZpZGlhIFBDSSBjb25maWcgKEJBUlNzLCBEcml2ZXIgQmluZGluZyk=
 139	AMD, nVidia	software	bHNiX3JlbGVhc2UgLWE=	T1MgdmVyc2lvbiAmIFVidW50dSByZWxlYXNl
+139.1	AMD, nVidia	software	Z2l0IC1DICIke0NPTExFQ1RPUl9SRVBPX1JPT1Q6LS59IiBkZXNjcmliZSAtLXRhZ3MgLS1hbHdheXMgMj4vZGV2L251bGwgfHwgZWNobyAibm8gZ2l0IG1ldGFkYXRhOiB0aGlzIHdvcmtsb2FkIHdhcyBjb3BpZWQsIG5vdCBjbG9uZWQi	V29ya2xvYWQgcmVsZWFzZSAoZ2l0IHRhZyBvZiB0aGlzIHdvcmtsb2FkIHJlcG9zaXRvcnkp
+139.2	AMD, nVidia	software	Z2l0IC1DICIke0NPTExFQ1RPUl9SRVBPX1JPT1Q6LS59Ly4uIiBkZXNjcmliZSAtLXRhZ3MgLS1hbHdheXMgMj4vZGV2L251bGwgfHwgZWNobyAibm90IGluc2lkZSBhIGNsb25lZCBiZW5jaG1hcmsgYnVuZGxlIg==	QnVuZGxlIHJlbGVhc2UgKGdpdCB0YWcgb2YgdGhlIGJ1bmRsZSB0aGF0IGhvbGRzIHRoaXMgd29ya2xvYWQp
 140	AMD, nVidia	software	dW5hbWUgLWE=	TGludXggS2VybmVsIFZlcnNpb24=
 141	AMD, nVidia	software	ZGttcyAtLXZlcnNpb24=	S2VybmVsIE1vZHVsZXMgKERLTVMpIFZlcnNpb24=
 142	AMD, nVidia	software	ZGttcyBzdGF0dXM=	S2VybmVsIE1vZHVsZXMgKERLTVMpIFN0YXR1cw==

@@ -106,6 +106,36 @@ class LinpackSizeTest(unittest.TestCase):
         self.assertEqual(checked, 6)
 
 
+class BabelStreamSmokeReadsHbmTest(unittest.TestCase):
+    """x15 smoke must not fit in any GPU cache, or it measures cache, not HBM.
+
+    Until TEMPLATE_00_117 smoke used 1048576 FP64 values per array (24 MiB working
+    set); 415 smoke published Add/Triad as na because 3982 GB/s exceeded the H100 SXM
+    HBM3 peak. metric_contract marks a working set under 4x the GPU cache as
+    cache-resident, so every profile's working set must clear that on every GPU.
+    """
+
+    GPUS = ("AMD Instinct MI300X", "NVIDIA H100 80GB HBM3", "NVIDIA H100 NVL", "NVIDIA H100 PCIe", "unknown GPU")
+
+    def test_every_profile_working_set_clears_every_gpu_cache(self) -> None:
+        import sys
+
+        sys.path.insert(0, str(ROOT / "scripts"))
+        import metric_contract
+
+        workbook = load_workbook(MATRIX, read_only=True, data_only=True)
+        rows = list(workbook["Parameters_SmokeBaselineExtend"].iter_rows(values_only=True))[1:]
+        sizes = {_norm(r[0]): r[3:6] for r in rows if r[0] is not None and r[2] == "array_size" and _norm(r[0])[1:] == "15"}
+        self.assertEqual(sorted(sizes), ["115", "215", "315", "415"])
+        self.assertEqual(len({tuple(map(_norm, v)) for v in sizes.values()}), 1)
+        for workload, values in sizes.items():
+            for profile, value in zip(("smoke", "baseline", "extended"), values):
+                working_set = int(float(value)) * 8 * 3
+                for gpu in self.GPUS:
+                    with self.subTest(workload=workload, profile=profile, gpu=gpu):
+                        self.assertFalse(metric_contract.cache_resident(working_set, "hbm", gpu))
+
+
 class OnePyTorchBuildTest(unittest.TestCase):
     def test_no_nvidia_installer_pins_the_old_24_04_torch(self) -> None:
         paths = [ROOT / "scripts" / "install_pytorch_nvidia.sh", ROOT / "scripts" / "templates" / "setup_nvidia_skeleton.sh"]

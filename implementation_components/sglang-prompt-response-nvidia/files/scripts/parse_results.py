@@ -109,6 +109,11 @@ META_KEYS = (
 )
 
 
+# Per-request metrics published as the median of the timed requests, so one slow
+# request (compilation the warm-up did not absorb) cannot dominate the summary.
+MEDIAN_METRICS = {"end_to_end_latency_ms", "ttft_ms", "output_tokens_per_s"}
+
+
 def utc_now() -> str:
     return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
@@ -384,7 +389,8 @@ def main() -> int:
     # 2026-10-01: a request the client recorded as failed (status=error) counts
     # against completed_request_rate_pct but does not fail the run; the run fails
     # if no request succeeded or a successful row has invalid values. Metric
-    # means use successful requests only. A metric with no number on any
+    # summaries use successful requests only; per-request latencies and rates are
+    # medians (MEDIAN_METRICS, TEMPLATE_00_117), the request and cache rates means. A metric with no number on any
     # successful row is published as its "na (...)" text (it used to become 0.0
     # or vanish from summary.json).
     parsed_samples = []
@@ -464,7 +470,8 @@ def main() -> int:
         if run_status == "stub":
             run_metrics[name] = "na (stub server, smoke only)"
         else:
-            run_metrics[name] = statistics.fmean(values) if values else na_reason([row.get(name) for row in ok_rows])
+            summarize = statistics.median if name in MEDIAN_METRICS else statistics.fmean
+            run_metrics[name] = summarize(values) if values else na_reason([row.get(name) for row in ok_rows])
     e2e_values = ok_numbers("end_to_end_latency_ms")
     ttft_values = ok_numbers("ttft_ms")
     insert_values = (

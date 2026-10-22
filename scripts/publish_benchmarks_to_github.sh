@@ -31,7 +31,8 @@ if grep -q $'\r' "$0"; then echo "This file has Windows (CRLF) line endings. Fix
 #     numbers (the shared script's examples name 101-132 in every bundle).
 #   - Bundle README: Getting started begins with x07 (STREAM, CPU only, no
 #     GPU install or restart), then x01, x02 and x14 (host-GPU copy at
-#     256 MiB) instead of x15, whose smoke arrays fit in GPU cache.
+#     256 MiB) instead of x15, whose smoke arrays then fit in GPU cache
+#     (x15 smoke reads HBM since TEMPLATE_00_117).
 #   - Bundle README: the first GPU command says it is quiet for 5-20 minutes while
 #     it installs, and how to watch it (--show-output or install_status.txt).
 #   - Bundle README: smoke is a wiring check, not a number to quote; the
@@ -658,8 +659,9 @@ Log file:      /opt/benchmarks/benchmark_suite_log/run_benchmark_suite_<host>_@S
 
 Smoke shows that each benchmark installs, runs and records its results. Most
 smoke runs use small sizes, so their numbers are not for reports: for example,
-the @S@15 (GPU memory bandwidth) smoke arrays fit in GPU cache and do not
-measure HBM. Quote `baseline` or `extended` results. Smoke is short for most
+@S@20 (HPL FP64) smoke solves a 4096 x 4096 system, too small to load the GPU,
+and @S@15 (GPU memory bandwidth) smoke runs only 20 iterations. Quote
+`baseline` or `extended` results. Smoke is short for most
 benchmarks, but the AI benchmarks (@S@23 to @S@32) download models the first
 time, so their first smoke run takes longer.
 

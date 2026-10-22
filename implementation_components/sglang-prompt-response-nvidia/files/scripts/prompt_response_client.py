@@ -25,8 +25,14 @@ Metrics (2026-10-01):
   that wait was averaged into TTFT (published 11.8-17 s instead of ~45 ms). The
   warm-up prompt shares no prefix with the timed prompts, so it does not change
   the cache hit rate.
+- End-to-end latency, TTFT and output_tokens_per_s are the median (p50) of the
+  timed requests (TEMPLATE_00_117). With a mean, one request that still waited on
+  compilation after the warm-up dominated: 230 baseline published TTFT 1170 ms
+  when seven of eight requests took ~29 ms (one took 9156 ms).
 """
 from __future__ import annotations
+
+import statistics
 
 import argparse
 import csv
@@ -277,7 +283,7 @@ def main() -> int:
     def _summary(key):
         nums = [row[key] for row in ok_rows if isinstance(row[key], (int, float))]
         if nums:
-            return sum(nums) / len(nums)
+            return statistics.median(nums)
         reasons = {row[key] for row in ok_rows}
         return reasons.pop() if len(reasons) == 1 else NA_FAILED
 

@@ -195,6 +195,8 @@ mkdir -p "$OUTPUT_DIR"
 # so without this the probes record FAILED instead of the installed versions.
 # The collector lives in <repo>/scripts/, so the virtualenv is <repo>/.venv.
 COLLECTOR_REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." 2>/dev/null && pwd)"
+# Exported so the release commands (git describe) in each child bash see it.
+export COLLECTOR_REPO_ROOT
 if [[ -n "$COLLECTOR_REPO_ROOT" && -x "$COLLECTOR_REPO_ROOT/.venv/bin/python3" ]]; then
     export VIRTUAL_ENV="$COLLECTOR_REPO_ROOT/.venv"
     export PATH="$VIRTUAL_ENV/bin:$PATH"

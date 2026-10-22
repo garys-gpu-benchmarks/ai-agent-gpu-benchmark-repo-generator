@@ -335,15 +335,43 @@ class GpuLoad:
             self.thread.join(timeout=15)
 
 
+# The timed window starts only once the GPU is busy. rocblas-bench spends 3-4 s
+# loading the rocBLAS library before its first GEMM; with the old fixed start, the
+# 5 s smoke window saw only that start-up (1-4% utilization, idle power and
+# temperature, so both metrics were na) and baseline/extended averaged 5 idle
+# seconds into "sustained" power.
+UTIL_THRESHOLD_PCT = 10.0
+LOAD_WAIT_MAX_S = 30
+
+
+def wait_for_gpu_load(load, max_wait=LOAD_WAIT_MAX_S, poll_s=0.5, read_util=None):
+    """Block until GPU utilization reaches UTIL_THRESHOLD_PCT, the load fails, or
+    max_wait seconds pass. Returns (seconds waited, peak utilization seen)."""
+    read_util = read_util or (lambda: gpu_metrics()[0])
+    began = time.time()
+    peak = 0.0
+    while time.time() - began < max_wait:
+        try:
+            util = float(read_util())
+        except (TypeError, ValueError):
+            util = 0.0
+        peak = max(peak, util)
+        if util >= UTIL_THRESHOLD_PCT or load.error or not load.thread.is_alive():
+            break
+        time.sleep(poll_s)
+    return time.time() - began, peak
+
+
 def gpu_load_failure(load, rows, profile):
     """Return an na reason when the requested GPU load did not run, else ""."""
     utils = [float(r["gpu_util_pct"]) for r in rows if str(r.get("gpu_util_pct", "")).replace(".", "", 1).isdigit()]
     peak_util = max(utils) if utils else 0.0
-    if load.ok_runs > 0 and peak_util >= 10:
+    if load.ok_runs > 0 and peak_util >= UTIL_THRESHOLD_PCT:
         return ""
-    why = load.error or f"GPU utilization peaked at {peak_util:g}%"
-    if profile == "smoke":
-        return f"na (timed loop too short: GPU load did not reach the GPU in the smoke duration; {why})"
+    why = load.error or (
+        f"GPU utilization peaked at {peak_util:g}% after waiting up to {LOAD_WAIT_MAX_S} s "
+        f"for it to reach {UTIL_THRESHOLD_PCT:g}%"
+    )
     return f"na (GPU load did not run: {why})"
 
 
@@ -357,13 +385,18 @@ def main() -> int:
     Path(args.run_dir).mkdir(parents=True, exist_ok=True)
     stress = None
     gpu_proc = None
+    if gpu_load > 0:
+        # Start the GPU load first and give it room to get going, then start the
+        # timed window (and the CPU stress) once the GPU is actually busy.
+        gpu_proc = GpuLoad(seconds + LOAD_WAIT_MAX_S, gpu_load, Path(args.run_dir) / "gpu_load.log").start()
+        waited, seen = wait_for_gpu_load(gpu_proc)
+        gpu_proc.deadline = time.time() + seconds
+        print(f"[INFO] GPU load reached {seen:g}% utilization after {waited:.1f} s; the {seconds} s timed window starts now")
     if shutil.which("stress-ng"):
         stress = subprocess.Popen(
             ["stress-ng", "--cpu", str(threads), "--cpu-load", str(cpu_load), "--timeout", f"{seconds}s"],
             stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
         )
-    if gpu_load > 0:
-        gpu_proc = GpuLoad(seconds, gpu_load, Path(args.run_dir) / "gpu_load.log").start()
     header = [
         "sample_index", "second", "gpu_util_pct", "gpu_temp_c", "gpu_power_w",
         "ecc_uncorrected", "peak_gpu_junction_temp_c", "sustained_gpu_power_w",

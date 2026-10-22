@@ -7272,10 +7272,14 @@ parameters:
     workload_specific_overrides:
       '201':
         workload_name: System Config Verification
-        meaning: substring of nvidia-smi Driver Version
+        meaning: minimum driver version. Driver version compliance percent is the share of the three driver components (loaded
+          kernel module, nvidia-smi, libcuda) whose version is at or above it, so a newer driver such as 595 is compliant
+          with 580
       '401':
         workload_name: System Config Verification
-        meaning: substring of nvidia-smi Driver Version
+        meaning: minimum driver version. Driver version compliance percent is the share of the three driver components (loaded
+          kernel module, nvidia-smi, libcuda) whose version is at or above it, so a newer driver such as 595 is compliant
+          with 580
     cli_config_key: workload-specific
     interaction_precedence: workload-specific interaction rules
     notes_constraints: Do not assume this shared name has identical units or semantics across all workloads.
