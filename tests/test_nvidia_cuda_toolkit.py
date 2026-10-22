@@ -299,6 +299,46 @@ class SetupScriptTest(unittest.TestCase):
         self.assertIn("installs Ubuntu's nvidia-cuda-toolkit", text)
 
 
+class NcclCheckTest(unittest.TestCase):
+    """vLLM and SGLang use PyTorch's bundled NCCL, so setup must not require the system libnccl.so.
+
+    Only the NCCL bandwidth workload (x16) installs libnccl2/libnccl-dev. In TEMPLATE_00_116,
+    230 failed setup on a fresh 24.04 host because x16 had not run first, although
+    torch.cuda.nccl.version() in its .venv returned (2, 29, 7).
+    """
+
+    OVERLAYS = ("sglang-prompt-response", "vllm-kvcache", "vllm-throughput", "vllm-token-generation")
+
+    def overlay(self, name: str) -> str:
+        return (ROOT / "implementation_components" / f"{name}-nvidia" / "files" / "setup.sh").read_text(encoding="utf-8")
+
+    def test_checks_torch_nccl_not_the_system_library(self) -> None:
+        for name in self.OVERLAYS:
+            text = self.overlay(name)
+            with self.subTest(overlay=name):
+                self.assertIn('verify_cmd "NCCL" .venv/bin/python -c "import torch; assert torch.cuda.nccl.version()"', text)
+                self.assertNotRegex(text, r'(?m)^verify_cmd "NCCL" test ')
+
+    def test_check_passes_and_fails_on_the_venv_answer(self) -> None:
+        body = function_source(self.overlay("sglang-prompt-response"), "verify_cmd")
+        for answer, expected in (("(2, 29, 7)", 0), ("", 1)):
+            with tempfile.TemporaryDirectory() as tmp, self.subTest(answer=answer or "missing"):
+                venv = Path(tmp) / ".venv" / "bin"
+                venv.mkdir(parents=True)
+                python = venv / "python"
+                if expected == 0:
+                    python.write_text("#!/bin/bash\necho '(2, 29, 7)'\nexit 0\n", encoding="utf-8")
+                else:
+                    python.write_text("#!/bin/bash\necho 'AssertionError' >&2\nexit 1\n", encoding="utf-8")
+                python.chmod(0o755)
+                script = "\n".join([
+                    'log_status() { echo "$1"; }', body,
+                    'verify_cmd "NCCL" .venv/bin/python -c "import torch; assert torch.cuda.nccl.version()"',
+                ])
+                result = subprocess.run(["bash", "-c", script], cwd=tmp, text=True, capture_output=True, check=False)
+                self.assertEqual(result.returncode, expected, result.stdout + result.stderr)
+
+
 class UnsupportedCompilerTest(unittest.TestCase):
     def test_unsupported_gnu_version_fails_without_the_header_repair(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

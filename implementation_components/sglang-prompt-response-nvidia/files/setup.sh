@@ -236,7 +236,11 @@ verify_cmd "KV-Cache Manager" test -f scripts/tiny_sglang_server.py
 verify_cmd "Mistral-7B-v0.3 Model" test -f scripts/prompt_response_client.py
 verify_cmd "SGLang LLM" test -f scripts/tiny_sglang_server.py
 verify_cmd "HTTP client harness" test -f scripts/prompt_response_client.py
-verify_cmd "NCCL" test -e /usr/lib/x86_64-linux-gnu/libnccl.so -o -e /usr/local/cuda/lib64/libnccl.so
+# NCCL here is the library PyTorch ships in .venv (nvidia-nccl-cu13), which this
+# workload uses for GPU communication. The system libnccl.so is installed only by
+# the NCCL bandwidth workload (x16), so checking for it made this setup fail
+# whenever x16 had not run first on the machine.
+verify_cmd "NCCL" .venv/bin/python -c "import torch; assert torch.cuda.nccl.version()"
 restore_triton_nvidia_bin_exec
 verify_cmd "Triton JIT Compiler" .venv/bin/python -c "import triton; print(getattr(triton,\"__version__\",\"present\"))"
 test -e /dev/nvidiactl || { echo "[FAIL] /dev/nvidiactl is not accessible." >&2; exit 1; }

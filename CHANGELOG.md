@@ -1,5 +1,12 @@
 # Changelog
 
+## 2026-10-22 — TEMPLATE_00_117: vLLM and SGLang setups check PyTorch's NCCL, not a system libnccl.so
+
+- **Finding (TEMPLATE_00_116, fresh 24.04 copy, Project401):** `./run_benchmark_suite.sh -w 201,205,218,221,222,226,232,230 --smoke` failed 230 at the end of setup with `[FAIL] Required framework item failed verification: NCCL`, after torch 2.13.0+cu130, SGLang 0.5.19, `sgl_kernel` and `launch_server` had all verified. The check required `/usr/lib/x86_64-linux-gnu/libnccl.so` or `/usr/local/cuda/lib64/libnccl.so`, which only the NCCL bandwidth workload (x16) installs (`libnccl2 libnccl-dev`). Full-suite runs passed only because x16 runs before x27-x30; this run skipped 216. In the same `.venv`, `torch.cuda.nccl.version()` returned `(2, 29, 7)`.
+- **Fix:** the NCCL check in `implementation_components/sglang-prompt-response-nvidia`, `vllm-kvcache-nvidia`, `vllm-throughput-nvidia` and `vllm-token-generation-nvidia` (`files/setup.sh`) is now `verify_cmd "NCCL" .venv/bin/python -c "import torch; assert torch.cuda.nccl.version()"`: the NCCL PyTorch ships (`nvidia-nccl-cu13`), which vLLM and SGLang use. It still fails when PyTorch has no working NCCL. Nothing new is installed, the check keeps its name, and x16's own system-NCCL checks are unchanged (it compiles against libnccl).
+- **Tests:** `tests/test_nvidia_cuda_toolkit.py` checks all four setups use the PyTorch check, and runs it against a `.venv` that reports NCCL and one that does not.
+- **Already generated:** workloads 227-230 and 427-430 generated from TEMPLATE_00_116 still have the old check; regenerate them, or apply the same one-line change to their `setup.sh` before publishing.
+
 ## 2026-10-21 — TEMPLATE_00_116: x20 NVIDIA extended N matches what runs; preflight finds a working Python
 
 - **x20 NVIDIA HPL (220/420) extended:** `BenchmarkSpecDefinitions.xlsx` said `problem_size_N` 65536, but the cuSOLVER collector clamps N >= 65536 to 32768 (`clamp_problem_n`), so every extended run used N=32768 while the ledger and metrics recorded 65536. Extended N is now 32768, the size that ran (and the AMD 120/320 value, kept after N=65536 hung). Runtime does not change. The notes cells record why; `sync_matrix_profile_commands.py` updated the two extended command cells. `tests/test_nvidia_sibling_parity.py` now fails if any 220/420 profile N would be clamped.
