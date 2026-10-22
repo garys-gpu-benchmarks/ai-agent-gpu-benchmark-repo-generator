@@ -415,10 +415,9 @@ def env_reuse_stamp(repo_dir: Path) -> str:
         vendor = "cpu"
     flags = resolve_flags(fields.get("Framework", ""), vendor=vendor)
     active = ",".join(f"{key}={flags[key]}" for key in sorted(flags) if flags[key])
-    if vendor == "nvidia" and "26.04" in fields.get("OS Version", ""):
+    if vendor == "nvidia":
+        # One PyTorch build (torch 2.13.0+cu130) on Ubuntu 24.04 and 26.04.
         wheel = "cu130"
-    elif vendor == "nvidia":
-        wheel = "cu128"
     else:
         wheel = "rocm"
     return f"flags={active};wheel={wheel}"

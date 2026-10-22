@@ -177,16 +177,16 @@ if ! "${REPO_ROOT}/.venv/bin/python" -c "import transformers" >/dev/null 2>&1; t
   "${REPO_ROOT}/.venv/bin/python" -m pip install transformers
 fi
 if ! "${REPO_ROOT}/.venv/bin/python" -c "import torch; assert torch.cuda.is_available()" >/dev/null 2>&1; then
-  log_status "STEP|SETUP pip install torch cu128"
-  record_cmd "${REPO_ROOT}/.venv/bin/python -m pip install torch torchvision --index-url https://download.pytorch.org/whl/cu128"
-  "${REPO_ROOT}/.venv/bin/python" -m pip install torch torchvision --index-url https://download.pytorch.org/whl/cu128
+  log_status "STEP|SETUP pip install torch cu130"
+  record_cmd "${REPO_ROOT}/.venv/bin/python -m pip install torch torchvision --index-url https://download.pytorch.org/whl/cu130"
+  "${REPO_ROOT}/.venv/bin/python" -m pip install torch torchvision --index-url https://download.pytorch.org/whl/cu130
 fi
 if ! "${REPO_ROOT}/.venv/bin/python" -c "import torchvision" >/dev/null 2>&1; then
-  log_status "STEP|SETUP pip install torchvision cu128"
-  "${REPO_ROOT}/.venv/bin/python" -m pip install torchvision --index-url https://download.pytorch.org/whl/cu128
+  log_status "STEP|SETUP pip install torchvision cu130"
+  "${REPO_ROOT}/.venv/bin/python" -m pip install torchvision --index-url https://download.pytorch.org/whl/cu130
 fi
 log_status "STEP|SETUP pin torchaudio to match torch CUDA"
-TORCH_CUDA="$("${REPO_ROOT}/.venv/bin/python" -c "import torch; print((torch.version.cuda or '12.8').replace('.',''))" || echo 128)"
+TORCH_CUDA="$("${REPO_ROOT}/.venv/bin/python" -c "import torch; print((torch.version.cuda or '13.0').replace('.',''))" || echo 130)"
 AUDIO_TAG="cu${TORCH_CUDA:0:3}"
 # torchaudio 2.11.0 is the last torchaudio release. It is built against PyTorch's
 # stable ABI and supports torch 2.11 and every later torch (vLLM 0.31 installs

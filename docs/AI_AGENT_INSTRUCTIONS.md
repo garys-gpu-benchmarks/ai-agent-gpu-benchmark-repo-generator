@@ -19,10 +19,16 @@ When the Cursor workspace is this generator folder, attach `@docs/AI_AGENT_INSTR
 Save that chat text as the submitted-prompt artifact, then run this from the generator directory. This is the only generation action. Do not pass `--remote-root`, `--project-root`, or `--template-root`, and do not reimplement copy, setup, or smoke:
 
 ```bash
-MSYS_NO_PATHCONV=1 python3 scripts/run_from_prompt.py --prompt-file ../AI_AGENT_PROMPT_SUBMITTED_<WORKLOADS>_<UTC_TIMESTAMP>.md
+python3 scripts/generation_host_preflight.py --prompt-file ../AI_AGENT_PROMPT_SUBMITTED_<WORKLOADS>_<UTC_TIMESTAMP>.md
 ```
 
-Run it from the generator directory in Git Bash (Windows) or bash, exactly as written. `python3` is the interpreter that passes `scripts/generation_host_preflight.py` (Python 3.10+ with PyYAML); if a different one is first on `PATH`, put that interpreter's full path in its place (preflight prints the full command with it when it fails). `MSYS_NO_PATHCONV=1` stops Git Bash from rewriting paths. Save the prompt in the project root (the generator's parent) and pass it as the relative `../` path, never a `C:\...` or `/c/...` path.
+Then run the start command that preflight prints, exactly as printed. It has this form, with the interpreter preflight chose in place of `<python>`:
+
+```bash
+MSYS_NO_PATHCONV=1 <python> scripts/run_from_prompt.py --prompt-file ../AI_AGENT_PROMPT_SUBMITTED_<WORKLOADS>_<UTC_TIMESTAMP>.md
+```
+
+Run both from the generator directory in Git Bash (Windows) or bash. Preflight itself only needs Python 3 to start (`python3`, `python`, or `py -3`). When that interpreter lacks Python 3.10+ or PyYAML, preflight tries `GENERATOR_PYTHON` (if set), then `python3`, `python` and `py -3` on `PATH`, then `/c/Python/python.exe`, `/c/Python3*/python.exe` and `%LOCALAPPDATA%\Programs\Python\Python3*\python.exe`, and prints the start command with the first one that has both. If none does, it prints the `pip install pyyaml` command to run first. Do not type `python3` into the start command yourself. `MSYS_NO_PATHCONV=1` stops Git Bash from rewriting paths. Save the prompt in the project root (the generator's parent) and pass it as the relative `../` path, never a `C:\...` or `/c/...` path.
 
 `scripts/run_from_prompt.py` resolves the template from its own file location, writes each repository in the parent of this generator, and calls `scripts/create_one_workload.py` for the whole list in order. Repositories are created in that parent even when Cursor's open folder is this generator.
 
@@ -70,7 +76,7 @@ Do not leave world-writable `/opt/benchmarks/<Workload Number>-<Repo Name>` tree
 
 7. Determine the parent project root as the parent of the source template directory. Before Phase 0, save the exact received prompt in that project root as `AI_AGENT_PROMPT_SUBMITTED_<WORKLOADS>_<UTC_TIMESTAMP>.md`. Use `ALL` when every workbook workload was requested, compact `starttoend` tokens for ranges, and underscore-separated tokens for non-contiguous lists. Do not overwrite an existing artifact; append a numeric collision suffix if necessary. Append traceability metadata as an HTML comment without writing private-key contents.
 
-8. Before Phase 0 extraction, run `python3 scripts/generation_host_preflight.py --template-root <source-template>`. When it fails it prints the exact start command with the interpreter it ran under. The host needs Python 3.10+, PyYAML, and (on the validation VM) `rg`. Write every generated `.sh` / `.py` / `.md` / `.yaml` / `.json` / `.txt` as LF, including the nested `*_copy/` tree. Do not start a second overlapping `setup.sh` on the remote VM.
+8. Before Phase 0 extraction, run `python3 scripts/generation_host_preflight.py --template-root <source-template>`. When this interpreter lacks Python 3.10+ or PyYAML, preflight finds one that has both and prints the exact start command with it; if none does, it prints the `pip install pyyaml` command. The host needs Python 3.10+, PyYAML, and (on the validation VM) `rg`. Write every generated `.sh` / `.py` / `.md` / `.yaml` / `.json` / `.txt` as LF, including the nested `*_copy/` tree. Do not start a second overlapping `setup.sh` on the remote VM.
 
 ## Required gated workflow
 
@@ -114,10 +120,10 @@ Imperative rules:
 3. Call the chatbox entry point once for the full list. It invokes `create_one_workload.py`, which creates, remote-validates, and records one workload at a time. Do not reinvent copy/setup/smoke helpers, and do not pass `--remote-root`:
 
    ```bash
-   MSYS_NO_PATHCONV=1 python3 scripts/run_from_prompt.py --prompt-file ../AI_AGENT_PROMPT_SUBMITTED_<WORKLOADS>_<UTC_TIMESTAMP>.md
+   MSYS_NO_PATHCONV=1 <python> scripts/run_from_prompt.py --prompt-file ../AI_AGENT_PROMPT_SUBMITTED_<WORKLOADS>_<UTC_TIMESTAMP>.md
    ```
 
-   Use the exact start command from "Minimal operator prompt" above.
+   Use the exact start command that `scripts/generation_host_preflight.py --prompt-file ...` printed ("Minimal operator prompt" above), with the interpreter it chose.
 
    `create_one_workload.py` catches per-workload failures as `Exception`/`RuntimeError` (not `SystemExit`) and records `failed` before continuing. Do not call it with a separate `--workload` list unless retrying with `--validate-only`.
 

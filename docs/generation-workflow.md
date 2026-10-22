@@ -52,10 +52,16 @@ python3 scripts/validate_template_inputs.py \
 10. For a multi-workload chat prompt, run the entry point once. It calls the official driver for each workload in order and does not take `--remote-root`:
 
 ```bash
-MSYS_NO_PATHCONV=1 python3 scripts/run_from_prompt.py --prompt-file ../AI_AGENT_PROMPT_SUBMITTED_<WORKLOADS>_<UTC_TIMESTAMP>.md
+python3 scripts/generation_host_preflight.py --prompt-file ../AI_AGENT_PROMPT_SUBMITTED_<WORKLOADS>_<UTC_TIMESTAMP>.md
 ```
 
-Run it from the generator directory in Git Bash (Windows) or bash, exactly as written. `python3` is the interpreter that passes `scripts/generation_host_preflight.py` (Python 3.10+ with PyYAML); if a different one is first on `PATH`, put that interpreter's full path in its place (preflight prints the full command with it when it fails). `MSYS_NO_PATHCONV=1` stops Git Bash from rewriting paths. Save the prompt in the project root (the generator's parent) and pass it as the relative `../` path, never a `C:\...` or `/c/...` path.
+Then run the start command that preflight prints, exactly as printed. It has this form, with the interpreter preflight chose in place of `<python>`:
+
+```bash
+MSYS_NO_PATHCONV=1 <python> scripts/run_from_prompt.py --prompt-file ../AI_AGENT_PROMPT_SUBMITTED_<WORKLOADS>_<UTC_TIMESTAMP>.md
+```
+
+Run both from the generator directory in Git Bash (Windows) or bash. Preflight itself only needs Python 3 to start (`python3`, `python`, or `py -3`). When that interpreter lacks Python 3.10+ or PyYAML, preflight tries `GENERATOR_PYTHON` (if set), then `python3`, `python` and `py -3` on `PATH`, then `/c/Python/python.exe`, `/c/Python3*/python.exe` and `%LOCALAPPDATA%\Programs\Python\Python3*\python.exe`, and prints the start command with the first one that has both. If none does, it prints the `pip install pyyaml` command to run first. Do not type `python3` into the start command yourself. `MSYS_NO_PATHCONV=1` stops Git Bash from rewriting paths. Save the prompt in the project root (the generator's parent) and pass it as the relative `../` path, never a `C:\...` or `/c/...` path.
 
 `scripts/create_one_workload.py` remains the per-workload driver. Use it directly only to retry with `--validate-only`. A single-workload invocation is:
 

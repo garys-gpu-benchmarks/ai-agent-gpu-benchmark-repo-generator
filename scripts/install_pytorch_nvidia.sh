@@ -35,9 +35,12 @@ case "${VERSION_ID:-}" in
     VISION_SPEC="${TORCHVISION_INSTALL_SPEC:-torchvision==0.28.0+cu130}"
     ;;
   *)
-    TORCH_INDEX="${PYTORCH_CUDA_INDEX_URL:-https://download.pytorch.org/whl/cu128}"
-    TORCH_SPEC="${PYTORCH_INSTALL_SPEC:-torch==2.7.1+cu128}"
-    VISION_SPEC="${TORCHVISION_INSTALL_SPEC:-torchvision==0.22.1+cu128}"  # matches torch 2.7.1
+    # Ubuntu 24.04 uses the same torch as 26.04 (TEMPLATE_00_116). Driver 595
+    # supports CUDA 13, and 24.04's vLLM/SGLang workloads already ran
+    # torch 2.13.0+cu130, so every NVIDIA workload now runs one PyTorch build.
+    TORCH_INDEX="${PYTORCH_CUDA_INDEX_URL:-https://download.pytorch.org/whl/cu130}"
+    TORCH_SPEC="${PYTORCH_INSTALL_SPEC:-torch==2.13.0+cu130}"
+    VISION_SPEC="${TORCHVISION_INSTALL_SPEC:-torchvision==0.28.0+cu130}"
     ;;
 esac
 
@@ -55,7 +58,7 @@ fi
 # ship libcudnn_engines_tensor_ir.so.9. Reinstalling 9.20.0.48 does not add it.
 # Convolution components replace that pin with the complete 9.23.2.1 wheel.
 # Only when this repo is a convolution component and torch.version.cuda is 13.
-# Ubuntu 24.04 stays on cu128 and does not receive a CUDA 13 cuDNN.
+# This applies on Ubuntu 24.04 and 26.04 alike: both install torch 2.13.0+cu130.
 if [[ -f scripts/probe_setup.sh || -f src/cudnn_conv.cu ]]; then
   cuda_major="$("${PYTHON_BIN}" - <<'PY'
 import torch

@@ -106,14 +106,18 @@ class RepairLog(unittest.TestCase):
 
 
 class StartCommand(unittest.TestCase):
-    EXACT = "MSYS_NO_PATHCONV=1 python3 scripts/run_from_prompt.py --prompt-file ../AI_AGENT_PROMPT_SUBMITTED_<WORKLOADS>_<UTC_TIMESTAMP>.md"
+    PREFLIGHT = "python3 scripts/generation_host_preflight.py --prompt-file ../AI_AGENT_PROMPT_SUBMITTED_<WORKLOADS>_<UTC_TIMESTAMP>.md"
+    EXACT = "MSYS_NO_PATHCONV=1 <python> scripts/run_from_prompt.py --prompt-file ../AI_AGENT_PROMPT_SUBMITTED_<WORKLOADS>_<UTC_TIMESTAMP>.md"
 
     def test_documents_carry_one_exact_command(self) -> None:
         for rel in ("AGENTS.md", "docs/AI_AGENT_INSTRUCTIONS.md", "docs/generation-workflow.md",
                     ".cursor/rules/generate-workloads.mdc"):
             text = (ROOT / rel).read_text(encoding="utf-8")
+            self.assertIn(self.PREFLIGHT, text, rel)
             self.assertIn(self.EXACT, text, rel)
             self.assertNotIn("python3 scripts/run_from_prompt.py --prompt-file <SUBMITTED_PROMPT_FILE>", text, rel)
+            # The start command names the interpreter preflight chose, never a bare python3.
+            self.assertNotIn("MSYS_NO_PATHCONV=1 python3 scripts/run_from_prompt.py", text, rel)
 
     def test_preflight_command_uses_this_python_and_relative_prompt(self) -> None:
         command = preflight.start_command(str(ROOT.parent / "AI_AGENT_PROMPT_SUBMITTED_101_X.md"))
@@ -130,6 +134,69 @@ class StartCommand(unittest.TestCase):
         self.assertEqual(result.returncode, 1)
         self.assertIn("start generation from the generator directory with exactly:", result.stdout)
         self.assertIn("MSYS_NO_PATHCONV=1 ", result.stdout)
+
+
+class PreflightFindsPython(unittest.TestCase):
+    """Git Bash's python3 had no PyYAML; preflight must name an interpreter that works."""
+
+    PROMPT = str(ROOT.parent / "AI_AGENT_PROMPT_SUBMITTED_101_X.md")
+
+    def run_main(self, working, tried, pip=False) -> tuple[int, str]:
+        import contextlib
+        import io
+
+        out = io.StringIO()
+        argv = ["generation_host_preflight.py", "--template-root", str(ROOT), "--prompt-file", self.PROMPT]
+        with mock.patch.dict(sys.modules, {"yaml": None}), \
+                mock.patch.object(sys, "argv", argv), \
+                mock.patch.object(preflight, "find_working_python", return_value=(working, tried)), \
+                mock.patch.object(preflight, "has_pip", return_value=pip), \
+                contextlib.redirect_stdout(out):
+            code = preflight.main()
+        return code, out.getvalue()
+
+    def test_prints_the_start_command_with_the_python_that_works(self) -> None:
+        code, text = self.run_main(["/c/Python/python.exe"], [["/usr/bin/python3"], ["/c/Python/python.exe"]])
+        self.assertEqual(code, 1)
+        self.assertIn("[FAIL] PyYAML is not importable on", text)
+        self.assertIn("[INFO] /c/Python/python.exe passes preflight. Start generation from the generator directory with exactly:", text)
+        self.assertIn("MSYS_NO_PATHCONV=1 /c/Python/python.exe scripts/run_from_prompt.py --prompt-file ../AI_AGENT_PROMPT_SUBMITTED_101_X.md", text)
+
+    def test_py_launcher_keeps_its_version_flag(self) -> None:
+        command = preflight.start_command(self.PROMPT, ["/c/Windows/py.exe", "-3"])
+        self.assertTrue(command.startswith("MSYS_NO_PATHCONV=1 /c/Windows/py.exe -3 scripts/run_from_prompt.py"))
+
+    def test_says_so_and_gives_the_install_command_when_none_works(self) -> None:
+        code, text = self.run_main(None, [["/usr/bin/python3"]], pip=True)
+        self.assertEqual(code, 1)
+        self.assertIn("[FAIL] No Python 3.10+ with PyYAML was found. Tried: /usr/bin/python3", text)
+        self.assertIn("/usr/bin/python3 -m pip install pyyaml", text)
+        self.assertNotIn("MSYS_NO_PATHCONV=1", text)
+
+    def test_candidate_order(self) -> None:
+        def which(name):
+            return {"python3": "/usr/bin/python3", "python": "/usr/local/bin/python", "py": "/c/Windows/py.exe"}.get(name)
+
+        def fake_glob(pattern):
+            return ["/c/Python/python.exe"] if pattern == "/c/Python/python.exe" else []
+
+        env = {"GENERATOR_PYTHON": "/opt/gen/bin/python"}
+        with mock.patch.dict(os.environ, env, clear=False), \
+                mock.patch.dict(os.environ, {"LOCALAPPDATA": ""}), \
+                mock.patch.object(preflight.shutil, "which", side_effect=which), \
+                mock.patch.object(preflight.glob, "glob", side_effect=fake_glob), \
+                mock.patch.object(preflight.sys, "executable", "/somewhere/else/python3"):
+            found = preflight.candidate_pythons()
+        self.assertEqual(found, [
+            ["/opt/gen/bin/python"],
+            ["/usr/bin/python3"],
+            ["/usr/local/bin/python"],
+            ["/c/Windows/py.exe", "-3"],
+            ["/c/Python/python.exe"],
+        ])
+
+    def test_python_check_accepts_this_interpreter(self) -> None:
+        self.assertTrue(preflight.passes_python_check([sys.executable]))
 
 
 class RemoteCopy(unittest.TestCase):

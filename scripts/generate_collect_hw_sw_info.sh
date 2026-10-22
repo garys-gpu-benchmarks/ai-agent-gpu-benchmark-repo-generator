@@ -190,6 +190,16 @@ SUBSEP="------------------------------------------------------------------------
 
 mkdir -p "$OUTPUT_DIR"
 
+# Python package probes (torch, transformers, jax, vllm, sglang, ...) must see
+# the workload's own virtualenv. The system python3 has none of those packages,
+# so without this the probes record FAILED instead of the installed versions.
+# The collector lives in <repo>/scripts/, so the virtualenv is <repo>/.venv.
+COLLECTOR_REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." 2>/dev/null && pwd)"
+if [[ -n "$COLLECTOR_REPO_ROOT" && -x "$COLLECTOR_REPO_ROOT/.venv/bin/python3" ]]; then
+    export VIRTUAL_ENV="$COLLECTOR_REPO_ROOT/.venv"
+    export PATH="$VIRTUAL_ENV/bin:$PATH"
+fi
+
 trim() {
     local s="$1"
     s="${s#"${s%%[![:space:]]*}"}"

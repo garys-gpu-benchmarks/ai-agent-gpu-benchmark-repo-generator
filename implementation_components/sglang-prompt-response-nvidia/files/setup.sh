@@ -6,7 +6,7 @@
 # Description: Idempotent local NVIDIA setup for SGLang prompt-response (230 / 430).
 # Execution: bash setup.sh --assume-yes
 # Options: --assume-yes, --help
-# Requirements: Ubuntu 24.04 (cu128) or Ubuntu 26.04 (CUDA 13.3 / cu130), bash, apt, NVIDIA driver
+# Requirements: Ubuntu 24.04 or Ubuntu 26.04 (torch cu130 wheels), bash, apt, NVIDIA driver
 # Environment: Local benchmark host only. Remote SSH execution is not supported.
 # Dependencies: python3-venv, sqlite3, g++, NVCC, nvidia-smi
 # Variables: BENCHMARK_PYTHON, CUDA_HOME
@@ -156,7 +156,7 @@ apt_install \
   ca-certificates
 
 # Same toolkit as every other NVIDIA workload on this Ubuntu release
-# (24.04: CUDA 12.8 for the cu128 wheels, 26.04: CUDA 13.3 for cu130).
+# (24.04: CUDA 12.8, 26.04: CUDA 13.3; the torch wheels are cu130 on both).
 # See scripts/lib/nvidia_cuda_toolkit.sh.
 install_nvidia_cuda_toolkit
 export PATH="/usr/local/cuda/bin:/usr/local/cuda-${NVIDIA_CUDA_VERSION}/bin:${PATH}"
@@ -196,14 +196,16 @@ if is_ubuntu_2604; then
     "${REPO_ROOT}/.venv/bin/python" -m pip install 'torchvision==0.24.1+cu130' --index-url https://download.pytorch.org/whl/cu130
   fi
 else
-  if ! "${REPO_ROOT}/.venv/bin/python" -c "import torch; assert torch.cuda.is_available()" >/dev/null 2>&1; then
-    log_status "STEP|SETUP pip install torch cu128"
-    record_cmd "${REPO_ROOT}/.venv/bin/python -m pip install 'torch==2.7.1+cu128' --index-url https://download.pytorch.org/whl/cu128"
-    "${REPO_ROOT}/.venv/bin/python" -m pip install 'torch==2.7.1+cu128' --index-url https://download.pytorch.org/whl/cu128
+  # install_sglang_nvidia.sh pins torch 2.13.0+cu130 on 24.04; install that
+  # build here too, so setup does not download a different torch first.
+  if ! "${REPO_ROOT}/.venv/bin/python" -c "import torch; assert torch.cuda.is_available() and torch.__version__.startswith('2.13.0')" >/dev/null 2>&1; then
+    log_status "STEP|SETUP pip install torch 2.13.0+cu130"
+    record_cmd "${REPO_ROOT}/.venv/bin/python -m pip install 'torch==2.13.0+cu130' --index-url https://download.pytorch.org/whl/cu130"
+    "${REPO_ROOT}/.venv/bin/python" -m pip install 'torch==2.13.0+cu130' --index-url https://download.pytorch.org/whl/cu130
   fi
   if ! "${REPO_ROOT}/.venv/bin/python" -c "import torchvision" >/dev/null 2>&1; then
-    log_status "STEP|SETUP pip install torchvision cu128"
-    "${REPO_ROOT}/.venv/bin/python" -m pip install torchvision --index-url https://download.pytorch.org/whl/cu128
+    log_status "STEP|SETUP pip install torchvision 0.28.0+cu130"
+    "${REPO_ROOT}/.venv/bin/python" -m pip install 'torchvision==0.28.0+cu130' --index-url https://download.pytorch.org/whl/cu130
   fi
 fi
 log_status "STEP|SETUP install sglang nvidia extras"
