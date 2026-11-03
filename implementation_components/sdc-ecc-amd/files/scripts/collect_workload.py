@@ -143,9 +143,15 @@ def main() -> int:
     seconds = max(1.0, duration_seconds(pv(params, "duration", args.profile, 5)))
     iters = max(1, int(float(pv(params, "num_iterations", args.profile, 2) or 2)))
     mem_gb = max(0.125, float(pv(params, "memory_size", args.profile, 1) or 1))
+    device_id = max(0, int(float(pv(params, "device_id", args.profile, 0) or 0)))
+    pattern = str(pv(params, "pattern_type", args.profile, "walking-1s") or "walking-1s").strip().lower()
     Path(args.run_dir).mkdir(parents=True, exist_ok=True)
     import torch
-    device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+    if torch.cuda.is_available():
+        torch.cuda.set_device(device_id)
+        device = torch.device(f"cuda:{device_id}")
+    else:
+        device = torch.device("cpu")
     requested = int(mem_gb * (1024 ** 3))
     if device.type == "cuda":
         free, _total = torch.cuda.mem_get_info(device)
@@ -164,9 +170,18 @@ def main() -> int:
     while time.time() - start < seconds:
         for _ in range(iters):
             buf = torch.zeros(n, device=device, dtype=torch.int32)
-            buf[::2] = 1
-            mismatch_count = int((buf[::2] != 1).sum().item())
-            mismatch_count += int((buf[1::2] != 0).sum().item())
+            if pattern in {"walking-1s", "walking-ones", "walking_1s"}:
+                # arange is int64. Shifting int32 ones by an int64 promotes to
+                # int64, and bit 31 does not fit in the int32 buffer. copy_
+                # wraps that element, so every loop looks like a mismatch.
+                shifts = (torch.arange(n, device=device) % 32).to(dtype=torch.int32)
+                expected = torch.ones(n, device=device, dtype=torch.int32) << shifts
+                buf.copy_(expected)
+                mismatch_count = int((buf != expected).sum().item())
+            else:
+                buf[::2] = 1
+                mismatch_count = int((buf[::2] != 1).sum().item())
+                mismatch_count += int((buf[1::2] != 0).sum().item())
             if mismatch_count:
                 failed_checks += 1
             loops += 1

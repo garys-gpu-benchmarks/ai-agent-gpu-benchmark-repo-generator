@@ -84,12 +84,26 @@ def main() -> int:
         shutil.copy2(binary, Path("bin/stream"))
     env = os.environ.copy()
     env["OMP_NUM_THREADS"] = threads
+    numa_node = str(pv(params, "numa_node", args.profile, "0") or "").strip()
+    affinity = str(pv(params, "thread_affinity", args.profile, "") or "").strip()
+    if affinity.lower() == "core":
+        env["OMP_PROC_BIND"] = "close"
+    command = [str(binary)]
+    if shutil.which("numactl") and numa_node not in {"", "none"}:
+        command = ["numactl", f"--cpunodebind={numa_node}", f"--membind={numa_node}", *command]
+    if affinity and affinity.lower() not in {"", "none", "core"} and shutil.which("numactl"):
+        bind = affinity.split(":", 1)[1] if affinity.lower().startswith("node:") else affinity
+        flag = "--cpunodebind" if affinity.lower().startswith("node:") else "--physcpubind"
+        if command[0] == "numactl":
+            command.insert(1, f"{flag}={bind}")
+        else:
+            command = ["numactl", f"{flag}={bind}", *command]
     # 0.05 s per iteration was sized for a 10M-element array. Time per iteration
     # grows with the array, so scale the allowance (407 extended, 40M x 32000,
     # was killed at the old 1660 s limit).
     per_iter = 0.05 * max(1.0, float(array_size or 10000000) / 10000000.0)
     timeout = max(120, int(float(ntimes or 10) * per_iter) + 120)
-    completed = subprocess.run([str(binary)], check=False, capture_output=True, text=True, env=env, timeout=timeout)
+    completed = subprocess.run(command, check=False, capture_output=True, text=True, env=env, timeout=timeout)
     text = (completed.stdout or "") + "\n" + (completed.stderr or "")
     rates = {}
     for name in ("copy", "scale", "add", "triad"):

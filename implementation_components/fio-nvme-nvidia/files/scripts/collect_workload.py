@@ -40,7 +40,7 @@ def percentile(mapping: dict, key: str, default: float) -> float:
     return default
 
 
-def run_fio(filename: Path, rw: str, block_size: str, io_depth: str, num_jobs: str, size: str, runtime: str, engine: str, direct: str) -> dict:
+def run_fio(filename: Path, rw: str, block_size: str, io_depth: str, num_jobs: str, size: str, runtime: str, engine: str, direct: str, ramp_time: str = "0") -> dict:
     if not str(filename).startswith("/dev/"):
         filename.parent.mkdir(parents=True, exist_ok=True)
     command = [
@@ -49,7 +49,10 @@ def run_fio(filename: Path, rw: str, block_size: str, io_depth: str, num_jobs: s
         "--time_based", f"--ioengine={engine}", f"--direct={direct}", "--group_reporting",
         "--output-format=json",
     ]
-    timeout = max(30, int(float(runtime or 5)) + 30)
+    ramp = str(ramp_time or "0").strip()
+    if ramp not in {"", "0", "0.0"}:
+        command.append(f"--ramp_time={ramp}")
+    timeout = max(30, int(float(runtime or 5)) + int(float(ramp or 0)) + 30)
     completed = subprocess.run(command, check=False, capture_output=True, text=True, timeout=timeout)
     if completed.returncode != 0:
         raise SystemExit(f"[FAIL] fio exited {completed.returncode}: {(completed.stderr or completed.stdout)[-400:]}")
@@ -108,6 +111,7 @@ def main() -> int:
     runtime = str(pv(params, "runtime", args.profile, "2"))
     engine = str(pv(params, "io_engine", args.profile, "libaio"))
     direct = str(pv(params, "direct", args.profile, "1"))
+    ramp_time = str(pv(params, "warmup_duration_sec", args.profile, "0") or "0")
     filename = Path(str(pv(params, "filename", args.profile, "data/fio_target.bin")))
     Path(args.run_dir).mkdir(parents=True, exist_ok=True)
     header = [
@@ -119,7 +123,7 @@ def main() -> int:
     for rw in rws or ["randread"]:
         for block_size in blocks or ["4k"]:
             for io_depth in depths or ["1"]:
-                rows.append(run_fio(filename, rw, block_size, io_depth, jobs, size, runtime, engine, direct))
+                rows.append(run_fio(filename, rw, block_size, io_depth, jobs, size, runtime, engine, direct, ramp_time))
     # The singular keys are the first declared case (headline_rule=first_case).
     # Every job keeps its own measurement; nothing is overwritten with job 1.
     metric_columns = [

@@ -77,7 +77,7 @@ def _stop(proc: subprocess.Popen | None) -> None:
         proc.kill()
 
 
-def iperf(protocol: str, port: int, seconds: int, streams: int, reverse, bandwidth: str, peer: str):
+def iperf(protocol: str, port: int, seconds: int, streams: int, reverse, bandwidth: str, peer: str, length: str = "", window: str = "", omit: str = "0"):
     last_error = ""
     budget = client_timeout(seconds)
     for candidate in (port, port + 1, port + 2):
@@ -99,6 +99,16 @@ def iperf(protocol: str, port: int, seconds: int, streams: int, reverse, bandwid
         ]
         if protocol == "udp":
             cmd += ["-u", "-b", bandwidth]
+        if str(length).strip():
+            cmd += ["-l", str(length).strip()]
+        if str(window).strip():
+            cmd += ["-w", str(window).strip()]
+        try:
+            omit_s = int(float(omit or 0))
+        except (TypeError, ValueError):
+            omit_s = 0
+        if omit_s > 0:
+            cmd += ["-O", str(omit_s)]
         if str(reverse).lower() in {"true", "1", "yes"}:
             cmd.append("-R")
         try:
@@ -145,6 +155,9 @@ def main() -> int:
     protocols = as_list(pv(params, "protocol", args.profile, "tcp,udp"))
     bandwidth = udp_rate(pv(params, "bandwidth_limit", args.profile, pv(params, "bandwidth", args.profile, "")))
     peer = os.environ.get("BENCHMARK_IPERF_PEER", "127.0.0.1")
+    length = str(pv(params, "buffer_length", args.profile, "") or "")
+    window = str(pv(params, "window_size", args.profile, "") or "")
+    omit = str(pv(params, "omit_initial_seconds", args.profile, "0") or "0")
     Path(args.run_dir).mkdir(parents=True, exist_ok=True)
     header = [
         "sample_index", "status", "protocol", "iperf_endpoint", "parallel_streams",
@@ -153,7 +166,7 @@ def main() -> int:
     ]
     rows = []
     for proto in protocols or ["tcp"]:
-        bits, jitter, lost, retr, error = iperf(proto.lower(), port, seconds, streams, reverse, bandwidth, peer)
+        bits, jitter, lost, retr, error = iperf(proto.lower(), port, seconds, streams, reverse, bandwidth, peer, length, window, omit)
         if bits <= 0:
             raise SystemExit(f"[FAIL] iperf3 {proto} produced no throughput: {error}")
         rows.append({

@@ -25,7 +25,10 @@ int main(int argc, char **argv) {
     size_t n = strtoull(argv[1], 0, 10);
     double seconds = atof(argv[2]);
     int iters = atoi(argv[3]);
+    int device = argc >= 5 ? atoi(argv[4]) : 0;
+    int walking = argc >= 6 && (argv[5][0] == 'w' || argv[5][0] == 'W');
     if (n < 1024) n = 1024;
+    CUDA_OK(cudaSetDevice(device));
     if (seconds < 0.1) seconds = 0.1;
     if (iters < 1) iters = 1;
     unsigned int *buf = 0;
@@ -51,7 +54,7 @@ int main(int argc, char **argv) {
         if (loops > 0 && (ms / 1000.0) >= seconds) break;
         if ((ms / 1000.0) >= seconds + 1.0) break;
         for (int k = 0; k < iters; ++k) {
-            unsigned int value = (loops & 1) ? 0xFFFFFFFFu : 0x00000001u;
+            unsigned int value = walking ? (1u << (loops % 32)) : ((loops & 1) ? 0xFFFFFFFFu : 0x00000001u);
             fill_pattern<<<blocks, threads>>>(buf, n, value);
             // A rejected launch (e.g. no SASS for this GPU) is only visible here;
             // without this check the walk counts zero failures and passes.

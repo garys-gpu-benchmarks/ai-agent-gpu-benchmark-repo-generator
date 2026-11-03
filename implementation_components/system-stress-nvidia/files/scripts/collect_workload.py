@@ -216,8 +216,10 @@ def main() -> int:
     gpu_pct = min(100.0, max(0.0, as_float(setting(args.gpu_load_percent, "gpu_load_percent", 50), 50.0)))
     temp_limit = as_float(setting(args.temp_threshold, "temp_threshold", ""), 0.0)
     power_limit = as_float(setting(args.power_threshold, "power_threshold", ""), 0.0)
-    throttle_check = as_bool(setting(args.throttle_check, "throttle_check", True), True)
-    ecc_check = as_bool(setting(args.ecc_check, "ecc_check", True), True)
+    # throttle_check and ecc_check are no longer parameters. The numbered
+    # metrics are always collected.
+    throttle_check = True
+    ecc_check = True
     poll = max(0.5, as_float(setting(args.poll_interval, "poll_interval", 1), 1.0))
 
     run_dir = Path(args.run_dir)

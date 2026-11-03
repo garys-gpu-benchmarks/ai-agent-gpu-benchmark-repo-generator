@@ -146,6 +146,17 @@ def kernel_release_matches(expected, uname_r):
     return uname_r == expected or uname_r.startswith(expected + "-") or uname_r.startswith(expected + ".")
 
 
+def version_prefix_in_text(expected, text):
+    """True when a version token equals the workbook prefix or continues it."""
+    expected = (expected or "").strip()
+    if not expected:
+        return False
+    for token in re.findall(r"\d+\.\d+(?:\.\d+)*", text or ""):
+        if token == expected or token.startswith(expected + "."):
+            return True
+    return False
+
+
 def firmware_revision():
     """Detected GPU firmware/VBIOS revision of the first card, or "". Recorded in
     firmware_version.txt for information only; it is not a metric or a gate."""
@@ -190,8 +201,7 @@ def main() -> int:
     sweep = load_params(args.config)
     expected_kernel = str(sweep.get("kernel_version", "6.8.0"))
     expected_driver = str(sweep.get("driver_version", "6"))
-    # Read for the record; not compared yet (kernel/runtime checks live elsewhere).
-    _expected_rocm = str(sweep.get("rocm_version", "10.1.0"))
+    expected_rocm = str(sweep.get("rocm_version", "10.1.0"))
     packages = [item.strip() for item in str(sweep.get("required_packages", "amdrocm-base10.1,amdrocm-amdsmi10.1")).split(",") if item.strip()]
     permissions_check = str(sweep.get("permissions_check", "true")).lower() in {"1", "true", "yes"}
     uname = os.uname().release
@@ -237,11 +247,16 @@ def main() -> int:
         ("modinfo", ["modinfo", "amdgpu"]),
         ("hipcc", ["hipcc", "--version"]),
     )
+    rocm_matches = False
     for name, command in probes:
         code, text = run_command(command)
         if code != 0:
             print(f"[WARN] probe {name} ({' '.join(command)}) exited {code}", file=sys.stderr)
+        if name in {"amd-smi-version", "hipcc"} and version_prefix_in_text(expected_rocm, text):
+            rocm_matches = True
         checks.append((name, code, text))
+    if not rocm_matches:
+        package_mismatch += 1
     header = [
         "sample_index", "check_name", "rc", "rocm_package_mismatch_count",
         "kernel_release_mismatch_count", "kernel_mismatch_count",

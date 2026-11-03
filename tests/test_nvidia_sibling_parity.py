@@ -20,9 +20,15 @@ from openpyxl import load_workbook
 
 ROOT = Path(__file__).resolve().parents[1]
 MATRIX = ROOT / "BenchmarkSpecDefinitions.xlsx"
-# The only parameters allowed to differ between a 24.04 workload and its
-# 26.04 sibling: the expected OS kernel and CUDA toolkit in x01.
-ALLOWED = {("01", "kernel_version"), ("01", "cuda_version")}
+# Parameters allowed to differ between a 24.04 workload and its 26.04 sibling.
+# x01 kernel and CUDA are host facts. x09 num_threads and thread_affinity stay
+# on 409 (implement) and are removed from 209 (delete) by the 2026-11-02 action sheet.
+ALLOWED = {
+    ("01", "kernel_version"),
+    ("01", "cuda_version"),
+    ("09", "num_threads"),
+    ("09", "thread_affinity"),
+}
 
 
 def _norm(value) -> str:

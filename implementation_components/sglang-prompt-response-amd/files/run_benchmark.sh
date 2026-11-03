@@ -105,8 +105,9 @@ INPUT_LEN=""
 OUTPUT_LEN=""
 NUM_PROMPTS=""
 SEED=""
-STREAMING=""
-MODEL_NAME="mistralai/Mistral-7B-v0.3"
+MODEL_NAME=""
+MAX_TOTAL_TOKENS=""
+MAX_RUNNING_REQUESTS=""
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -132,7 +133,9 @@ while [[ $# -gt 0 ]]; do
     --output-len) OUTPUT_LEN="${2:-}"; shift 2 ;;
     --num-prompts) NUM_PROMPTS="${2:-}"; shift 2 ;;
     --seed) SEED="${2:-}"; shift 2 ;;
-    --streaming) STREAMING="${2:-}"; shift 2 ;;
+    --model-name) MODEL_NAME="${2:-}"; shift 2 ;;
+    --max-total-tokens) MAX_TOTAL_TOKENS="${2:-}"; shift 2 ;;
+    --max-running-requests) MAX_RUNNING_REQUESTS="${2:-}"; shift 2 ;;
     --help|--specification|--matrix-definition) shift ;;
     *) die "Unknown option: $1" ;;
   esac
@@ -200,7 +203,12 @@ INPUT_LEN="${INPUT_LEN:-$(yaml_get input_len)}"
 OUTPUT_LEN="${OUTPUT_LEN:-$(yaml_get output_len)}"
 NUM_PROMPTS="${NUM_PROMPTS:-$(yaml_get num_prompts)}"
 SEED="${SEED:-$(yaml_get seed)}"
-STREAMING="${STREAMING:-$(yaml_get streaming)}"
+MODEL_NAME="${MODEL_NAME:-$(yaml_get model_name)}"
+MODEL_NAME="${MODEL_NAME:-mistralai/Mistral-7B-v0.3}"
+MAX_TOTAL_TOKENS="${MAX_TOTAL_TOKENS:-$(yaml_get max_total_tokens)}"
+MAX_TOTAL_TOKENS="${MAX_TOTAL_TOKENS:-2048}"
+MAX_RUNNING_REQUESTS="${MAX_RUNNING_REQUESTS:-$(yaml_get max_running_requests)}"
+MAX_RUNNING_REQUESTS="${MAX_RUNNING_REQUESTS:-1}"
 OUTPUT_FORMAT="${OUTPUT_FORMAT:-$(yaml_get output_format)}"
 OUTPUT_FORMAT="${OUTPUT_FORMAT:-csv}"
 case "${DTYPE}" in
@@ -209,7 +217,7 @@ esac
 
 BENCHMARK_RUN_COMMAND="bash run_benchmark.sh --${PROFILE}"
 [[ "${VALIDATE}" -eq 1 ]] && BENCHMARK_RUN_COMMAND+=" --validate"
-BENCHMARK_RUN_COMMAND+=" --dtype ${DTYPE} --input-len ${INPUT_LEN} --output-len ${OUTPUT_LEN} --num-prompts ${NUM_PROMPTS} --seed ${SEED} --streaming ${STREAMING}"
+BENCHMARK_RUN_COMMAND+=" --model-name ${MODEL_NAME} --dtype ${DTYPE} --input-len ${INPUT_LEN} --output-len ${OUTPUT_LEN} --num-prompts ${NUM_PROMPTS} --seed ${SEED} --max-total-tokens ${MAX_TOTAL_TOKENS} --max-running-requests ${MAX_RUNNING_REQUESTS}"
 set_benchmark_run_command "${BENCHMARK_RUN_COMMAND}"
 
 HOSTNAME_VALUE="$(hostname -s 2>/dev/null || hostname)"
@@ -274,7 +282,7 @@ run_collection() {
     if [[ -z "${sglang_model_path}" || ! -d "${sglang_model_path}" ]]; then
       die "SGLang shard prefetch did not return a snapshot directory"
     fi
-    server_cmd="${PYTHON_BIN} -m sglang.launch_server --model-path ${sglang_model_path} --dtype ${DTYPE} --port 30000 --host 127.0.0.1 --tp 1 --mem-fraction-static 0.8 --disable-cuda-graph --watchdog-timeout 1800 --enable-cache-report"
+    server_cmd="${PYTHON_BIN} -m sglang.launch_server --model-path ${sglang_model_path} --dtype ${DTYPE} --port 30000 --host 127.0.0.1 --tp 1 --mem-fraction-static 0.8 --max-total-tokens ${MAX_TOTAL_TOKENS} --max-running-requests ${MAX_RUNNING_REQUESTS} --disable-cuda-graph --watchdog-timeout 1800 --enable-cache-report"
   fi
   echo "[RUN] ${server_cmd}"
   echo "${server_cmd}" >> "${COMMAND_LOG}"
@@ -282,10 +290,10 @@ run_collection() {
   SERVER_PID="$!"
   wait_for_server "http://127.0.0.1:30000/v1/models"
   local collect_cmd
-  printf -v collect_cmd '%q ' "${PYTHON_BIN}" scripts/prompt_response_client.py --run-dir "${RUN_DIR}" --raw-file "${RAW_FILE}" --base-url "http://127.0.0.1:30000" --model-name "${MODEL_NAME}" --dtype "${DTYPE}" --input-len "${INPUT_LEN}" --output-len "${OUTPUT_LEN}" --num-prompts "${NUM_PROMPTS}" --seed "${SEED}" --streaming "${STREAMING}" --output-format "${OUTPUT_FORMAT}"
+  printf -v collect_cmd '%q ' "${PYTHON_BIN}" scripts/prompt_response_client.py --run-dir "${RUN_DIR}" --raw-file "${RAW_FILE}" --base-url "http://127.0.0.1:30000" --model-name "${MODEL_NAME}" --dtype "${DTYPE}" --input-len "${INPUT_LEN}" --output-len "${OUTPUT_LEN}" --num-prompts "${NUM_PROMPTS}" --seed "${SEED}" --streaming true --output-format "${OUTPUT_FORMAT}"
   echo "[RUN] ${collect_cmd}"
   echo "${collect_cmd}" >> "${COMMAND_LOG}"
-  if ! "${PYTHON_BIN}" scripts/prompt_response_client.py --run-dir "${RUN_DIR}" --raw-file "${RAW_FILE}" --base-url "http://127.0.0.1:30000" --model-name "${MODEL_NAME}" --dtype "${DTYPE}" --input-len "${INPUT_LEN}" --output-len "${OUTPUT_LEN}" --num-prompts "${NUM_PROMPTS}" --seed "${SEED}" --streaming "${STREAMING}" --output-format "${OUTPUT_FORMAT}" 2>&1 | tee -a "${RUN_DIR}/run.log"; then
+  if ! "${PYTHON_BIN}" scripts/prompt_response_client.py --run-dir "${RUN_DIR}" --raw-file "${RAW_FILE}" --base-url "http://127.0.0.1:30000" --model-name "${MODEL_NAME}" --dtype "${DTYPE}" --input-len "${INPUT_LEN}" --output-len "${OUTPUT_LEN}" --num-prompts "${NUM_PROMPTS}" --seed "${SEED}" --streaming true --output-format "${OUTPUT_FORMAT}" 2>&1 | tee -a "${RUN_DIR}/run.log"; then
     die "collection failed with status 1"
   fi
   cleanup_server

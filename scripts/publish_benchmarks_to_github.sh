@@ -21,6 +21,9 @@ if grep -q $'\r' "$0"; then echo "This file has Windows (CRLF) line endings. Fix
 #   gpu-bench-suite             operator tools (run_benchmark_suite.sh,
 #                               get_remote_info.sh)
 #   the generator               ai-agent-gpu-benchmark-repo-generator
+#   the profile repository      github.com/garymichaelbass/garymichaelbass
+#                               receives BenchmarkSpecDefinitions.xlsx only
+#                               (its README and sample folders are left as they are)
 #
 # Changes 2026-10-19 (lab-technician review of the v1.0.14 bundles):
 #   - Bundle .gitmodules no longer carry "branch = main", so
@@ -99,7 +102,9 @@ if grep -q $'\r' "$0"; then echo "This file has Windows (CRLF) line endings. Fix
 #   1  stopped on a problem (see the STOPPED line)
 #   2  usage error
 #
-# Revision: 2026-10-19 (the only publish script: the former
+# Revision: 2026-10-31 (step 10 copies BenchmarkSpecDefinitions.xlsx onto
+#           github.com/garymichaelbass/garymichaelbass; only that file changes)
+#           2026-10-19 (the only publish script: the former
 #           publish_benchmarks_to_github_manual.sh, renamed; the variant that
 #           copied workloads in from fixed source folders is removed)
 #           2026-10-14 (step 0 and step 9 run the generator's own ruff lint
@@ -121,6 +126,11 @@ readonly GENREPO="ai-agent-gpu-benchmark-repo-generator"
 # has it under this name, step 9 renames it to $GENREPO.
 readonly OLD_GENREPO="999-ai-agent-gpu-benchmark-repo-generator"
 readonly PERSONAL_GENERATOR="garymichaelbass/ai-agent-gpu-benchmark-repo-generator"
+# The GitHub profile repository. Step 10 copies BenchmarkSpecDefinitions.xlsx
+# from the generator in the run folder onto this repository. Only that file
+# is added or updated; the profile README and sample folders stay.
+readonly PROFILE_REPO="garymichaelbass/garymichaelbass"
+readonly PROFILE_SPEC="BenchmarkSpecDefinitions.xlsx"
 
 # Only matters the first time the generator is published, and only if GitHub
 # already has it under the personal account ($PERSONAL_GENERATOR):
@@ -183,6 +193,8 @@ Steps:
   7  Build and publish the 4 bundles in RUN_FOLDER_Bundles
   8  Test one bundle the way an end user would
   9  Publish the generator
+  10 Publish BenchmarkSpecDefinitions.xlsx to github.com/${PROFILE_REPO}
+     (that file only; the profile README and sample folders are not changed)
 
 Versions are chosen from GitHub: v1.0.0 on the first run, then the next
 patch number (v1.0.8 -> v1.0.9). The choice is kept in
@@ -309,6 +321,37 @@ use_github_repo() {
   git remote remove origin 2>/dev/null
   git remote add origin "https://github.com/${ORG}/$1.git"
   gh repo view "${ORG}/$1" >/dev/null 2>&1 || gh repo create "${ORG}/$1" --public --description "$2" >/dev/null
+}
+
+# Copies BenchmarkSpecDefinitions.xlsx ($1) onto the profile repository.
+# $2 is the local clone directory, $3 is the remote URL. Only that file is
+# staged. git add -A is not used, so a profile README or sample folder that
+# is absent from this clone cannot be deleted. Returns 1 on failure.
+publish_profile_spec() {
+  local spec=$1 dest=$2 remote=$3
+  [[ -f "${spec}" ]] || { echo "missing workbook: ${spec}"; return 1; }
+  profile_clone() {
+    rm -rf "${dest}"
+    git clone -q "${remote}" "${dest}"
+  }
+  again profile_clone || { echo "cloning ${PROFILE_REPO} failed"; return 1; }
+  cp -a "${spec}" "${dest}/${PROFILE_SPEC}" || { echo "copying ${PROFILE_SPEC} into the profile clone failed"; return 1; }
+  (
+    cd "${dest}" || exit 1
+    again git add -- "${PROFILE_SPEC}" || exit 1
+    if git diff --cached --quiet; then
+      echo "${PROFILE_SPEC} on ${PROFILE_REPO} is already this file"
+      exit 0
+    fi
+    if git cat-file -e "HEAD:${PROFILE_SPEC}" 2>/dev/null; then
+      msg="Update BenchmarkSpecDefinitions.xlsx to ${VERSION}"
+    else
+      msg="Add BenchmarkSpecDefinitions.xlsx (${VERSION})"
+    fi
+    again git commit -q -m "${msg}" || exit 1
+    again git push origin main || exit 1
+    echo "Published ${PROFILE_SPEC} to ${PROFILE_REPO} (${VERSION})"
+  )
 }
 
 # Attaches GitHub's history, stages everything, marks shell scripts executable
@@ -880,6 +923,7 @@ if [[ ! -d "${GEN}/${GENREPO}" ]]; then
   [[ -d "${GEN}/${OLD_GENREPO}" ]] && stop "the generator folder in ${GEN} has the old name ${OLD_GENREPO}. Rename it to ${GENREPO} and run again."
   stop "${GENREPO} not found in ${GEN}. Copy the generator into the run folder first (see the top of this file)."
 fi
+[[ -f "${GEN}/${GENREPO}/${PROFILE_SPEC}" ]] || stop "${GENREPO}/${PROFILE_SPEC} is missing from the run folder. Step 10 copies that file to ${PROFILE_REPO}."
 # The generator being published should hold the master copy of this script.
 if [[ ! -f "${GEN}/${GENREPO}/scripts/${SCRIPT_NAME}" ]]; then
   echo "NOTE: ${GENREPO}/scripts/ has no ${SCRIPT_NAME}. Consider adding this script there as the master copy."
@@ -1481,12 +1525,33 @@ fi
 
 
 # ==============================================================================
+# STEP 10: PUBLISH THE WORKBOOK TO THE PROFILE REPOSITORY
+# ==============================================================================
+# The workbook in the run folder is the one this publish was generated from.
+# It is copied onto github.com/garymichaelbass/garymichaelbass as one file.
+# The profile README and the sample workload folders are not part of this step.
+
+if is_done profile-spec; then skipped 10; else
+  step 10 "Publish ${PROFILE_SPEC} to ${PROFILE_REPO}"
+  publish_profile_spec \
+    "${GEN}/${GENREPO}/${PROFILE_SPEC}" \
+    "${WORK}/_profile_repo" \
+    "https://github.com/${PROFILE_REPO}.git" \
+    || stop "updating ${PROFILE_SPEC} on ${PROFILE_REPO} failed. The gh login must be allowed to push to that repository. Fix that and run again."
+  rm -rf "${WORK}/_profile_repo"
+  echo "Download: https://github.com/${PROFILE_REPO}/raw/main/${PROFILE_SPEC}"
+  mark_done profile-spec
+fi
+
+
+# ==============================================================================
 # FINISHED
 # ==============================================================================
 
 echo
 echo "======================================================================"
 echo "FINISHED: ${N} workloads, the bundles and the generator are published as ${VERSION}"
+echo "Profile workbook: https://github.com/${PROFILE_REPO}/raw/main/${PROFILE_SPEC}"
 [[ -n "${SHARED_REPO}" ]] && echo "Shared CI:      ${ORG}/${SHARED_REPO}, called by the workloads at ${MAJOR}"
 [[ -n "${TOOLS_REPO}" ]] && echo "Operator tools: ${ORG}/${TOOLS_REPO} at ${VERSION}"
 echo "Repositories in ${ORG}: $(gh repo list "${ORG}" --limit 300 --json name -q '.[].name' | wc -l)"

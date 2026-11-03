@@ -124,6 +124,8 @@ def main() -> int:
     seconds = max(1.0, duration_seconds(pv(sweep, "duration", args.profile, 5), 5))
     iters = max(1, int(float(pv(sweep, "num_iterations", args.profile, 2) or 2)))
     mem_gb = max(0.125, float(pv(sweep, "memory_size", args.profile, 0.25) or 0.25))
+    device_id = max(0, int(float(pv(sweep, "device_id", args.profile, 0) or 0)))
+    pattern = str(pv(sweep, "pattern_type", args.profile, "walking-1s") or "walking-1s")
     run_dir = Path(args.run_dir)
     run_dir.mkdir(parents=True, exist_ok=True)
     if not Path("bin/ecc_walk").is_file():
@@ -136,7 +138,7 @@ def main() -> int:
     ecc_before = sum_ecc_counters(ecc_before_text)
     start = time.time()
     completed = subprocess.run(
-        ["bin/ecc_walk", str(n), str(seconds), str(iters)],
+        ["bin/ecc_walk", str(n), str(seconds), str(iters), str(device_id), pattern],
         check=False, capture_output=True, text=True, timeout=int(seconds) + 120,
     )
     text = (completed.stdout or "") + "\n" + (completed.stderr or "")

@@ -23,7 +23,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--output-format", default="csv")
     parser.add_argument("--num-numa-nodes", default="1")
     parser.add_argument("--num-threads", default="1")
-    parser.add_argument("--thread-affinity", default="0-3")
+    parser.add_argument("--thread-affinity", default="")
     parser.add_argument("--page-size", default="4KB")
     parser.add_argument("--working-set-size", default="")
     parser.add_argument("--stride", default="64")

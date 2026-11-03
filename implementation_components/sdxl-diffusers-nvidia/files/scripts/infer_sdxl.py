@@ -26,6 +26,21 @@ import torch.nn as nn
 
 SDXL_HF_ID = "stabilityai/stable-diffusion-xl-base-1.0"
 SYNTHETIC_PROMPT = "a photograph of a red cube on a wooden table, studio lighting"
+
+
+def sized_prompt(length: str) -> str:
+    """Repeat the synthetic prompt out to prompt_len words."""
+    words = SYNTHETIC_PROMPT.split()
+    try:
+        count = max(1, int(float(length)))
+    except (TypeError, ValueError):
+        return SYNTHETIC_PROMPT
+    if count <= len(words):
+        return " ".join(words[:count])
+    padded = list(words)
+    while len(padded) < count:
+        padded.append(words[len(padded) % len(words)])
+    return " ".join(padded)
 LATENT_CHANNELS = 4
 MIN_REAL_RESOLUTION = 256
 MIN_TIMED_IMAGES = 2
@@ -418,7 +433,7 @@ def main() -> int:
             dtype,
             resolve_hf_id(str(args.model_name)),
             str(args.scheduler),
-            SYNTHETIC_PROMPT,
+            sized_prompt(prompt_len),
             resolution,
             steps,
             num_images,

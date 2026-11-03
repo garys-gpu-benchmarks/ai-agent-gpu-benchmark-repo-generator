@@ -172,16 +172,20 @@ enable_default() {
 }
 MODEL_NAME="${MODEL_NAME:-$(enable_default "$(yaml_get model_name)" "mistralai/Mistral-7B-v0.3")}"
 DTYPE="${DTYPE:-$(yaml_get dtype)}"
-TENSOR_PARALLEL_SIZE="$(enable_default "$(yaml_get tensor_parallel_size)" "1")"
-SCHEDULE_POLICY="$(enable_default "$(yaml_get schedule_policy)" "fcfs")"
-PROMPT_SOURCE="$(enable_default "$(yaml_get prompt_source)" "synthetic")"
+# tensor_parallel_size, schedule_policy, prompt_source, max_concurrency, and
+# request_rate are no longer workload parameters. The launch keeps the values
+# every profile used: one GPU, lpm, synthetic prompts, one request, no pacing.
+TENSOR_PARALLEL_SIZE="1"
+SCHEDULE_POLICY="lpm"
+PROMPT_SOURCE="synthetic"
 INPUT_LEN="${INPUT_LEN:-$(yaml_get input_len)}"
 OUTPUT_LEN="${OUTPUT_LEN:-$(yaml_get output_len)}"
 MAX_TOTAL_TOKENS="$(enable_default "$(yaml_get max_total_tokens)" "2048")"
 MAX_RUNNING_REQUESTS="$(enable_default "$(yaml_get max_running_requests)" "1")"
-MAX_CONCURRENCY="$(enable_default "$(yaml_get max_concurrency)" "1")"
-REQUEST_RATE="$(enable_default "$(yaml_get request_rate)" "inf")"
+MAX_CONCURRENCY="1"
+REQUEST_RATE="inf"
 NUM_PROMPTS="${NUM_PROMPTS:-$(yaml_get num_prompts)}"
+SEED="${SEED:-$(yaml_get seed)}"
 SEED="${SEED:-42}"
 OUTPUT_FORMAT="${OUTPUT_FORMAT:-csv}"
 BENCHMARK_RUN_COMMAND="bash run_benchmark.sh --${PROFILE}"

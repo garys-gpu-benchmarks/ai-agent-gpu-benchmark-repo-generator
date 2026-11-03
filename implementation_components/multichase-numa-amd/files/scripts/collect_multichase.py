@@ -87,7 +87,7 @@ def compile_binary() -> Path:
     build = Path("build")
     build.mkdir(exist_ok=True)
     binary = build / "multichase"
-    cmd = ["gcc", "-O2", "-std=c11", "src/multichase.c", "-o", str(binary)]
+    cmd = ["gcc", "-O2", "-std=c11", "-pthread", "src/multichase.c", "-o", str(binary)]
     completed = subprocess.run(cmd, check=False, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
     if completed.returncode != 0:
         raise SystemExit(f"[FAIL] multichase compile failed\n{completed.stdout}")
@@ -124,7 +124,7 @@ def main() -> int:
     parser.add_argument("--config", default="config/benchmark_config.yaml")
     parser.add_argument("--num-numa-nodes", default="1")
     parser.add_argument("--num-threads", default="1")
-    parser.add_argument("--thread-affinity", default="0-3")
+    parser.add_argument("--thread-affinity", default="")
     parser.add_argument("--page-size", default="4KB")
     parser.add_argument("--stride", default="64")
     parser.add_argument("--access-pattern", default="random")
@@ -148,6 +148,12 @@ def main() -> int:
     print("[INFO] working_set_size expands from yaml; no list CLI flag", file=transcript)
     print(f"[RUN] gcc -O2 -std=c11 src/multichase.c -o {binary}", file=transcript)
     numa_nodes = available_numa_nodes()
+    try:
+        requested_nodes = max(1, int(float(args.num_numa_nodes or 1)))
+    except (TypeError, ValueError):
+        requested_nodes = 1
+    if numa_nodes and len(numa_nodes) > requested_nodes:
+        numa_nodes = set(sorted(numa_nodes)[:requested_nodes])
     has_numactl = shutil.which("numactl") is not None
     if has_numactl and not numa_nodes:
         print("[WARN] numactl --hardware did not report any nodes; running unbound", file=transcript)
@@ -197,9 +203,13 @@ def main() -> int:
                 str(args.stride),
                 str(iters),
                 str(warmup),
+                str(max(1, int(float(args.num_threads or 1)))),
             ]
+            affinity = str(args.thread_affinity or "").strip()
+            if affinity and affinity.lower() not in {"none", "core"}:
+                cmd.insert(1, f"--physcpubind={affinity}")
         else:
-            cmd = [str(binary), str(size), str(args.stride), str(iters), str(warmup)]
+            cmd = [str(binary), str(size), str(args.stride), str(iters), str(warmup), str(max(1, int(float(args.num_threads or 1))))]
         print("#", f"metadata num_numa_nodes={args.num_numa_nodes} num_threads={args.num_threads} thread_affinity={args.thread_affinity} page_size={args.page_size} working_set_size={size} stride={args.stride} access_pattern={args.access_pattern} prefetch_enabled={args.prefetch_enabled} warmup_iters={warmup} iterations={iters} tier={tier}", file=transcript)
         print("[RUN]", " ".join(cmd), file=transcript)
         completed = subprocess.run(cmd, check=False, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, errors="replace")
@@ -217,7 +227,7 @@ def main() -> int:
                 rows.append(not_measured_row(index, tier, size, args, "numactl --membind=1 not permitted",
                                              REMOTE_BIND_DENIED))
                 continue
-            cmd = [str(binary), str(size), str(args.stride), str(iters), str(warmup)]
+            cmd = [str(binary), str(size), str(args.stride), str(iters), str(warmup), str(max(1, int(float(args.num_threads or 1))))]
             print("[RUN]", " ".join(cmd), file=transcript)
             completed = subprocess.run(cmd, check=False, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, errors="replace")
         print(completed.stdout, file=transcript)

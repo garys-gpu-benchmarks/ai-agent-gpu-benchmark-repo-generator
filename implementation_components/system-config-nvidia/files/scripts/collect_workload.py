@@ -192,6 +192,14 @@ def write_csv(path, header, rows):
     print(buf.getvalue(), end="")
 
 
+def kernel_release_matches(expected, uname_r):
+    expected = (expected or "").strip()
+    uname_r = (uname_r or "").strip()
+    if not expected or not uname_r:
+        return False
+    return uname_r == expected or uname_r.startswith(expected + "-") or uname_r.startswith(expected + ".")
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--run-dir", required=True)
@@ -202,8 +210,9 @@ def main() -> int:
     parser.add_argument("--output-format", default="csv")
     args = parser.parse_args()
     sweep = (yaml.safe_load(Path(args.config).read_text(encoding="utf-8")) or {}).get("sweep") or {}
-    # Read for the record; not compared yet (kernel/runtime checks live elsewhere).
-    _expected_kernel = str(pv(sweep, "kernel_version", args.profile, "6.8.0"))
+    expected_kernel = str(pv(sweep, "kernel_version", args.profile, "6.8.0"))
+    kernel_text = os.uname().release
+    kernel_ok = kernel_release_matches(expected_kernel, kernel_text)
     expected_driver = str(pv(sweep, "nvidia_driver_version", args.profile, sweep.get("driver_version", "580")))
     expected_cuda = str(pv(sweep, "cuda_version", args.profile, "12.6"))
     packages = [item.strip() for item in str(pv(sweep, "required_packages", args.profile, "nvidia-smi")).split(",") if item.strip()]
@@ -275,15 +284,21 @@ def main() -> int:
         "required_library_path_device_permission_errors",
         "error_message",
     ]
+    kernel_error = "" if kernel_ok else f"uname -r {kernel_text} does not match kernel_version {expected_kernel}"
     row = {
-        "status": "ok" if vbios_present == 1.0 and stack_mismatches == 0 else "error",
+        "status": "ok" if vbios_present == 1.0 and stack_mismatches == 0 and kernel_ok else "error",
         "cuda_package_version_mismatches_count": float(package_mismatch),
         "cuda_major_version_mismatch_count": float(cuda_mismatch),
         "nvidia_kernel_module_driver_version_mismatches_count": stack_mismatches,
         "vbios_string_present": vbios_present,
         "driver_compliance_percent": driver_compliance,
         "required_library_path_device_permission_errors": float(permission_errors),
-        "error_message": "" if vbios else "VBIOS Version missing from nvidia-smi -q",
+        "error_message": "; ".join(
+            part for part in (
+                "" if vbios else "VBIOS Version missing from nvidia-smi -q",
+                kernel_error,
+            ) if part
+        ),
     }
     write_csv(args.raw_file, header, [row])
     return 0

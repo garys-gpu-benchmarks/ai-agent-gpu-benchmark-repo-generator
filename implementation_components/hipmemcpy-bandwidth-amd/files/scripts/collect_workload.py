@@ -4,6 +4,7 @@ from __future__ import annotations
 import argparse
 import csv
 import io
+import os
 import subprocess
 import sys
 from pathlib import Path
@@ -89,7 +90,10 @@ def main() -> int:
             extras.extend([flag, str(value)])
     timeout = 3600
     try:
-        completed = subprocess.run(["bin/hip_memcpy_bw", *extras], check=False, capture_output=True, text=True, timeout=timeout)
+        device_id = str(pv(params, "device_id", args.profile, "0") or "0")
+        env = os.environ.copy()
+        env["HIP_VISIBLE_DEVICES"] = device_id
+        completed = subprocess.run(["bin/hip_memcpy_bw", *extras], check=False, capture_output=True, text=True, timeout=timeout, env=env)
         text = (completed.stdout or "") + "\n" + (completed.stderr or "")
     except subprocess.TimeoutExpired as exc:
         text = str(exc) + f"\nTimeoutExpired after {timeout}s\n"

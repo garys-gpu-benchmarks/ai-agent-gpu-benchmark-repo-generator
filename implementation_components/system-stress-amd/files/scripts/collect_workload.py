@@ -382,6 +382,8 @@ def main() -> int:
     cpu_load = int(float(pv(params, "cpu_load_percent", args.profile, 50) or 50))
     seconds = max(1, int(duration_seconds(pv(params, "duration", args.profile, 5))))
     gpu_load = int(float(pv(params, "gpu_load_percent", args.profile, 0) or 0))
+    temp_limit = float(pv(params, "temp_threshold", args.profile, 100) or 100)
+    power_limit = float(pv(params, "power_threshold", args.profile, 1000) or 1000)
     Path(args.run_dir).mkdir(parents=True, exist_ok=True)
     stress = None
     gpu_proc = None
@@ -427,6 +429,17 @@ def main() -> int:
     for row in rows:
         row["ras_uncorrectable_ecc_delta_count"] = delta
     write_csv(args.raw_file, header, rows)
+    temps = [float(row["gpu_temp_c"]) for row in rows if isinstance(row.get("gpu_temp_c"), (int, float))]
+    powers = [float(row["gpu_power_w"]) for row in rows if isinstance(row.get("gpu_power_w"), (int, float))]
+    breaches = []
+    if temp_limit > 0 and temps and max(temps) > temp_limit:
+        breaches.append(f"peak GPU temperature {max(temps):g} C > temp_threshold {temp_limit:g} C")
+    if power_limit > 0 and powers and (sum(powers) / len(powers)) > power_limit:
+        mean_power = sum(powers) / len(powers)
+        breaches.append(f"sustained GPU power {mean_power:.1f} W > power_threshold {power_limit:g} W")
+    if breaches:
+        print("[FAIL] stress threshold exceeded: " + "; ".join(breaches), file=sys.stderr)
+        return 1
     return 0
 
 

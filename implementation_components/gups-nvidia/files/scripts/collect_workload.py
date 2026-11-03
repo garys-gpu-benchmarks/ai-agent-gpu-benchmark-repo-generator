@@ -78,7 +78,20 @@ def main() -> int:
         raise SystemExit("[FAIL] bin/gups missing")
     env = os.environ.copy()
     env["OMP_NUM_THREADS"] = str(threads)
+    affinity = str(pv(params, "thread_affinity", args.profile, "") or "").strip()
+    if affinity.lower() == "core":
+        env["OMP_PROC_BIND"] = "close"
+    numa_node = str(pv(params, "numa_node", args.profile, "0") or "").strip()
     command = ["bin/gups", str(table_size), str(updates), str(iters), str(seed)]
+    if shutil.which("numactl") and numa_node not in {"", "none"}:
+        command = ["numactl", f"--cpunodebind={numa_node}", f"--membind={numa_node}", *command]
+    if affinity and affinity.lower() not in {"", "none", "core"} and shutil.which("numactl"):
+        bind = affinity.split(":", 1)[1] if affinity.lower().startswith("node:") else affinity
+        flag = "--cpunodebind" if affinity.lower().startswith("node:") else "--physcpubind"
+        if command[0] == "numactl":
+            command.insert(1, f"{flag}={bind}")
+        else:
+            command = ["numactl", f"{flag}={bind}", *command]
     completed = subprocess.run(command, check=False, capture_output=True, text=True, env=env, timeout=3600)
     text = (completed.stdout or "") + "\n" + (completed.stderr or "")
     (run_dir / "gups.txt").write_text(text, encoding="utf-8")

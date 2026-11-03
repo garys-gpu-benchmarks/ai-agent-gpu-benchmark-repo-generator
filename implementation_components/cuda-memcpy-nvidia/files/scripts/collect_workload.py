@@ -6,6 +6,7 @@ from __future__ import annotations
 import argparse
 import csv
 import io
+import os
 import re
 import subprocess
 from pathlib import Path
@@ -62,13 +63,15 @@ def main() -> int:
     if not Path("bin/cuda_memcpy").is_file():
         raise SystemExit("[FAIL] bin/cuda_memcpy missing; host memset is not a CUDA memcpy result")
     rows = []
+    device_env = os.environ.copy()
+    device_env["CUDA_VISIBLE_DEVICES"] = str(pv(sweep, "device_id", args.profile, "0") or "0")
     size = min_bytes
     while size <= max_bytes:
         metrics = {}
         for kind in ("H2D", "D2H", "D2D", "H2D_pageable"):
             completed = subprocess.run(
                 ["bin/cuda_memcpy", str(size), str(warmup), str(iters), kind],
-                check=False, capture_output=True, text=True, timeout=3600,
+                check=False, capture_output=True, text=True, timeout=3600, env=device_env,
             )
             text = (completed.stdout or "") + (completed.stderr or "")
             (run_dir / f"memcpy_{kind}_{size}.txt").write_text(text, encoding="utf-8")

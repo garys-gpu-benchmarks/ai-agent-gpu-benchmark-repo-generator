@@ -94,7 +94,7 @@ def parse_args():
     parser.add_argument("--output-format", default="csv")
     return parser.parse_args()
 
-def run_gups(run_dir: Path, table_size: int, updates: int, iters: int, threads: int) -> tuple[float, str, str]:
+def run_gups(run_dir: Path, table_size: int, updates: int, iters: int, threads: int, seed: int = 42, numa_node: str = "", affinity: str = "") -> tuple[float, str, str]:
     """Return elapsed seconds, TLB miss rate, and L3 miss rate.
 
     The timed updates run in a native binary so the thread count is real work.
@@ -109,6 +109,7 @@ def run_gups(run_dir: Path, table_size: int, updates: int, iters: int, threads: 
         "  uint64_t n = strtoull(argv[1], 0, 10);\n"
         "  uint64_t updates = strtoull(argv[2], 0, 10);\n"
         "  int threads = atoi(argv[3]);\n"
+        "  uint64_t mix = argc > 4 ? strtoull(argv[4], 0, 10) : 42;\n"
         "  uint64_t *table = calloc(n, sizeof(uint64_t));\n"
         "  if (!table) return 1;\n"
         "  struct timespec a, b;\n"
@@ -119,7 +120,7 @@ def run_gups(run_dir: Path, table_size: int, updates: int, iters: int, threads: 
         "    int tid = 0;\n"
         "#ifdef _OPENMP\n    tid = omp_get_thread_num();\n    int nthreads = omp_get_num_threads();\n"
         "#else\n    int nthreads = 1;\n#endif\n"
-        "    uint64_t seed = 0x9e3779b97f4a7c15ULL ^ (uint64_t)tid;\n"
+        "    uint64_t seed = mix ^ (uint64_t)tid;\n"
         "    uint64_t begin = (updates * (uint64_t)tid) / (uint64_t)nthreads;\n"
         "    uint64_t end = (updates * (uint64_t)(tid + 1)) / (uint64_t)nthreads;\n"
         "    for (uint64_t i = begin; i < end; i++) {\n"
@@ -145,7 +146,17 @@ def run_gups(run_dir: Path, table_size: int, updates: int, iters: int, threads: 
         compiled = build.returncode == 0 and binary.is_file()
     total_updates = updates * iters
     if compiled:
-        command = [str(binary), str(table_size), str(total_updates), str(threads)]
+        command = [str(binary), str(table_size), str(total_updates), str(threads), str(seed)]
+        node = str(numa_node or "").strip()
+        if shutil.which("numactl") and node not in {"", "none"}:
+            command = ["numactl", f"--cpunodebind={node}", f"--membind={node}", *command]
+        if affinity and str(affinity).lower() not in {"", "none", "core"} and shutil.which("numactl"):
+            bind = str(affinity).split(":", 1)[1] if str(affinity).lower().startswith("node:") else str(affinity)
+            flag = "--cpunodebind" if str(affinity).lower().startswith("node:") else "--physcpubind"
+            if command[0] == "numactl":
+                command.insert(1, f"{flag}={bind}")
+            else:
+                command = ["numactl", f"{flag}={bind}", *command]
         perf = shutil.which("perf")
         if perf:
             command = [
@@ -184,7 +195,7 @@ def run_gups(run_dir: Path, table_size: int, updates: int, iters: int, threads: 
         return elapsed, rate("dtlb-load-misses", "dtlb-loads"), l3_rate
     import numpy as np
     table = np.zeros(table_size, dtype=np.uint64)
-    rng = np.random.default_rng(42)
+    rng = np.random.default_rng(seed if seed else 42)
     start = time.perf_counter()
     chunk = min(total_updates, 8_000_000)
     done = 0
@@ -210,8 +221,11 @@ def main() -> int:
     updates = max(1, int(float(pv(params, "num_updates", args.profile, 1000000) or 1000000)))
     iters = max(1, int(float(pv(params, "num_iterations", args.profile, 1) or 1)))
     threads = max(1, int(float(pv(params, "num_threads", args.profile, 1) or 1)))
+    seed = int(float(pv(params, "seed", args.profile, 42) or 42))
+    numa_node = str(pv(params, "numa_node", args.profile, "0") or "")
+    affinity = str(pv(params, "thread_affinity", args.profile, "") or "")
     Path(args.run_dir).mkdir(parents=True, exist_ok=True)
-    elapsed, tlb, l3 = run_gups(Path(args.run_dir), table_size, updates, iters, threads)
+    elapsed, tlb, l3 = run_gups(Path(args.run_dir), table_size, updates, iters, threads, seed, numa_node, affinity)
     gups = (updates * iters) / elapsed / 1e9
     row = {
         "kind": "sample", "seconds": elapsed, "updates": updates, "total_updates": updates * iters,

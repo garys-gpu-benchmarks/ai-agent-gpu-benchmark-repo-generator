@@ -1,5 +1,10 @@
 # Changelog
 
+## 2026-10-31 — Publish BenchmarkSpecDefinitions.xlsx to the GitHub profile repository
+
+- **`scripts/publish_benchmarks_to_github.sh` step 10:** after the generator is published, the script clones `garymichaelbass/garymichaelbass`, copies `BenchmarkSpecDefinitions.xlsx` from the generator in the run folder, and commits that file only. `git add -A` is not used, so the profile README and the sample workload folders stay. An unchanged file is not committed again. Step 0 stops if the workbook is missing from the run folder. The download address is `https://github.com/garymichaelbass/garymichaelbass/raw/main/BenchmarkSpecDefinitions.xlsx`.
+- **Tests:** `tests/test_publish_profile_spec.py` runs the step against a local repository that already has a README and a sample folder. Both survive an add and an update of the workbook.
+
 ## 2026-10-22 — TEMPLATE_00_117: workbook notes no longer fail generation; x09/x10/x14 smoke sizes and x01 driver wording match what runs
 
 - **Authoring notes stripped from every profile cell (`scripts/extract_benchmark_definition.py`).** In the TEMPLATE_00_116 batches, 207 (Project401) and 416 (Project403) failed `self_check_generated_repo.sh` because a `TEMPLATE_00_116` note in `Parameters_SmokeBaselineExtend` was copied into `benchmark_specification.json`; Cursor patched each batch's copy of the extractor, but the template was not. The smoke, baseline, extended and notes cells now go through `_strip_profile_cell()`, which removes `TEMPLATE_00_<n>` notes (including dated ones such as `2026-10-22 TEMPLATE_00_117: ...`) and returns any cell without the tag unchanged. All 128 workloads now extract with no `TEMPLATE_00_` text; before this, the 00_117 notes on x15, x20, x21, 130/330 and others would have failed the same way.
