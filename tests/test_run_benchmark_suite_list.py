@@ -14,10 +14,10 @@ import unittest
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-SUITE = ROOT / "templates" / "suite-tools" / "scripts" / "run_benchmark_suite.sh"
+SUITE = ROOT / "user_scripts" / "run_benchmark_suite.sh"
 BASH = shutil.which("bash")
 # One publish script since 2026-10-19 (the former _manual variant, renamed).
-PUBLISH = [ROOT / "scripts" / "publish_benchmarks_to_github.sh"]
+PUBLISH = [ROOT / "user_scripts" / "publish_benchmarks_to_github.sh"]
 DOCS = [ROOT / "README.md", ROOT / "templates" / "README_TEMPLATE.md",
         ROOT / "templates" / "suite-tools" / "README.md", ROOT / "docs" / "github-profile-README.md"]
 RUN_SH = re.compile(r"(?<![\w/.-])\./run\.sh\b")

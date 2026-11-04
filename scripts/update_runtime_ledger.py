@@ -950,6 +950,12 @@ def main() -> int:
         list(zip(metric_defs, results)),
         {"profile": args.profile, "gpu_count": gpu_count()},
     )
+    if args.exit_code != 0:
+        # The metric cells may be clean (401 on Nov 3: exit 1, five clean metrics),
+        # but a failed run is not a PASS row.
+        from metric_contract import RUN_FAILED_STATUS
+
+        result_status = RUN_FAILED_STATUS
     notes = args.notes
     if result_status == "SMOKE-STANDIN":
         notes = "stub"

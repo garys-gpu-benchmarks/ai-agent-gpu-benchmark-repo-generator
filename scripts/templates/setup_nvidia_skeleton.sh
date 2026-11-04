@@ -155,8 +155,8 @@ log_status "PHASE|SETUP start ${REPO_NAME}"
 source "${REPO_ROOT}/scripts/lib/keep_running_kernel.sh"
 keep_running_kernel
 nvidia_pin_host_driver
-record_cmd "DEBIAN_FRONTEND=noninteractive apt-get update -y"
-DEBIAN_FRONTEND=noninteractive apt-get update -y
+# Skips the refresh when this host refreshed its apt index in the last 6 h.
+nvidia_apt_update_once
 
 # Host interpreter: Ubuntu's /usr/bin/python3 unless BENCHMARK_PYTHON is set.
 # An interactive root PATH can put an image's uv Python 3.11 first; Ubuntu

@@ -29,6 +29,16 @@ def duration_seconds(raw):
     return number / 1000.0 if number >= 10000 else number
 
 
+def count_token(raw, true_value, default, minimum):
+    """yaml true means the NVIDIA twin's enabled default; a number is used as is."""
+    text = str(raw).strip().lower() if raw is not None else ""
+    if text in {"true", "yes", "on"}:
+        return true_value
+    if text in {"", "false", "no", "off"}:
+        return default
+    return max(minimum, int(float(text)))
+
+
 def load_params(path):
     cfg = yaml.safe_load(Path(path).read_text(encoding="utf-8")) or {}
     return cfg.get("sweep") or {}
@@ -67,6 +77,10 @@ def main() -> int:
     batch = int(float(pv(params, "batch_size", args.profile, 2) or 2))
     iters = max(1, int(float(pv(params, "num_iterations", args.profile, 2) or 2)))
     lr = float(pv(params, "learning_rate", args.profile, 5e-5) or 5e-5)
+    # Untimed passes before the timer, and backward passes per optimizer step.
+    # Without the yaml keys: no warmup and one pass per step, as before.
+    warmup = count_token(pv(params, "warmup_iters", args.profile, ""), 1, 0, 0)
+    accum = count_token(pv(params, "gradient_accumulation", args.profile, ""), 1, 1, 1)
     model_name = str(pv(params, "model_name", args.profile, "distilbert-base-uncased"))
     Path(args.run_dir).mkdir(parents=True, exist_ok=True)
     import torch
@@ -78,16 +92,25 @@ def main() -> int:
     mask = torch.ones_like(ids)
     labels = torch.zeros(batch, dtype=torch.long, device=device)
     model.train()
+    # Warmup matches the NVIDIA twin (225/425): forward and backward, gradients
+    # discarded, so kernel selection and allocator growth stay out of the timing.
+    for _ in range(warmup):
+        out = model(input_ids=ids, attention_mask=mask, labels=labels)
+        (out.loss / accum).backward()
+        opt.zero_grad(set_to_none=True)
     if device.type == "cuda":
         # Peak memory covers the training steps, not the model load.
         torch.cuda.synchronize()
         torch.cuda.reset_peak_memory_stats()
+    print(f"[INFO] distilbert: warmup_iters={warmup} gradient_accumulation={accum} num_iterations={iters}", flush=True)
     start = time.perf_counter()
-    for _ in range(iters):
-        opt.zero_grad(set_to_none=True)
+    opt.zero_grad(set_to_none=True)
+    for step in range(iters):
         out = model(input_ids=ids, attention_mask=mask, labels=labels)
-        out.loss.backward()
-        opt.step()
+        (out.loss / accum).backward()
+        if (step + 1) % accum == 0:
+            opt.step()
+            opt.zero_grad(set_to_none=True)
     if device.type == "cuda":
         torch.cuda.synchronize()
     elapsed = (time.perf_counter() - start) / iters

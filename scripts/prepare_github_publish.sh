@@ -133,6 +133,8 @@ SCRIPT_LEFTOVERS=(
   scripts/apply_component_gaps.py
   scripts/validate_template_inputs.py
   scripts/generation_host_preflight.py
+  scripts/remote_host_preflight.py
+  scripts/remote_host_bootstrap.py
   scripts/verify_generation_workflow.py
   scripts/sync_matrix_profile_commands.py
   scripts/matrix_profile_values.py
@@ -165,6 +167,7 @@ SCHEMA_LEFTOVERS=(
 
 DIR_LEFTOVERS=(
   ai-agent-gpu-benchmark-repo-generator_copy
+  scripts/remote
   docs/examples/generated-repo-github
   docs/examples/generated-repo-workflows
   .cache

@@ -4,7 +4,7 @@
 # Maintainer: AI Agent GPU Benchmark Repo Generator
 # Date: 2026-10-11
 # Description: Generate the two built-in tables of
-#   templates/suite-tools/scripts/show_metrics.sh from BenchmarkSpecDefinitions.xlsx:
+#   user_scripts/show_metrics.sh from BenchmarkSpecDefinitions.xlsx:
 #
 #   Metric_Short_Labels   one row per workload metric (Workload Number, Metric No,
 #                         Metric Key, Short Label <= 7 characters, ...)
@@ -45,7 +45,7 @@ WORKBOOK_NAME = "BenchmarkSpecDefinitions.xlsx"
 DEFINITIONS_SHEET = "Workload_Definitions"
 LABEL_SHEET = "Metric_Short_Labels"
 NAME_SHEET = "Workload_Short_Names"
-TEMPLATE_REL = Path("templates") / "suite-tools" / "scripts" / "show_metrics.sh"
+TEMPLATE_REL = Path("user_scripts") / "show_metrics.sh"
 BEGIN_MARKER = "# BEGIN GENERATED SHORT LABELS"
 END_MARKER = "# END GENERATED SHORT LABELS"
 NAME_BEGIN_MARKER = "# BEGIN GENERATED WORKLOAD NAMES"

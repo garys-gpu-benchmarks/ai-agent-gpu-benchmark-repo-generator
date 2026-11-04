@@ -119,8 +119,8 @@ fi
 
 log_status "PHASE|SETUP start ${REPO_NAME}"
 nvidia_pin_host_driver
-record_cmd "DEBIAN_FRONTEND=noninteractive apt-get update -y"
-DEBIAN_FRONTEND=noninteractive apt-get update -y
+# Skips the refresh when this host refreshed its apt index in the last 6 h.
+nvidia_apt_update_once
 
 # Host interpreter: Ubuntu's /usr/bin/python3 unless BENCHMARK_PYTHON is set.
 # An interactive root PATH can put an image's uv Python 3.11 first; Ubuntu
@@ -185,28 +185,18 @@ if ! "${REPO_ROOT}/.venv/bin/python" -c "import transformers" >/dev/null 2>&1; t
   log_status "STEP|SETUP pip install transformers"
   "${REPO_ROOT}/.venv/bin/python" -m pip install transformers
 fi
-if is_ubuntu_2604; then
-  if ! "${REPO_ROOT}/.venv/bin/python" -c "import torch; assert torch.cuda.is_available() and torch.__version__.startswith('2.9.1')" >/dev/null 2>&1; then
-    log_status "STEP|SETUP pip install torch 2.9.1+cu130"
-    record_cmd "${REPO_ROOT}/.venv/bin/python -m pip install 'torch==2.9.1+cu130' --index-url https://download.pytorch.org/whl/cu130"
-    "${REPO_ROOT}/.venv/bin/python" -m pip install 'torch==2.9.1+cu130' --index-url https://download.pytorch.org/whl/cu130
-  fi
-  if ! "${REPO_ROOT}/.venv/bin/python" -c "import torchvision" >/dev/null 2>&1; then
-    log_status "STEP|SETUP pip install torchvision 0.24.1+cu130"
-    "${REPO_ROOT}/.venv/bin/python" -m pip install 'torchvision==0.24.1+cu130' --index-url https://download.pytorch.org/whl/cu130
-  fi
-else
-  # install_sglang_nvidia.sh pins torch 2.13.0+cu130 on 24.04; install that
-  # build here too, so setup does not download a different torch first.
-  if ! "${REPO_ROOT}/.venv/bin/python" -c "import torch; assert torch.cuda.is_available() and torch.__version__.startswith('2.13.0')" >/dev/null 2>&1; then
-    log_status "STEP|SETUP pip install torch 2.13.0+cu130"
-    record_cmd "${REPO_ROOT}/.venv/bin/python -m pip install 'torch==2.13.0+cu130' --index-url https://download.pytorch.org/whl/cu130"
-    "${REPO_ROOT}/.venv/bin/python" -m pip install 'torch==2.13.0+cu130' --index-url https://download.pytorch.org/whl/cu130
-  fi
-  if ! "${REPO_ROOT}/.venv/bin/python" -c "import torchvision" >/dev/null 2>&1; then
-    log_status "STEP|SETUP pip install torchvision 0.28.0+cu130"
-    "${REPO_ROOT}/.venv/bin/python" -m pip install 'torchvision==0.28.0+cu130' --index-url https://download.pytorch.org/whl/cu130
-  fi
+# install_sglang_nvidia.sh pins torch 2.13.0+cu130 on Ubuntu 24.04 and 26.04.
+# Install that build here, once. Before TEMPLATE_00_119 the 26.04 branch
+# installed torch 2.9.1+cu130 first and the helper then replaced it with 2.13.0
+# (two full torch downloads; 430 took 19 minutes on the Nov 3 host).
+if ! "${REPO_ROOT}/.venv/bin/python" -c "import torch; assert torch.cuda.is_available() and torch.__version__.startswith('2.13.0')" >/dev/null 2>&1; then
+  log_status "STEP|SETUP pip install torch 2.13.0+cu130"
+  record_cmd "${REPO_ROOT}/.venv/bin/python -m pip install 'torch==2.13.0+cu130' --index-url https://download.pytorch.org/whl/cu130"
+  "${REPO_ROOT}/.venv/bin/python" -m pip install 'torch==2.13.0+cu130' --index-url https://download.pytorch.org/whl/cu130
+fi
+if ! "${REPO_ROOT}/.venv/bin/python" -c "import torchvision; assert '0.28.0' in torchvision.__version__" >/dev/null 2>&1; then
+  log_status "STEP|SETUP pip install torchvision 0.28.0+cu130"
+  "${REPO_ROOT}/.venv/bin/python" -m pip install 'torchvision==0.28.0+cu130' --index-url https://download.pytorch.org/whl/cu130
 fi
 log_status "STEP|SETUP install sglang nvidia extras"
 record_cmd "bash scripts/install_sglang_nvidia.sh"

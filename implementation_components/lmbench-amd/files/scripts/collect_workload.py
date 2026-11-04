@@ -108,11 +108,26 @@ def lmbench_value(tool: str, text: str):
     return None, "raw"
 
 
+def warmup_args(params, profile) -> list[str]:
+    """lmbench -W <warmup>: microseconds each benchmark runs untimed before its
+    timed repetitions (lmbench's benchmp warmup). lat_syscall, lat_ctx,
+    lat_mem_rd, bw_mem and bw_pipe all take it before their positional
+    arguments. lat_mem_rd warms up once per array size, so keep this small.
+    Empty or 0 passes nothing (lmbench's default of no warmup)."""
+    raw = pv(params, "warmup_duration_us", profile, "")
+    try:
+        value = int(float(raw)) if raw not in (None, "") else 0
+    except (TypeError, ValueError):
+        raise SystemExit(f"[FAIL] warmup_duration_us must be a number of microseconds, got {raw!r}")
+    return ["-W", str(value)] if value > 0 else []
+
+
 def main() -> int:
     args = parse_args()
     params = load_params(args.config)
     reps = max(1, int(float(pv(params, "repetitions", args.profile, 1) or 1)))
     timeout = {"smoke": 120, "baseline": 180, "extended": 180}.get(args.profile, 180)
+    warm = warmup_args(params, args.profile)
     Path(args.run_dir).mkdir(parents=True, exist_ok=True)
     tests = [
         (["lat_syscall", "null"], "lat_syscall_null_us"),
@@ -127,7 +142,7 @@ def main() -> int:
     rows = []
     for _rep in range(reps):
         for argv, name in tests:
-            cmd = [lmbench_bin(argv[0]), *argv[1:]]
+            cmd = [lmbench_bin(argv[0]), *warm, *argv[1:]]
             try:
                 completed = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout)
                 text = (completed.stdout or "") + " " + (completed.stderr or "")

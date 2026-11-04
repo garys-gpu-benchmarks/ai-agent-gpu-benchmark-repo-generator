@@ -40,6 +40,11 @@
       "type": "string",
       "enum": ["not_requested", "validation_only", "pending", "submitted", "failed"]
     },
+    "generation_successful_seconds": { "type": "integer", "minimum": 0 },
+    "generation_seconds_including_failed_attempts": { "type": "integer", "minimum": 0 },
+    "remote_host_preflight": { "type": "object", "description": "Remote VM probe before workload 1 (TEMPLATE_00_119). Warnings only." },
+    "host_bootstrap": { "type": "object", "description": "One-time host bootstrap before workload 1, timed apart from the workloads (TEMPLATE_00_119)." },
+    "host_prefetch": { "type": "object", "description": "Background Hugging Face prefetch status read at the end of the batch (TEMPLATE_00_119)." },
     "repositories": {
       "type": "array",
       "items": {

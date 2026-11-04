@@ -28,8 +28,9 @@ NVIDIA_SETUPS = [ROOT / "scripts" / "templates" / "setup_nvidia_skeleton.sh"] + 
 FAKE_TOOLS = {
     "apt-cache": r'''#!/bin/bash
 echo "apt-cache $*" >> "$STATE/log"
-[[ "$1" == "show" && -f "$STATE/repo" ]] && exit 0
-exit 100
+[[ "$1" == "show" && -f "$STATE/repo" ]] || exit 100
+[[ -f "$STATE/no_slim" && "$2" != cuda-toolkit-* ]] && exit 100
+exit 0
 ''',
     "curl": r'''#!/bin/bash
 echo "curl $*" >> "$STATE/log"
@@ -51,15 +52,16 @@ exit 0
     "apt-get": r'''#!/bin/bash
 echo "apt-get $*" >> "$STATE/log"
 [[ "$1" == "install" ]] || exit 0
-pkg="${!#}"
 if [[ -f "$STATE/audit_after_install" ]]; then cp "$STATE/audit_after_install" "$STATE/audit"; fi
 [[ -f "$STATE/apt_fail" ]] && exit 100
-if [[ "$pkg" =~ ^cuda-toolkit-([0-9]+)-([0-9]+)$ ]]; then
-  ver="${BASH_REMATCH[1]}.${BASH_REMATCH[2]}"
-  mkdir -p "$PREFIX/cuda-$ver/bin"
-  printf '#!/bin/bash\necho "Cuda compilation tools, release %s, V%s.1"\n' "$ver" "$ver" > "$PREFIX/cuda-$ver/bin/nvcc"
-  chmod +x "$PREFIX/cuda-$ver/bin/nvcc"
-fi
+for pkg in "$@"; do
+  if [[ "$pkg" =~ ^cuda-(toolkit|compiler)-([0-9]+)-([0-9]+)$ ]]; then
+    ver="${BASH_REMATCH[2]}.${BASH_REMATCH[3]}"
+    mkdir -p "$PREFIX/cuda-$ver/bin"
+    printf '#!/bin/bash\necho "Cuda compilation tools, release %s, V%s.1"\n' "$ver" "$ver" > "$PREFIX/cuda-$ver/bin/nvcc"
+    chmod +x "$PREFIX/cuda-$ver/bin/nvcc"
+  fi
+done
 exit 0
 ''',
     "update-alternatives": '#!/bin/bash\necho "update-alternatives $*" >> "$STATE/log"\nexit 0\n',
@@ -152,15 +154,44 @@ class InstallTest(unittest.TestCase):
     def tearDown(self) -> None:
         self.host.close()
 
-    def test_fresh_2404_adds_the_repository_then_installs_cuda_toolkit_12_8(self) -> None:
+    SLIM_12_8 = ("apt-get install -y -o Dpkg::Options::=--force-unsafe-io cuda-compiler-12-8 "
+                 "cuda-libraries-dev-12-8 cuda-command-line-tools-12-8 cuda-nvml-dev-12-8")
+
+    def test_fresh_2404_adds_the_repository_then_installs_the_cuda_12_8_packages(self) -> None:
         result = self.host.run('install_nvidia_cuda_toolkit; echo "ver=${NVIDIA_CUDA_VERSION}"')
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertIn("ver=12.8", result.stdout)
         log = self.host.log()
         self.assertIn("compute/cuda/repos/ubuntu2404/x86_64/cuda-keyring_1.1-1_all.deb", log)
-        self.assertIn("apt-get install -y cuda-toolkit-12-8", log)
+        self.assertIn(self.SLIM_12_8, log)
         self.assertNotIn("nvidia-cuda-toolkit", log)
+        self.assertNotIn("install -y -o Dpkg::Options::=--force-unsafe-io cuda-toolkit-", log)
         self.assertLess(log.index("dpkg -i"), log.index("apt-get install"))
+
+    def test_fresh_2604_installs_the_cuda_13_3_packages_without_nsight(self) -> None:
+        host = FakeHost("26.04")
+        try:
+            result = host.run("install_nvidia_cuda_toolkit")
+            self.assertEqual(result.returncode, 0, result.stderr)
+            log = host.log()
+            self.assertIn("compute/cuda/repos/ubuntu2604/x86_64/cuda-keyring_1.1-1_all.deb", log)
+            self.assertIn(
+                "apt-get install -y -o Dpkg::Options::=--force-unsafe-io cuda-compiler-13-3 "
+                "cuda-libraries-dev-13-3 cuda-command-line-tools-13-3 cuda-nvml-dev-13-3", log)
+            for heavy in ("cuda-toolkit-13-3", "cuda-visual-tools", "nsight", "cuda-documentation"):
+                self.assertNotIn(f"install -y -o Dpkg::Options::=--force-unsafe-io {heavy}", log)
+        finally:
+            host.close()
+
+    def test_missing_slim_package_falls_back_to_the_full_toolkit(self) -> None:
+        (self.host.state / "repo").touch()
+        (self.host.state / "no_slim").touch()
+        result = self.host.run("install_nvidia_cuda_toolkit")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("installing the full cuda-toolkit-12-8", result.stdout)
+        log = self.host.log()
+        self.assertIn("apt-get install -y -o Dpkg::Options::=--force-unsafe-io cuda-toolkit-12-8", log)
+        self.assertNotIn("dpkg -i", log)
 
     def test_versioned_nvcc_already_present_installs_nothing(self) -> None:
         nvcc = self.host.prefix / "cuda-12.8" / "bin" / "nvcc"
@@ -177,7 +208,7 @@ class InstallTest(unittest.TestCase):
         stale.chmod(0o755)
         result = self.host.run("install_nvidia_cuda_toolkit")
         self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertIn("apt-get install -y cuda-toolkit-12-8", self.host.log())
+        self.assertIn(self.SLIM_12_8, self.host.log())
 
     def test_inconsistent_dpkg_after_the_install_fails(self) -> None:
         (self.host.state / "audit_after_install").write_text(
@@ -190,7 +221,8 @@ class InstallTest(unittest.TestCase):
         (self.host.state / "apt_fail").touch()
         result = self.host.run("install_nvidia_cuda_toolkit")
         self.assertNotEqual(result.returncode, 0)
-        self.assertIn("apt-get install cuda-toolkit-12-8 failed", result.stderr)
+        self.assertIn("apt-get install cuda-compiler-12-8 cuda-libraries-dev-12-8 "
+                      "cuda-command-line-tools-12-8 cuda-nvml-dev-12-8 failed", result.stderr)
 
 
 class DriverPinTest(unittest.TestCase):

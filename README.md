@@ -179,7 +179,7 @@ my_project_root/
 ```text
 config/ci_contract.yaml ──► templates/workload/.github/workflows/   ──► 2 thin callers in each of the 128 workload repos
    (owner, tag, inputs,     templates/shared-workflows/            ──► shared-workflows repo  (published once, tagged v1)
-    runner labels, tools)   templates/suite-tools/                 ──► gpu-bench-suite repo   (run_benchmark_suite.sh, get_remote_info.sh, show_metrics.sh)
+    runner labels, tools)   user_scripts/ + templates/suite-tools/                 ──► gpu-bench-suite repo   (run_benchmark_suite.sh, show_metrics.sh, show_ledger_runs.sh, get_benchmark_results.sh)
 ```
 
 | Where | File | Runs on | When |
@@ -192,14 +192,14 @@ config/ci_contract.yaml ──► templates/workload/.github/workflows/   ──
 
 ### Commands
 
-Publishing is done by [`scripts/publish_benchmarks_to_github.sh`](scripts/publish_benchmarks_to_github.sh). This repository holds the master copy; it is never copied into generated workloads (`init_generated_repo.py` excludes it). The script has no source folders built in: you fill the run folder by hand, and step 0 only checks it (every batch has all 32 workloads, no duplicate or out-of-range numbers, the generator present).
+Publishing is done by [`user_scripts/publish_benchmarks_to_github.sh`](user_scripts/publish_benchmarks_to_github.sh). This repository holds the master copy; it is never copied into generated workloads (generation copies only `.claude/`, `schemas/`, `docs/`, `scripts/` and `config/`). The script has no source folders built in: you fill the run folder by hand, and step 0 only checks it (every batch has all 32 workloads, no duplicate or out-of-range numbers, the generator present).
 
 The script lives in `Publishing\`, with one dated folder per publish run:
 
 ```text
 Z:\ServersProcsMemory\Github_Garys_GPU_Repos\
 └── Publishing\
-    ├── publish_benchmarks_to_github.sh             # copy of scripts/publish_benchmarks_to_github.sh
+    ├── publish_benchmarks_to_github.sh             # copy of user_scripts/publish_benchmarks_to_github.sh
     └── 20261019_02\
         ├── src_380_381_382_383\                    # filled by hand: the 128 workloads + ai-agent-gpu-benchmark-repo-generator
         ├── src_380_381_382_383_PubTree\            # created by the script (logs in _logs\)
@@ -218,7 +218,7 @@ cp -a $P/Project379_TEMPLATE_00_112_20261017/TEMPLATE_00_112/ai-agent-gpu-benchm
 cp -a $P/Project380_101_132_TEMPLATE_00_112_20261019_Cursor/TEMPLATE_00_112/1[0-9][0-9]-* $R/   # and 2xx, 3xx, 4xx likewise
 
 cd /z/ServersProcsMemory/Github_Garys_GPU_Repos/Publishing
-cp 20261019_02/src_380_381_382_383/ai-agent-gpu-benchmark-repo-generator/scripts/publish_benchmarks_to_github.sh .
+cp 20261019_02/src_380_381_382_383/ai-agent-gpu-benchmark-repo-generator/user_scripts/publish_benchmarks_to_github.sh .
 ./publish_benchmarks_to_github.sh 20261019_02/src_380_381_382_383
 ```
 
@@ -266,17 +266,30 @@ The other bundles are `bundle-nvidia-ubuntu-2404`, `bundle-amd-ubuntu-2604` and 
 ### From your laptop
 
 ```bash
-./get_remote_info.sh --host 203.0.113.10         # ledger + results/raw + results/parsed + suite logs
-./get_remote_info.sh --host ubuntu@203.0.113.10 --port 2222 -i ~/.ssh/id_ed25519 -o ~/results
+./get_benchmark_results.sh --host 203.0.113.10   # ledger + results/raw + results/parsed + suite logs
+./get_benchmark_results.sh --host ubuntu@203.0.113.10 --port 2222 -i ~/.ssh/id_ed25519 -o ~/results
+./show_ledger_runs.sh --host 203.0.113.10      # just the run table (workload, profile, runtime, exit code); copies nothing
 ./show_metrics.sh 332 --host 203.0.113.10         # one workload's metrics from the remote ledger
 ./show_metrics.sh 332 --baseline --file RUNTIME_LEDGERS/runtime_ledger_301_332_<time>.csv
 ```
 
-The suite scripts are kept in [`templates/suite-tools/scripts/`](templates/suite-tools/scripts) and emitted to `gpu-bench-suite/`.
+### User scripts
+
+Every script you run by hand has its one master copy in [`user_scripts/`](user_scripts):
+
+| Script | Runs on | What it does |
+|---|---|---|
+| `run_benchmark_suite.sh` | the GPU host | Runs the workloads under `/opt/benchmarks` for the chosen profiles |
+| `show_metrics.sh` | laptop (`--host`) or GPU host | One workload's metrics from the runtime ledger, with per-profile means |
+| `show_ledger_runs.sh` | laptop (`--host`) or GPU host | The run table only (workload, profile, runtime, exit code); copies nothing |
+| `get_benchmark_results.sh` | laptop (`--host`) or GPU host | Copies the ledger, every workload's results and the suite logs, and prints the run table |
+| `publish_benchmarks_to_github.sh` | your laptop (Git Bash) | Publishes the workloads, bundles, generator and workbook (run a copy from `Publishing\`) |
+
+The first four are the suite tools: `scripts/emit_shared_workflows.py` emits them to `gpu-bench-suite/scripts/` (with `templates/suite-tools/README.md`), generation installs them at `/opt/benchmarks` and in the project folder, and every bundle carries them. `user_scripts/` itself is never copied into a workload.
 
 `show_metrics.sh` prints one row per run in fixed 7-character metric columns, with an Exit column (ledger exit code) after Idx, at most 93 characters wide. Two sheets of `BenchmarkSpecDefinitions.xlsx` supply its text: `Metric_Short_Labels` (one row per workload metric; the column headings, at most 7 characters) and `Workload_Short_Names` (one row per workload; the Name column, at most 12 characters, for example `RAG Sweep` for "RAG Pipeline Sweep"). After changing either, run `python3 scripts/generate_show_metrics.py`; it checks both sheets against `Workload_Definitions` (metric keys from the `Metrics` column, full workload names, no short name used twice in a batch, one short name per full name) and rewrites the two tables in the script. `--check` reports drift without writing (CI runs it), and `--add-missing` adds rows for new metrics and workloads, marked `auto: review`.
 
-Generating a workload (`scripts/create_generated_repo.py`) also regenerates `show_metrics.sh` from the sheet and puts a copy of `get_remote_info.sh` and `show_metrics.sh` in the project folder, one level above the folder that holds the generator and the workloads (for example `Project347_.../get_remote_info.sh` next to `Project347_.../TEMPLATE_00_105/`). Run it from there; it writes `DIRECTORIES/` and `RUNTIME_LEDGERS/` beside itself. An existing copy that differs is kept. It is never copied into a workload, and it does not belong in `scripts/` next to `publish_benchmarks_to_github.sh`: everything in `scripts/` is copied into every workload. When a workload is loaded onto the VM, `scripts/create_one_workload.py` installs `templates/suite-tools/scripts/show_metrics.sh` at `/opt/benchmarks/show_metrics.sh` and `templates/suite-tools/scripts/run_benchmark_suite.sh` at `/opt/benchmarks/run_benchmark_suite.sh`. A published bundle does the same: `scripts/publish_benchmarks_to_github.sh` copies both, so `git clone ... /opt/benchmarks` leaves them there.
+Generating a workload (`scripts/create_generated_repo.py`) also regenerates `show_metrics.sh` from the sheet and puts a copy of `get_benchmark_results.sh`, `show_ledger_runs.sh` and `show_metrics.sh` in the project folder, one level above the folder that holds the generator and the workloads (for example `Project347_.../get_benchmark_results.sh` next to `Project347_.../TEMPLATE_00_105/`). Run it from there; it writes `DIRECTORIES/` and `RUNTIME_LEDGERS/` beside itself. An existing copy that differs is kept. It is never copied into a workload; none of the user scripts belong in `scripts/`, because everything in `scripts/` is copied into every workload. When a workload is loaded onto the VM, `scripts/create_one_workload.py` installs `user_scripts/show_metrics.sh`, `run_benchmark_suite.sh`, `get_benchmark_results.sh` and `show_ledger_runs.sh` at `/opt/benchmarks/` (run without `--host` there, `get_benchmark_results.sh` and `show_ledger_runs.sh` read that machine). A published bundle does the same: `scripts/publish_benchmarks_to_github.sh` copies all four, so `git clone ... /opt/benchmarks` leaves them there.
 
 ## Limitations and prerequisites
 
@@ -303,7 +316,8 @@ Keep private keys, passwords, API tokens, SSH commands containing secrets, and o
 | `config/ci_contract.yaml` | CI contract: GitHub owner, `shared-workflows` tag, caller inputs, runner labels, tool versions, bundle names (generation-only) |
 | `templates/workload/.github/workflows/` | Thin caller workflows rendered into every generated repo |
 | `templates/shared-workflows/` | The reusable workflows, self-test and docs, emitted once to the `shared-workflows` repo |
-| `templates/suite-tools/` | `run_benchmark_suite.sh`, `get_remote_info.sh` and `show_metrics.sh`, emitted to the `gpu-bench-suite` repo |
+| `user_scripts/` | The scripts you run by hand: the four suite tools (`run_benchmark_suite.sh`, `show_metrics.sh`, `show_ledger_runs.sh`, `get_benchmark_results.sh`, emitted to the `gpu-bench-suite` repo) and `publish_benchmarks_to_github.sh` |
+| `templates/suite-tools/` | The `gpu-bench-suite` README template |
 | `docs/` | Phase-by-phase generation workflow and machine-checkable contracts |
 | `schemas/` | JSON Schemas that generated artifacts must validate against |
 | `scripts/` | Generation, validation, and smoke-check tooling |

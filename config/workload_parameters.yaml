@@ -335,6 +335,7 @@ parameters:
     - 121
     - 122
     - 123
+    - 125
     - 126
     - 209
     - 214
@@ -360,6 +361,7 @@ parameters:
     - 321
     - 322
     - 323
+    - 325
     - 326
     - 409
     - 414
@@ -392,7 +394,8 @@ parameters:
         meaning: Defined by the workload description.
       '118':
         workload_name: MIOpen Convolution Solver Microbenchmark
-        meaning: Defined by the workload description.
+        meaning: an untimed MIOpenDriver run of that many iterations before each timed run (untimed passes on the PyTorch
+          fallback). conv_direction=all runs -F 1,2,4; otherwise -F 1
       '119':
         workload_name: PyTorch Microkernel Suite
         meaning: Defined by the workload description.
@@ -408,6 +411,9 @@ parameters:
       '123':
         workload_name: BERT Inference Sweep
         meaning: Defined by the workload description.
+      '125':
+        workload_name: DistilBERT NLP Training Baseline
+        meaning: untimed forward/backward passes before the timer starts
       '126':
         workload_name: JAX XLA Transformer Forward Pass
         meaning: Defined by the workload description.
@@ -467,7 +473,8 @@ parameters:
         meaning: Defined by the workload description.
       '318':
         workload_name: MIOpen Convolution Solver Microbenchmark
-        meaning: Defined by the workload description.
+        meaning: an untimed MIOpenDriver run of that many iterations before each timed run (untimed passes on the PyTorch
+          fallback). conv_direction=all runs -F 1,2,4; otherwise -F 1
       '319':
         workload_name: PyTorch Microkernel Suite
         meaning: Defined by the workload description.
@@ -483,6 +490,9 @@ parameters:
       '323':
         workload_name: BERT Inference Sweep
         meaning: Defined by the workload description.
+      '325':
+        workload_name: DistilBERT NLP Training Baseline
+        meaning: untimed forward/backward passes before the timer starts
       '326':
         workload_name: JAX XLA Transformer Forward Pass
         meaning: Defined by the workload description.
@@ -600,8 +610,7 @@ parameters:
         meaning: Defined by the workload description.
       '122':
         workload_name: ResNet-50 BF16 Inference Throughput Sweep
-        meaning: bf16 by default (fp16 if yaml lacks bf16). image_size, warmup_iters, and num_iterations come from yaml. device_id,
-          weights, image_source, and num_workers are ignored. p50/p95/p99 equal the mean step time
+        meaning: bf16 by default (fp16 if yaml lacks bf16). image_size, warmup_iters, and num_iterations come from yaml
       '123':
         workload_name: BERT Inference Sweep
         meaning: Defined by the workload description.
@@ -673,8 +682,7 @@ parameters:
         meaning: Defined by the workload description.
       '322':
         workload_name: ResNet-50 BF16 Inference Throughput Sweep
-        meaning: bf16 by default (fp16 if yaml lacks bf16). image_size, warmup_iters, and num_iterations come from yaml. device_id,
-          weights, image_source, and num_workers are ignored. p50/p95/p99 equal the mean step time
+        meaning: bf16 by default (fp16 if yaml lacks bf16). image_size, warmup_iters, and num_iterations come from yaml
       '323':
         workload_name: BERT Inference Sweep
         meaning: Defined by the workload description.
@@ -745,15 +753,14 @@ parameters:
     semantic_scope: workload-specific; see workload definitions below
     workloads_using:
     - 118
-    - 119
     - 121
     - 122
     - 123
+    - 124
     - 125
     - 126
     - 132
     - 218
-    - 219
     - 221
     - 222
     - 223
@@ -762,15 +769,14 @@ parameters:
     - 226
     - 232
     - 318
-    - 319
     - 321
     - 322
     - 323
+    - 324
     - 325
     - 326
     - 332
     - 418
-    - 419
     - 421
     - 422
     - 423
@@ -782,9 +788,6 @@ parameters:
       '118':
         workload_name: MIOpen Convolution Solver Microbenchmark
         meaning: Defined by the workload description.
-      '119':
-        workload_name: PyTorch Microkernel Suite
-        meaning: Defined by the workload description.
       '121':
         workload_name: ResNet-50 FP16 Training Step (PyTorch)
         meaning: Defined by the workload description.
@@ -794,6 +797,9 @@ parameters:
       '123':
         workload_name: BERT Inference Sweep
         meaning: Defined by the workload description.
+      '124':
+        workload_name: Stable Diffusion XL Inference Baseline
+        meaning: images per pipeline call. This is not TorchBench run.py
       '125':
         workload_name: DistilBERT NLP Training Baseline
         meaning: Defined by the workload description.
@@ -805,9 +811,6 @@ parameters:
         meaning: Defined by the workload description.
       '218':
         workload_name: cuDNN Convolution Microbenchmark
-        meaning: Defined by the workload description.
-      '219':
-        workload_name: TorchBench Microkernels
         meaning: Defined by the workload description.
       '221':
         workload_name: ResNet-50 FP16 Training Step (PyTorch)
@@ -834,9 +837,6 @@ parameters:
       '318':
         workload_name: MIOpen Convolution Solver Microbenchmark
         meaning: Defined by the workload description.
-      '319':
-        workload_name: PyTorch Microkernel Suite
-        meaning: Defined by the workload description.
       '321':
         workload_name: ResNet-50 FP16 Training Step (PyTorch)
         meaning: Defined by the workload description.
@@ -846,6 +846,9 @@ parameters:
       '323':
         workload_name: BERT Inference Sweep
         meaning: Defined by the workload description.
+      '324':
+        workload_name: Stable Diffusion XL Inference Baseline
+        meaning: images per pipeline call. This is not TorchBench run.py
       '325':
         workload_name: DistilBERT NLP Training Baseline
         meaning: Defined by the workload description.
@@ -857,9 +860,6 @@ parameters:
         meaning: Defined by the workload description.
       '418':
         workload_name: cuDNN Convolution Microbenchmark
-        meaning: Defined by the workload description.
-      '419':
-        workload_name: TorchBench Microkernels
         meaning: Defined by the workload description.
       '421':
         workload_name: ResNet-50 FP16 Training Step (PyTorch)
@@ -1082,7 +1082,7 @@ parameters:
         meaning: Defined by the workload description.
       '122':
         workload_name: ResNet-50 BF16 Inference Throughput Sweep
-        meaning: Defined by the workload description.
+        meaning: GPU index
       '126':
         workload_name: JAX XLA Transformer Forward Pass
         meaning: Defined by the workload description.
@@ -1094,9 +1094,8 @@ parameters:
         meaning: torch CUDA device
       '214':
         workload_name: CUDA Memcpy Bandwidth Test (H2D, D2H, D2D)
-        meaning: GPU index. warmup_iters and num_iterations time cudaMemcpy with CUDA events. yaml direction and pinned_memory
-          are ignored; all four kinds run every size. Bandwidth is recorded at max_bytes and latency (time per copy) for H2D,
-          D2H, and D2D at min_bytes
+        meaning: GPU index. warmup_iters and num_iterations time cudaMemcpy with CUDA events. Bandwidth is recorded at max_bytes
+          and latency (time per copy) for H2D, D2H, and D2D at min_bytes
       '215':
         workload_name: BabelStream HBM Bandwidth
         meaning: Defined by the workload description.
@@ -1126,7 +1125,7 @@ parameters:
         meaning: Defined by the workload description.
       '322':
         workload_name: ResNet-50 BF16 Inference Throughput Sweep
-        meaning: Defined by the workload description.
+        meaning: GPU index
       '326':
         workload_name: JAX XLA Transformer Forward Pass
         meaning: Defined by the workload description.
@@ -1138,9 +1137,8 @@ parameters:
         meaning: torch CUDA device
       '414':
         workload_name: CUDA Memcpy Bandwidth Test (H2D, D2H, D2D)
-        meaning: GPU index. warmup_iters and num_iterations time cudaMemcpy with CUDA events. yaml direction and pinned_memory
-          are ignored; all four kinds run every size. Bandwidth is recorded at max_bytes and latency (time per copy) for H2D,
-          D2H, and D2D at min_bytes
+        meaning: GPU index. warmup_iters and num_iterations time cudaMemcpy with CUDA events. Bandwidth is recorded at max_bytes
+          and latency (time per copy) for H2D, D2H, and D2D at min_bytes
       '415':
         workload_name: BabelStream HBM Bandwidth
         meaning: Defined by the workload description.
@@ -1374,6 +1372,103 @@ parameters:
     cli_config_key: workload-specific
     interaction_precedence: distinct from total sequence length
     notes_constraints: Do not assume this shared name has identical units or semantics across all workloads.
+  num_threads:
+    description: Execution threads issuing work.
+    data_type: integer
+    units: threads
+    default_value: workload-specific
+    valid_range: integer >= 1
+    required: workload-specific
+    semantic_scope: workload-specific; see workload definitions below
+    workloads_using:
+    - 103
+    - 107
+    - 109
+    - 110
+    - 113
+    - 203
+    - 207
+    - 209
+    - 210
+    - 213
+    - 303
+    - 307
+    - 309
+    - 310
+    - 313
+    - 403
+    - 407
+    - 409
+    - 410
+    - 413
+    workload_specific_overrides:
+      '103':
+        workload_name: CPU + System Stress (Baseline Health)
+        meaning: stress-ng --cpu workers (16)
+      '107':
+        workload_name: STREAM - CPU (Copy/Scale/Add/Triad)
+        meaning: OpenMP workers
+      '109':
+        workload_name: multichase Pointer-Chase
+        meaning: Defined by the workload description.
+      '110':
+        workload_name: NUMA Cache Latency Sweep
+        meaning: Defined by the workload description.
+      '113':
+        workload_name: GUPS Random Memory
+        meaning: Defined by the workload description.
+      '203':
+        workload_name: CPU + System Stress (Baseline Health)
+        meaning: stress-ng --cpu workers (default 16)
+      '207':
+        workload_name: STREAM - CPU (Copy/Scale/Add/Triad)
+        meaning: OMP_NUM_THREADS. The collector does not launch with numactl. dtype is FP64 from the official source. thread_affinity,
+          page_size, and kernel_types yaml fields are not applied as CLI knobs. The overlay scripts/build.sh is not used by
+          the collector
+      '209':
+        workload_name: multichase Pointer-Chase
+        meaning: concurrent chase threads
+      '210':
+        workload_name: NUMA Cache Latency Sweep
+        meaning: Defined by the workload description.
+      '213':
+        workload_name: GUPS Random Memory
+        meaning: Defined by the workload description.
+      '303':
+        workload_name: CPU + System Stress (Baseline Health)
+        meaning: stress-ng --cpu workers (16)
+      '307':
+        workload_name: STREAM - CPU (Copy/Scale/Add/Triad)
+        meaning: OpenMP workers
+      '309':
+        workload_name: multichase Pointer-Chase
+        meaning: Defined by the workload description.
+      '310':
+        workload_name: NUMA Cache Latency Sweep
+        meaning: Defined by the workload description.
+      '313':
+        workload_name: GUPS Random Memory
+        meaning: Defined by the workload description.
+      '403':
+        workload_name: CPU + System Stress (Baseline Health)
+        meaning: stress-ng --cpu workers (default 16)
+      '407':
+        workload_name: STREAM - CPU (Copy/Scale/Add/Triad)
+        meaning: OMP_NUM_THREADS. The collector does not launch with numactl. dtype is FP64 from the official source. thread_affinity,
+          page_size, and kernel_types yaml fields are not applied as CLI knobs. The overlay scripts/build.sh is not used by
+          the collector
+      '409':
+        workload_name: multichase Pointer-Chase
+        meaning: concurrent chase threads
+      '410':
+        workload_name: NUMA Cache Latency Sweep
+        meaning: Defined by the workload description.
+      '413':
+        workload_name: GUPS Random Memory
+        meaning: Defined by the workload description.
+    cli_config_key: workload-specific
+    interaction_precedence: distinct from num_workers
+    notes_constraints: Do not assume this shared name has identical units or semantics across all workloads.
   output_len:
     description: Number of generated or output tokens.
     data_type: integer
@@ -1467,99 +1562,6 @@ parameters:
     cli_config_key: workload-specific
     interaction_precedence: input_len + output_len may be limited by model context
     notes_constraints: Do not assume this shared name has identical units or semantics across all workloads.
-  num_threads:
-    description: Execution threads issuing work.
-    data_type: integer
-    units: threads
-    default_value: workload-specific
-    valid_range: integer >= 1
-    required: workload-specific
-    semantic_scope: workload-specific; see workload definitions below
-    workloads_using:
-    - 103
-    - 107
-    - 109
-    - 110
-    - 113
-    - 203
-    - 207
-    - 210
-    - 213
-    - 303
-    - 307
-    - 309
-    - 310
-    - 313
-    - 403
-    - 407
-    - 409
-    - 410
-    - 413
-    workload_specific_overrides:
-      '103':
-        workload_name: CPU + System Stress (Baseline Health)
-        meaning: stress-ng --cpu workers (16)
-      '107':
-        workload_name: STREAM - CPU (Copy/Scale/Add/Triad)
-        meaning: OpenMP workers
-      '109':
-        workload_name: multichase Pointer-Chase
-        meaning: Defined by the workload description.
-      '110':
-        workload_name: NUMA Cache Latency Sweep
-        meaning: Defined by the workload description.
-      '113':
-        workload_name: GUPS Random Memory
-        meaning: Defined by the workload description.
-      '203':
-        workload_name: CPU + System Stress (Baseline Health)
-        meaning: stress-ng --cpu workers (default 16)
-      '207':
-        workload_name: STREAM - CPU (Copy/Scale/Add/Triad)
-        meaning: OMP_NUM_THREADS. The collector does not launch with numactl. dtype is FP64 from the official source. thread_affinity,
-          page_size, and kernel_types yaml fields are not applied as CLI knobs. The overlay scripts/build.sh is not used by
-          the collector
-      '210':
-        workload_name: NUMA Cache Latency Sweep
-        meaning: Defined by the workload description.
-      '213':
-        workload_name: GUPS Random Memory
-        meaning: Defined by the workload description.
-      '303':
-        workload_name: CPU + System Stress (Baseline Health)
-        meaning: stress-ng --cpu workers (16)
-      '307':
-        workload_name: STREAM - CPU (Copy/Scale/Add/Triad)
-        meaning: OpenMP workers
-      '309':
-        workload_name: multichase Pointer-Chase
-        meaning: Defined by the workload description.
-      '310':
-        workload_name: NUMA Cache Latency Sweep
-        meaning: Defined by the workload description.
-      '313':
-        workload_name: GUPS Random Memory
-        meaning: Defined by the workload description.
-      '403':
-        workload_name: CPU + System Stress (Baseline Health)
-        meaning: stress-ng --cpu workers (default 16)
-      '407':
-        workload_name: STREAM - CPU (Copy/Scale/Add/Triad)
-        meaning: OMP_NUM_THREADS. The collector does not launch with numactl. dtype is FP64 from the official source. thread_affinity,
-          page_size, and kernel_types yaml fields are not applied as CLI knobs. The overlay scripts/build.sh is not used by
-          the collector
-      '409':
-        workload_name: multichase Pointer-Chase
-        meaning: recorded in CSV
-      '410':
-        workload_name: NUMA Cache Latency Sweep
-        meaning: Defined by the workload description.
-      '413':
-        workload_name: GUPS Random Memory
-        meaning: Defined by the workload description.
-    cli_config_key: workload-specific
-    interaction_precedence: distinct from num_workers
-    notes_constraints: Do not assume this shared name has identical units or semantics across all workloads.
   thread_affinity:
     description: Policy or CPU/NUMA placement for execution threads.
     data_type: string
@@ -1574,6 +1576,7 @@ parameters:
     - 110
     - 113
     - 207
+    - 209
     - 210
     - 213
     - 307
@@ -1600,6 +1603,9 @@ parameters:
       '207':
         workload_name: STREAM - CPU (Copy/Scale/Add/Triad)
         meaning: Defined by the workload description.
+      '209':
+        workload_name: multichase Pointer-Chase
+        meaning: CPU list passed to numactl --physcpubind
       '210':
         workload_name: NUMA Cache Latency Sweep
         meaning: Defined by the workload description.
@@ -1623,7 +1629,7 @@ parameters:
         meaning: Defined by the workload description.
       '409':
         workload_name: multichase Pointer-Chase
-        meaning: Defined by the workload description.
+        meaning: CPU list passed to numactl --physcpubind
       '410':
         workload_name: NUMA Cache Latency Sweep
         meaning: Defined by the workload description.
@@ -1632,67 +1638,6 @@ parameters:
         meaning: Defined by the workload description.
     cli_config_key: workload-specific
     interaction_precedence: interacts with NUMA placement and reproducibility
-    notes_constraints: Do not assume this shared name has identical units or semantics across all workloads.
-  block_size:
-    description: Work unit or block size.
-    data_type: integer or string
-    units: workload-specific
-    default_value: workload-specific
-    valid_range: positive workload-specific value
-    required: workload-specific
-    semantic_scope: workload-specific; see workload definitions below
-    workloads_using:
-    - 106
-    - 115
-    - 120
-    - 206
-    - 215
-    - 220
-    - 306
-    - 315
-    - 320
-    - 406
-    - 415
-    - 420
-    workload_specific_overrides:
-      '106':
-        workload_name: FIO NVMe Sweep
-        meaning: Defined by the workload description.
-      '115':
-        workload_name: BabelStream HBM Bandwidth
-        meaning: Defined by the workload description.
-      '120':
-        workload_name: rocHPL FP64 (High Performance Linpack)
-        meaning: Defined by the workload description.
-      '206':
-        workload_name: FIO NVMe Sweep
-        meaning: Defined by the workload description.
-      '215':
-        workload_name: BabelStream HBM Bandwidth
-        meaning: Defined by the workload description.
-      '220':
-        workload_name: NVIDIA HPL FP64 (High Performance Linpack)
-        meaning: Defined by the workload description.
-      '306':
-        workload_name: FIO NVMe Sweep
-        meaning: Defined by the workload description.
-      '315':
-        workload_name: BabelStream HBM Bandwidth
-        meaning: Defined by the workload description.
-      '320':
-        workload_name: rocHPL FP64 (High Performance Linpack)
-        meaning: Defined by the workload description.
-      '406':
-        workload_name: FIO NVMe Sweep
-        meaning: Defined by the workload description.
-      '415':
-        workload_name: BabelStream HBM Bandwidth
-        meaning: Defined by the workload description.
-      '420':
-        workload_name: NVIDIA HPL FP64 (High Performance Linpack)
-        meaning: Defined by the workload description.
-    cli_config_key: workload-specific
-    interaction_precedence: 'meaning varies: I/O bytes, GPU threads, matrix tile, or panel size'
     notes_constraints: Do not assume this shared name has identical units or semantics across all workloads.
   duration:
     description: Wall-clock or sampling duration.
@@ -1728,8 +1673,7 @@ parameters:
         meaning: Defined by the workload description.
       '203':
         workload_name: CPU + System Stress (Baseline Health)
-        meaning: 'seconds (smoke 5, baseline 200, extended 580). temp_threshold and throttle_check: limits that mark samples
-          error'
+        meaning: seconds (smoke 5, baseline 200, extended 580)
       '204':
         workload_name: Silent Data Corruption (SDC)
         meaning: wall-clock cap (collector converts ms yaml values to seconds). pattern_type is documented but the binary
@@ -1749,8 +1693,7 @@ parameters:
         meaning: Defined by the workload description.
       '403':
         workload_name: CPU + System Stress (Baseline Health)
-        meaning: 'seconds (smoke 5, baseline 200, extended 580). temp_threshold and throttle_check: limits that mark samples
-          error'
+        meaning: seconds (smoke 5, baseline 200, extended 580)
       '404':
         workload_name: Silent Data Corruption (SDC)
         meaning: wall-clock cap (collector converts ms yaml values to seconds). pattern_type is documented but the binary
@@ -2185,6 +2128,51 @@ parameters:
     cli_config_key: workload-specific
     interaction_precedence: must fit target memory and may need block alignment
     notes_constraints: Do not assume this shared name has identical units or semantics across all workloads.
+  block_size:
+    description: Work unit or block size.
+    data_type: integer or string
+    units: workload-specific
+    default_value: workload-specific
+    valid_range: positive workload-specific value
+    required: workload-specific
+    semantic_scope: workload-specific; see workload definitions below
+    workloads_using:
+    - 106
+    - 115
+    - 206
+    - 215
+    - 306
+    - 315
+    - 406
+    - 415
+    workload_specific_overrides:
+      '106':
+        workload_name: FIO NVMe Sweep
+        meaning: Defined by the workload description.
+      '115':
+        workload_name: BabelStream HBM Bandwidth
+        meaning: Defined by the workload description.
+      '206':
+        workload_name: FIO NVMe Sweep
+        meaning: Defined by the workload description.
+      '215':
+        workload_name: BabelStream HBM Bandwidth
+        meaning: Defined by the workload description.
+      '306':
+        workload_name: FIO NVMe Sweep
+        meaning: Defined by the workload description.
+      '315':
+        workload_name: BabelStream HBM Bandwidth
+        meaning: Defined by the workload description.
+      '406':
+        workload_name: FIO NVMe Sweep
+        meaning: Defined by the workload description.
+      '415':
+        workload_name: BabelStream HBM Bandwidth
+        meaning: Defined by the workload description.
+    cli_config_key: workload-specific
+    interaction_precedence: 'meaning varies: I/O bytes, GPU threads, matrix tile, or panel size'
+    notes_constraints: Do not assume this shared name has identical units or semantics across all workloads.
   image_size:
     description: Spatial image dimensions.
     data_type: integer or tuple
@@ -2500,51 +2488,6 @@ parameters:
     cli_config_key: workload-specific
     interaction_precedence: must be <= max_bytes
     notes_constraints: Do not assume this shared name has identical units or semantics across all workloads.
-  num_gpus:
-    description: Number of GPUs participating in the workload.
-    data_type: integer
-    units: GPUs
-    default_value: workload-specific
-    valid_range: integer >= 1 and <= visible GPUs
-    required: workload-specific
-    semantic_scope: workload-specific; see workload definitions below
-    workloads_using:
-    - 116
-    - 120
-    - 216
-    - 220
-    - 316
-    - 320
-    - 416
-    - 420
-    workload_specific_overrides:
-      '116':
-        workload_name: RCCL Bandwidth Test
-        meaning: Defined by the workload description.
-      '120':
-        workload_name: rocHPL FP64 (High Performance Linpack)
-        meaning: Defined by the workload description.
-      '216':
-        workload_name: NCCL Bandwidth Test
-        meaning: GPUs in the communicator (capped at the GPUs present, max 8)
-      '220':
-        workload_name: NVIDIA HPL FP64 (High Performance Linpack)
-        meaning: Defined by the workload description.
-      '316':
-        workload_name: RCCL Bandwidth Test
-        meaning: Defined by the workload description.
-      '320':
-        workload_name: rocHPL FP64 (High Performance Linpack)
-        meaning: Defined by the workload description.
-      '416':
-        workload_name: NCCL Bandwidth Test
-        meaning: GPUs in the communicator (capped at the GPUs present, max 8)
-      '420':
-        workload_name: NVIDIA HPL FP64 (High Performance Linpack)
-        meaning: Defined by the workload description.
-    cli_config_key: workload-specific
-    interaction_precedence: may constrain tensor parallelism and process-grid dimensions
-    notes_constraints: Do not assume this shared name has identical units or semantics across all workloads.
   numa_node:
     description: NUMA node selected for placement.
     data_type: integer
@@ -2616,8 +2559,8 @@ parameters:
         meaning: Defined by the workload description.
       '221':
         workload_name: ResNet-50 FP16 Training Step (PyTorch)
-        meaning: fp16. image_size, batch_size, warmup_iters, and num_iterations come from yaml. optimizer/learning_rate/gradient_accumulation/num_workers
-          are recorded; the trainer uses a local synthetic loader, not ImageNet
+        meaning: fp16. image_size, batch_size, warmup_iters, and num_iterations come from yaml. learning_rate comes from yaml.
+          The trainer uses SGD with no gradient accumulation and a local synthetic loader, not ImageNet
       '224':
         workload_name: Stable Diffusion XL Inference Baseline
         meaning: Defined by the workload description.
@@ -2629,8 +2572,8 @@ parameters:
         meaning: Defined by the workload description.
       '421':
         workload_name: ResNet-50 FP16 Training Step (PyTorch)
-        meaning: fp16. image_size, batch_size, warmup_iters, and num_iterations come from yaml. optimizer/learning_rate/gradient_accumulation/num_workers
-          are recorded; the trainer uses a local synthetic loader, not ImageNet
+        meaning: fp16. image_size, batch_size, warmup_iters, and num_iterations come from yaml. learning_rate comes from yaml.
+          The trainer uses SGD with no gradient accumulation and a local synthetic loader, not ImageNet
       '424':
         workload_name: Stable Diffusion XL Inference Baseline
         meaning: Defined by the workload description.
@@ -3316,42 +3259,13 @@ parameters:
         meaning: Defined by the workload description.
       '214':
         workload_name: CUDA Memcpy Bandwidth Test (H2D, D2H, D2D)
-        meaning: Defined by the workload description.
+        meaning: all or a comma list of H2D, D2H, D2D; directions left out are reported blank
       '314':
         workload_name: hipMemcpy Bandwidth Test (H2D, D2H, D2D)
         meaning: Defined by the workload description.
       '414':
         workload_name: CUDA Memcpy Bandwidth Test (H2D, D2H, D2D)
-        meaning: Defined by the workload description.
-    cli_config_key: workload-specific
-    interaction_precedence: workload-specific interaction rules
-    notes_constraints: Do not assume this shared name has identical units or semantics across all workloads.
-  dmesg_check:
-    description: Shared workload parameter.
-    data_type: string
-    units: workload-specific
-    default_value: workload-specific
-    valid_range: workload-specific
-    required: workload-specific
-    semantic_scope: workload-specific; see workload definitions below
-    workloads_using:
-    - 102
-    - 202
-    - 302
-    - 402
-    workload_specific_overrides:
-      '102':
-        workload_name: ROCm System Validation (clocks, temp, etc.)
-        meaning: Defined by the workload description.
-      '202':
-        workload_name: NVIDIA System Validation (clocks, temperature, etc.)
-        meaning: Defined by the workload description.
-      '302':
-        workload_name: ROCm System Validation (clocks, temp, etc.)
-        meaning: Defined by the workload description.
-      '402':
-        workload_name: NVIDIA System Validation (clocks, temperature, etc.)
-        meaning: Defined by the workload description.
+        meaning: all or a comma list of H2D, D2H, D2D; directions left out are reported blank
     cli_config_key: workload-specific
     interaction_precedence: workload-specific interaction rules
     notes_constraints: Do not assume this shared name has identical units or semantics across all workloads.
@@ -3480,20 +3394,22 @@ parameters:
     required: workload-specific
     semantic_scope: workload-specific; see workload definitions below
     workloads_using:
-    - 221
+    - 125
     - 225
-    - 421
+    - 325
     - 425
     workload_specific_overrides:
-      '221':
-        workload_name: ResNet-50 FP16 Training Step (PyTorch)
-        meaning: Defined by the workload description.
+      '125':
+        workload_name: DistilBERT NLP Training Baseline
+        meaning: backward passes per optimizer step. dataset_name and optimizer are ignored. loss is hardcoded 1.0. This is
+          not pytest test_bench.py
       '225':
         workload_name: DistilBERT NLP Training Baseline
         meaning: Defined by the workload description.
-      '421':
-        workload_name: ResNet-50 FP16 Training Step (PyTorch)
-        meaning: Defined by the workload description.
+      '325':
+        workload_name: DistilBERT NLP Training Baseline
+        meaning: backward passes per optimizer step. dataset_name and optimizer are ignored. loss is hardcoded 1.0. This is
+          not pytest test_bench.py
       '425':
         workload_name: DistilBERT NLP Training Baseline
         meaning: Defined by the workload description.
@@ -3699,35 +3615,6 @@ parameters:
         meaning: Defined by the workload description.
       '419':
         workload_name: TorchBench Microkernels
-        meaning: Defined by the workload description.
-    cli_config_key: workload-specific
-    interaction_precedence: workload-specific interaction rules
-    notes_constraints: Do not assume this shared name has identical units or semantics across all workloads.
-  input_source:
-    description: Shared workload parameter.
-    data_type: string
-    units: workload-specific
-    default_value: workload-specific
-    valid_range: workload-specific
-    required: workload-specific
-    semantic_scope: workload-specific; see workload definitions below
-    workloads_using:
-    - 118
-    - 218
-    - 318
-    - 418
-    workload_specific_overrides:
-      '118':
-        workload_name: MIOpen Convolution Solver Microbenchmark
-        meaning: Defined by the workload description.
-      '218':
-        workload_name: cuDNN Convolution Microbenchmark
-        meaning: Defined by the workload description.
-      '318':
-        workload_name: MIOpen Convolution Solver Microbenchmark
-        meaning: Defined by the workload description.
-      '418':
-        workload_name: cuDNN Convolution Microbenchmark
         meaning: Defined by the workload description.
     cli_config_key: workload-specific
     interaction_precedence: workload-specific interaction rules
@@ -4171,6 +4058,35 @@ parameters:
     cli_config_key: workload-specific
     interaction_precedence: workload-specific interaction rules
     notes_constraints: Do not assume this shared name has identical units or semantics across all workloads.
+  num_gpus:
+    description: Number of GPUs participating in the workload.
+    data_type: integer
+    units: GPUs
+    default_value: workload-specific
+    valid_range: integer >= 1 and <= visible GPUs
+    required: workload-specific
+    semantic_scope: workload-specific; see workload definitions below
+    workloads_using:
+    - 116
+    - 216
+    - 316
+    - 416
+    workload_specific_overrides:
+      '116':
+        workload_name: RCCL Bandwidth Test
+        meaning: Defined by the workload description.
+      '216':
+        workload_name: NCCL Bandwidth Test
+        meaning: GPUs in the communicator (capped at the GPUs present, max 8)
+      '316':
+        workload_name: RCCL Bandwidth Test
+        meaning: Defined by the workload description.
+      '416':
+        workload_name: NCCL Bandwidth Test
+        meaning: GPUs in the communicator (capped at the GPUs present, max 8)
+    cli_config_key: workload-specific
+    interaction_precedence: may constrain tensor parallelism and process-grid dimensions
+    notes_constraints: Do not assume this shared name has identical units or semantics across all workloads.
   num_heads:
     description: Shared workload parameter.
     data_type: string
@@ -4465,64 +4381,6 @@ parameters:
     cli_config_key: workload-specific
     interaction_precedence: workload-specific interaction rules
     notes_constraints: Do not assume this shared name has identical units or semantics across all workloads.
-  panel_factorization:
-    description: Shared workload parameter.
-    data_type: string
-    units: workload-specific
-    default_value: workload-specific
-    valid_range: workload-specific
-    required: workload-specific
-    semantic_scope: workload-specific; see workload definitions below
-    workloads_using:
-    - 120
-    - 220
-    - 320
-    - 420
-    workload_specific_overrides:
-      '120':
-        workload_name: rocHPL FP64 (High Performance Linpack)
-        meaning: Defined by the workload description.
-      '220':
-        workload_name: NVIDIA HPL FP64 (High Performance Linpack)
-        meaning: Defined by the workload description.
-      '320':
-        workload_name: rocHPL FP64 (High Performance Linpack)
-        meaning: Defined by the workload description.
-      '420':
-        workload_name: NVIDIA HPL FP64 (High Performance Linpack)
-        meaning: Defined by the workload description.
-    cli_config_key: workload-specific
-    interaction_precedence: workload-specific interaction rules
-    notes_constraints: Do not assume this shared name has identical units or semantics across all workloads.
-  parallel_jobs:
-    description: Shared workload parameter.
-    data_type: string
-    units: workload-specific
-    default_value: workload-specific
-    valid_range: workload-specific
-    required: workload-specific
-    semantic_scope: workload-specific; see workload definitions below
-    workloads_using:
-    - 112
-    - 212
-    - 312
-    - 412
-    workload_specific_overrides:
-      '112':
-        workload_name: lmbench Microbench Suite
-        meaning: Defined by the workload description.
-      '212':
-        workload_name: lmbench Microbench Suite
-        meaning: Defined by the workload description.
-      '312':
-        workload_name: lmbench Microbench Suite
-        meaning: Defined by the workload description.
-      '412':
-        workload_name: lmbench Microbench Suite
-        meaning: Defined by the workload description.
-    cli_config_key: workload-specific
-    interaction_precedence: workload-specific interaction rules
-    notes_constraints: Do not assume this shared name has identical units or semantics across all workloads.
   parallel_streams:
     description: Shared workload parameter.
     data_type: string
@@ -4581,35 +4439,6 @@ parameters:
     cli_config_key: workload-specific
     interaction_precedence: workload-specific interaction rules
     notes_constraints: Do not assume this shared name has identical units or semantics across all workloads.
-  pcie_check:
-    description: Shared workload parameter.
-    data_type: string
-    units: workload-specific
-    default_value: workload-specific
-    valid_range: workload-specific
-    required: workload-specific
-    semantic_scope: workload-specific; see workload definitions below
-    workloads_using:
-    - 102
-    - 202
-    - 302
-    - 402
-    workload_specific_overrides:
-      '102':
-        workload_name: ROCm System Validation (clocks, temp, etc.)
-        meaning: Defined by the workload description.
-      '202':
-        workload_name: NVIDIA System Validation (clocks, temperature, etc.)
-        meaning: Defined by the workload description.
-      '302':
-        workload_name: ROCm System Validation (clocks, temp, etc.)
-        meaning: Defined by the workload description.
-      '402':
-        workload_name: NVIDIA System Validation (clocks, temperature, etc.)
-        meaning: Defined by the workload description.
-    cli_config_key: workload-specific
-    interaction_precedence: workload-specific interaction rules
-    notes_constraints: Do not assume this shared name has identical units or semantics across all workloads.
   permissions_check:
     description: Shared workload parameter.
     data_type: string
@@ -4660,12 +4489,43 @@ parameters:
         meaning: Defined by the workload description.
       '214':
         workload_name: CUDA Memcpy Bandwidth Test (H2D, D2H, D2D)
-        meaning: Defined by the workload description.
+        meaning: true copies to and from cudaMallocHost buffers, false from malloc (pageable) buffers. Pinned and pageable
+          H2D both run whenever H2D is selected, for the pinned-vs-pageable ratio
       '314':
         workload_name: hipMemcpy Bandwidth Test (H2D, D2H, D2D)
         meaning: Defined by the workload description.
       '414':
         workload_name: CUDA Memcpy Bandwidth Test (H2D, D2H, D2D)
+        meaning: true copies to and from cudaMallocHost buffers, false from malloc (pageable) buffers. Pinned and pageable
+          H2D both run whenever H2D is selected, for the pinned-vs-pageable ratio
+    cli_config_key: workload-specific
+    interaction_precedence: workload-specific interaction rules
+    notes_constraints: Do not assume this shared name has identical units or semantics across all workloads.
+  poll_interval:
+    description: Shared workload parameter.
+    data_type: string
+    units: workload-specific
+    default_value: workload-specific
+    valid_range: workload-specific
+    required: workload-specific
+    semantic_scope: workload-specific; see workload definitions below
+    workloads_using:
+    - 103
+    - 203
+    - 303
+    - 403
+    workload_specific_overrides:
+      '103':
+        workload_name: CPU + System Stress (Baseline Health)
+        meaning: Defined by the workload description.
+      '203':
+        workload_name: CPU + System Stress (Baseline Health)
+        meaning: Defined by the workload description.
+      '303':
+        workload_name: CPU + System Stress (Baseline Health)
+        meaning: Defined by the workload description.
+      '403':
+        workload_name: CPU + System Stress (Baseline Health)
         meaning: Defined by the workload description.
     cli_config_key: workload-specific
     interaction_precedence: workload-specific interaction rules
@@ -4722,13 +4582,13 @@ parameters:
         meaning: Defined by the workload description.
       '203':
         workload_name: CPU + System Stress (Baseline Health)
-        meaning: maximum allowable GPU power draw in Watts (default 700 W)
+        meaning: maximum allowable GPU power draw in Watts (default 700 W). The uncorrectable ECC count is always collected
       '303':
         workload_name: CPU + System Stress (Baseline Health)
         meaning: Defined by the workload description.
       '403':
         workload_name: CPU + System Stress (Baseline Health)
-        meaning: maximum allowable GPU power draw in Watts (default 700 W)
+        meaning: maximum allowable GPU power draw in Watts (default 700 W). The uncorrectable ECC count is always collected
     cli_config_key: workload-specific
     interaction_precedence: workload-specific interaction rules
     notes_constraints: Do not assume this shared name has identical units or semantics across all workloads.
@@ -4761,7 +4621,7 @@ parameters:
     cli_config_key: workload-specific
     interaction_precedence: workload-specific interaction rules
     notes_constraints: Do not assume this shared name has identical units or semantics across all workloads.
-  process_grid_P:
+  prompt_len:
     description: Shared workload parameter.
     data_type: string
     units: workload-specific
@@ -4770,51 +4630,22 @@ parameters:
     required: workload-specific
     semantic_scope: workload-specific; see workload definitions below
     workloads_using:
-    - 120
-    - 220
-    - 320
-    - 420
+    - 124
+    - 224
+    - 324
+    - 424
     workload_specific_overrides:
-      '120':
-        workload_name: rocHPL FP64 (High Performance Linpack)
+      '124':
+        workload_name: Stable Diffusion XL Inference Baseline
+        meaning: synthetic prompt length in words
+      '224':
+        workload_name: Stable Diffusion XL Inference Baseline
         meaning: Defined by the workload description.
-      '220':
-        workload_name: NVIDIA HPL FP64 (High Performance Linpack)
-        meaning: Defined by the workload description.
-      '320':
-        workload_name: rocHPL FP64 (High Performance Linpack)
-        meaning: Defined by the workload description.
-      '420':
-        workload_name: NVIDIA HPL FP64 (High Performance Linpack)
-        meaning: Defined by the workload description.
-    cli_config_key: workload-specific
-    interaction_precedence: workload-specific interaction rules
-    notes_constraints: Do not assume this shared name has identical units or semantics across all workloads.
-  process_grid_Q:
-    description: Shared workload parameter.
-    data_type: string
-    units: workload-specific
-    default_value: workload-specific
-    valid_range: workload-specific
-    required: workload-specific
-    semantic_scope: workload-specific; see workload definitions below
-    workloads_using:
-    - 120
-    - 220
-    - 320
-    - 420
-    workload_specific_overrides:
-      '120':
-        workload_name: rocHPL FP64 (High Performance Linpack)
-        meaning: Defined by the workload description.
-      '220':
-        workload_name: NVIDIA HPL FP64 (High Performance Linpack)
-        meaning: Defined by the workload description.
-      '320':
-        workload_name: rocHPL FP64 (High Performance Linpack)
-        meaning: Defined by the workload description.
-      '420':
-        workload_name: NVIDIA HPL FP64 (High Performance Linpack)
+      '324':
+        workload_name: Stable Diffusion XL Inference Baseline
+        meaning: synthetic prompt length in words
+      '424':
+        workload_name: Stable Diffusion XL Inference Baseline
         meaning: Defined by the workload description.
     cli_config_key: workload-specific
     interaction_precedence: workload-specific interaction rules
@@ -4922,18 +4753,16 @@ parameters:
     workload_specific_overrides:
       '112':
         workload_name: lmbench Microbench Suite
-        meaning: how many times the subset is repeated. parallel_jobs, warmup_duration_us, and per-test enable flags are yaml
-          fields and are ignored. Does not run lat_pipe, lat_unix, or lat_proc
+        meaning: how many times the subset is repeated
       '212':
         workload_name: lmbench Microbench Suite
-        meaning: suite repeats. Yaml lat_pipe, lat_unix, lat_proc, and extra lat_syscall variants are documented but not executed
+        meaning: suite repeats
       '312':
         workload_name: lmbench Microbench Suite
-        meaning: how many times the subset is repeated. parallel_jobs, warmup_duration_us, and per-test enable flags are yaml
-          fields and are ignored. Does not run lat_pipe, lat_unix, or lat_proc
+        meaning: how many times the subset is repeated
       '412':
         workload_name: lmbench Microbench Suite
-        meaning: suite repeats. Yaml lat_pipe, lat_unix, lat_proc, and extra lat_syscall variants are documented but not executed
+        meaning: suite repeats
     cli_config_key: workload-specific
     interaction_precedence: workload-specific interaction rules
     notes_constraints: Do not assume this shared name has identical units or semantics across all workloads.
@@ -5158,13 +4987,15 @@ parameters:
     workload_specific_overrides:
       '118':
         workload_name: MIOpen Convolution Solver Microbenchmark
-        meaning: Defined by the workload description.
+        meaning: find keeps MIOpenDriver's Find; heuristic, get, fixed and none set MIOPEN_FIND_MODE=FAST (find-db, else immediate-mode
+          heuristic). kernel_width is copied from kernel_height
       '218':
         workload_name: cuDNN Convolution Microbenchmark
         meaning: Defined by the workload description.
       '318':
         workload_name: MIOpen Convolution Solver Microbenchmark
-        meaning: Defined by the workload description.
+        meaning: find keeps MIOpenDriver's Find; heuristic, get, fixed and none set MIOPEN_FIND_MODE=FAST (find-db, else immediate-mode
+          heuristic). kernel_width is copied from kernel_height
       '418':
         workload_name: cuDNN Convolution Microbenchmark
         meaning: Defined by the workload description.
@@ -5393,42 +5224,13 @@ parameters:
         meaning: Defined by the workload description.
       '203':
         workload_name: CPU + System Stress (Baseline Health)
-        meaning: Defined by the workload description.
+        meaning: limit that marks samples error; a hardware thermal slowdown event always does
       '303':
         workload_name: CPU + System Stress (Baseline Health)
         meaning: Defined by the workload description.
       '403':
         workload_name: CPU + System Stress (Baseline Health)
-        meaning: Defined by the workload description.
-    cli_config_key: workload-specific
-    interaction_precedence: workload-specific interaction rules
-    notes_constraints: Do not assume this shared name has identical units or semantics across all workloads.
-  temperature_check:
-    description: Shared workload parameter.
-    data_type: string
-    units: workload-specific
-    default_value: workload-specific
-    valid_range: workload-specific
-    required: workload-specific
-    semantic_scope: workload-specific; see workload definitions below
-    workloads_using:
-    - 102
-    - 202
-    - 302
-    - 402
-    workload_specific_overrides:
-      '102':
-        workload_name: ROCm System Validation (clocks, temp, etc.)
-        meaning: Defined by the workload description.
-      '202':
-        workload_name: NVIDIA System Validation (clocks, temperature, etc.)
-        meaning: Defined by the workload description.
-      '302':
-        workload_name: ROCm System Validation (clocks, temp, etc.)
-        meaning: Defined by the workload description.
-      '402':
-        workload_name: NVIDIA System Validation (clocks, temperature, etc.)
-        meaning: Defined by the workload description.
+        meaning: limit that marks samples error; a hardware thermal slowdown event always does
     cli_config_key: workload-specific
     interaction_precedence: workload-specific interaction rules
     notes_constraints: Do not assume this shared name has identical units or semantics across all workloads.
@@ -5548,6 +5350,37 @@ parameters:
     cli_config_key: workload-specific
     interaction_precedence: workload-specific interaction rules
     notes_constraints: Do not assume this shared name has identical units or semantics across all workloads.
+  use_channels_last:
+    description: Shared workload parameter.
+    data_type: string
+    units: workload-specific
+    default_value: workload-specific
+    valid_range: workload-specific
+    required: workload-specific
+    semantic_scope: workload-specific; see workload definitions below
+    workloads_using:
+    - 122
+    - 222
+    - 322
+    - 422
+    workload_specific_overrides:
+      '122':
+        workload_name: ResNet-50 BF16 Inference Throughput Sweep
+        meaning: channels-last memory format for the model and input. weights, image_source, and num_workers are ignored.
+          p50/p95/p99 equal the mean step time
+      '222':
+        workload_name: ResNet-50 BF16 Inference Throughput Sweep
+        meaning: Defined by the workload description.
+      '322':
+        workload_name: ResNet-50 BF16 Inference Throughput Sweep
+        meaning: channels-last memory format for the model and input. weights, image_source, and num_workers are ignored.
+          p50/p95/p99 equal the mean step time
+      '422':
+        workload_name: ResNet-50 BF16 Inference Throughput Sweep
+        meaning: Defined by the workload description.
+    cli_config_key: workload-specific
+    interaction_precedence: workload-specific interaction rules
+    notes_constraints: Do not assume this shared name has identical units or semantics across all workloads.
   vocab_size:
     description: Shared workload parameter.
     data_type: string
@@ -5622,16 +5455,24 @@ parameters:
     workload_specific_overrides:
       '112':
         workload_name: lmbench Microbench Suite
-        meaning: Defined by the workload description.
+        meaning: lmbench -W, microseconds each test runs untimed before it is timed (lat_mem_rd warms up once per array size).
+          Every tool runs single-threaded (no -P). Per-test enable flags are not used. Does not run lat_pipe, lat_unix, or
+          lat_proc
       '212':
         workload_name: lmbench Microbench Suite
-        meaning: Defined by the workload description.
+        meaning: lmbench -W, microseconds each test runs untimed before it is timed (lat_mem_rd warms up once per array size).
+          Every tool runs single-threaded (no -P). Yaml lat_pipe, lat_unix, lat_proc, and extra lat_syscall variants are documented
+          but not executed
       '312':
         workload_name: lmbench Microbench Suite
-        meaning: Defined by the workload description.
+        meaning: lmbench -W, microseconds each test runs untimed before it is timed (lat_mem_rd warms up once per array size).
+          Every tool runs single-threaded (no -P). Per-test enable flags are not used. Does not run lat_pipe, lat_unix, or
+          lat_proc
       '412':
         workload_name: lmbench Microbench Suite
-        meaning: Defined by the workload description.
+        meaning: lmbench -W, microseconds each test runs untimed before it is timed (lat_mem_rd warms up once per array size).
+          Every tool runs single-threaded (no -P). Yaml lat_pipe, lat_unix, lat_proc, and extra lat_syscall variants are documented
+          but not executed
     cli_config_key: workload-specific
     interaction_precedence: workload-specific interaction rules
     notes_constraints: Do not assume this shared name has identical units or semantics across all workloads.
@@ -5768,69 +5609,6 @@ parameters:
     cli_config_key: workload-specific
     interaction_precedence: workload-specific interaction rules
     notes_constraints: Do not assume this shared name has identical units or semantics across all workloads.
-  ecc_check:
-    description: Whether ECC error telemetry is collected or validated.
-    data_type: boolean
-    units: boolean
-    default_value: workload-specific
-    valid_range: true or false
-    required: workload-specific
-    semantic_scope: workload-specific; see workload definitions below
-    workloads_using:
-    - 203
-    - 403
-    workload_specific_overrides:
-      '203':
-        workload_name: CPU + System Stress (Baseline Health)
-        meaning: include the uncorrectable ECC count
-      '403':
-        workload_name: CPU + System Stress (Baseline Health)
-        meaning: include the uncorrectable ECC count
-    cli_config_key: workload-specific
-    interaction_precedence: may require supported hardware telemetry
-    notes_constraints: Do not assume this shared name has identical units or semantics across all workloads.
-  function:
-    description: Shared workload parameter.
-    data_type: string
-    units: workload-specific
-    default_value: workload-specific
-    valid_range: workload-specific
-    required: workload-specific
-    semantic_scope: workload-specific; see workload definitions below
-    workloads_using:
-    - 217
-    - 417
-    workload_specific_overrides:
-      '217':
-        workload_name: GEMM / cuBLAS Microbenchmark
-        meaning: Defined by the workload description.
-      '417':
-        workload_name: GEMM / cuBLAS Microbenchmark
-        meaning: Defined by the workload description.
-    cli_config_key: workload-specific
-    interaction_precedence: workload-specific interaction rules
-    notes_constraints: Do not assume this shared name has identical units or semantics across all workloads.
-  num_workers:
-    description: Worker processes or data-loader/service workers.
-    data_type: integer
-    units: workers
-    default_value: workload-specific
-    valid_range: integer >= 0
-    required: workload-specific
-    semantic_scope: workload-specific; see workload definitions below
-    workloads_using:
-    - 221
-    - 421
-    workload_specific_overrides:
-      '221':
-        workload_name: ResNet-50 FP16 Training Step (PyTorch)
-        meaning: Defined by the workload description.
-      '421':
-        workload_name: ResNet-50 FP16 Training Step (PyTorch)
-        meaning: Defined by the workload description.
-    cli_config_key: workload-specific
-    interaction_precedence: distinct from execution threads
-    notes_constraints: Do not assume this shared name has identical units or semantics across all workloads.
   nvidia_driver_version:
     description: Shared workload parameter.
     data_type: string
@@ -5856,69 +5634,6 @@ parameters:
     cli_config_key: workload-specific
     interaction_precedence: workload-specific interaction rules
     notes_constraints: Do not assume this shared name has identical units or semantics across all workloads.
-  optimizer:
-    description: Optimization algorithm used for training.
-    data_type: string
-    units: optimizer token
-    default_value: workload-specific
-    valid_range: supported optimizer token
-    required: workload-specific
-    semantic_scope: workload-specific; see workload definitions below
-    workloads_using:
-    - 221
-    - 421
-    workload_specific_overrides:
-      '221':
-        workload_name: ResNet-50 FP16 Training Step (PyTorch)
-        meaning: Defined by the workload description.
-      '421':
-        workload_name: ResNet-50 FP16 Training Step (PyTorch)
-        meaning: Defined by the workload description.
-    cli_config_key: workload-specific
-    interaction_precedence: interacts with learning_rate and gradient_accumulation
-    notes_constraints: Do not assume this shared name has identical units or semantics across all workloads.
-  poll_interval:
-    description: Shared workload parameter.
-    data_type: string
-    units: workload-specific
-    default_value: workload-specific
-    valid_range: workload-specific
-    required: workload-specific
-    semantic_scope: workload-specific; see workload definitions below
-    workloads_using:
-    - 203
-    - 403
-    workload_specific_overrides:
-      '203':
-        workload_name: CPU + System Stress (Baseline Health)
-        meaning: Defined by the workload description.
-      '403':
-        workload_name: CPU + System Stress (Baseline Health)
-        meaning: Defined by the workload description.
-    cli_config_key: workload-specific
-    interaction_precedence: workload-specific interaction rules
-    notes_constraints: Do not assume this shared name has identical units or semantics across all workloads.
-  prompt_len:
-    description: Shared workload parameter.
-    data_type: string
-    units: workload-specific
-    default_value: workload-specific
-    valid_range: workload-specific
-    required: workload-specific
-    semantic_scope: workload-specific; see workload definitions below
-    workloads_using:
-    - 224
-    - 424
-    workload_specific_overrides:
-      '224':
-        workload_name: Stable Diffusion XL Inference Baseline
-        meaning: Defined by the workload description.
-      '424':
-        workload_name: Stable Diffusion XL Inference Baseline
-        meaning: Defined by the workload description.
-    cli_config_key: workload-specific
-    interaction_precedence: workload-specific interaction rules
-    notes_constraints: Do not assume this shared name has identical units or semantics across all workloads.
   rocm_version:
     description: Shared workload parameter.
     data_type: string
@@ -5937,48 +5652,6 @@ parameters:
       '301':
         workload_name: System Config Verification
         meaning: documented expectation; the collector checks package presence rather than an exact version string
-    cli_config_key: workload-specific
-    interaction_precedence: workload-specific interaction rules
-    notes_constraints: Do not assume this shared name has identical units or semantics across all workloads.
-  throttle_check:
-    description: Shared workload parameter.
-    data_type: string
-    units: workload-specific
-    default_value: workload-specific
-    valid_range: workload-specific
-    required: workload-specific
-    semantic_scope: workload-specific; see workload definitions below
-    workloads_using:
-    - 203
-    - 403
-    workload_specific_overrides:
-      '203':
-        workload_name: CPU + System Stress (Baseline Health)
-        meaning: limits that mark samples error
-      '403':
-        workload_name: CPU + System Stress (Baseline Health)
-        meaning: limits that mark samples error
-    cli_config_key: workload-specific
-    interaction_precedence: workload-specific interaction rules
-    notes_constraints: Do not assume this shared name has identical units or semantics across all workloads.
-  use_channels_last:
-    description: Shared workload parameter.
-    data_type: string
-    units: workload-specific
-    default_value: workload-specific
-    valid_range: workload-specific
-    required: workload-specific
-    semantic_scope: workload-specific; see workload definitions below
-    workloads_using:
-    - 222
-    - 422
-    workload_specific_overrides:
-      '222':
-        workload_name: ResNet-50 BF16 Inference Throughput Sweep
-        meaning: Defined by the workload description.
-      '422':
-        workload_name: ResNet-50 BF16 Inference Throughput Sweep
-        meaning: Defined by the workload description.
     cli_config_key: workload-specific
     interaction_precedence: workload-specific interaction rules
     notes_constraints: Do not assume this shared name has identical units or semantics across all workloads.

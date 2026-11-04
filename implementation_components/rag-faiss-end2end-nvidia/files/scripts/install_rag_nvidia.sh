@@ -47,5 +47,9 @@ fi
 if ! "${PYTHON_BIN}" -c "import llama_index" >/dev/null 2>&1; then
   "${PYTHON_BIN}" -m pip install llama-index-core
 fi
+# Same cache as scripts/lib/common.sh, so 427-431 (vLLM, SGLang) and the host
+# bootstrap prefetch share these snapshots. Plain HTTP, not the xet range client.
+export HF_HOME="${HF_HOME:-${HOME}/.cache/huggingface}"
+export HF_HUB_DISABLE_XET="${HF_HUB_DISABLE_XET:-1}"
 "${PYTHON_BIN}" "${REPO_ROOT}/scripts/prefetch_rag_models.py"
 echo "[PASS] NVIDIA RAG extras (FAISS, datasets, LlamaIndex, prefetch)"

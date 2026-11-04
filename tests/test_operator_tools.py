@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # File: tests/test_operator_tools.py
-# Description: create_generated_repo.install_operator_tools puts get_remote_info.sh and
+# Description: create_generated_repo.install_operator_tools puts get_benchmark_results.sh and
 #              show_metrics.sh in the project folder (the parent of the folder holding the
 #              workloads), keeps an existing copy that differs, and never puts them inside
 #              a workload.
@@ -29,7 +29,7 @@ class OperatorToolTests(unittest.TestCase):
         self.project = Path(self._tmp.name) / "Project347_101_to_132"
         self.batch = self.project / "TEMPLATE_00_105"
         self.batch.mkdir(parents=True)
-        self.dst = self.project / "get_remote_info.sh"
+        self.dst = self.project / "get_benchmark_results.sh"
         self.dsts = [self.project / Path(rel).name for rel in OPERATOR_TOOLS]
 
     def tearDown(self):
@@ -42,8 +42,8 @@ class OperatorToolTests(unittest.TestCase):
         return installed, out.getvalue()
 
     def test_master_copy_is_an_operator_tool_not_a_workload_file(self):
-        self.assertIn("templates/suite-tools/scripts/get_remote_info.sh", OPERATOR_TOOLS)
-        self.assertIn("templates/suite-tools/scripts/show_metrics.sh", OPERATOR_TOOLS)
+        self.assertIn("user_scripts/get_benchmark_results.sh", OPERATOR_TOOLS)
+        self.assertIn("user_scripts/show_metrics.sh", OPERATOR_TOOLS)
         for rel in OPERATOR_TOOLS:
             self.assertTrue((ROOT / rel).is_file(), rel)
         self.assertNotIn("templates", SHARED_DIRS)
@@ -94,12 +94,12 @@ class RemoteShowMetricsInstallTests(unittest.TestCase):
                 reuse=True,
             )
         self.assertEqual(rc, 0)
-        self.assertEqual(len(calls), 3)
-        for name in ("show_metrics.sh", "run_benchmark_suite.sh"):
+        self.assertEqual(len(calls), 5)  # the workload copy plus the four suite tools
+        for name in ("show_metrics.sh", "run_benchmark_suite.sh", "get_benchmark_results.sh", "show_ledger_runs.sh"):
             install = next(command for command in calls if f"/opt/benchmarks/{name}" in command)
             self.assertIn(f"chmod 755 /opt/benchmarks/{name}", install)
-            self.assertIn(f"templates/suite-tools/scripts/{name}", install.replace("\\", "/"))
-        publish = (ROOT / "scripts" / "publish_benchmarks_to_github.sh").read_text(encoding="utf-8")
+            self.assertIn(f"user_scripts/{name}", install.replace("\\", "/"))
+        publish = (ROOT / "user_scripts" / "publish_benchmarks_to_github.sh").read_text(encoding="utf-8")
         self.assertIn('tr -d \'\\r\' <"${METRICS_SCRIPT}" >show_metrics.sh', publish)
         self.assertIn("for f in run_benchmark_suite.sh show_metrics.sh", publish)
         self.assertNotIn("write_bundle_run_sh", publish)

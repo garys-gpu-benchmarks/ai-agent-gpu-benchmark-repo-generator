@@ -15,7 +15,7 @@ import unittest
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-SCRIPT = ROOT / "scripts" / "publish_benchmarks_to_github.sh"
+SCRIPT = ROOT / "user_scripts" / "publish_benchmarks_to_github.sh"
 BASH = shutil.which("bash")
 GIT = shutil.which("git")
 

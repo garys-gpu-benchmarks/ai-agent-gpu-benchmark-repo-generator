@@ -37,7 +37,7 @@ class ReadmeBundleSectionTests(unittest.TestCase):
                 self.assertIn(f"git clone --recurse-submodules https://github.com/{fields['CI Owner']}/{bundle} /opt/benchmarks", section)
                 self.assertIn(f"cd /opt/benchmarks/{number}-{repo}", section)
                 self.assertLess(section.index("## Download as a Bundle"), section.index("## Suite Tools"))
-                for script in ("run_benchmark_suite.sh", "get_remote_info.sh", "show_metrics.sh"):
+                for script in ("run_benchmark_suite.sh", "get_benchmark_results.sh", "show_ledger_runs.sh", "show_metrics.sh"):
                     self.assertIn(script, section)
                 self.assertIn(f"-w {number} ", section)
                 self.assertIn(f"show_metrics.sh {number} ", section)

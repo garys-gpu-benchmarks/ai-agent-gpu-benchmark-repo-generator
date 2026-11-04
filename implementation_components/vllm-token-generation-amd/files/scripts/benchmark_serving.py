@@ -245,7 +245,7 @@ def main() -> int:
     parser.add_argument("--max-concurrency", default="2")
     parser.add_argument("--output-format", default="csv")
     args = parser.parse_args()
-    if str(args.prompt_source).strip().lower() not in ("", "synthetic", "true", "yes"):
+    if str(args.prompt_source).lower() not in ("synthetic", "true", "yes"):
         raise SystemExit("[FAIL] prompt_source must remain synthetic")
     output_len = clamp_max_tokens(int(float(args.input_len)), int(float(args.output_len)), int(float(args.max_model_len)))
     run_dir = Path(args.run_dir)

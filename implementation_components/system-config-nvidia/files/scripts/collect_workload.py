@@ -10,6 +10,7 @@ import os
 import re
 import shutil
 import subprocess
+import sys
 from pathlib import Path
 
 import yaml
@@ -212,7 +213,10 @@ def main() -> int:
     sweep = (yaml.safe_load(Path(args.config).read_text(encoding="utf-8")) or {}).get("sweep") or {}
     expected_kernel = str(pv(sweep, "kernel_version", args.profile, "6.8.0"))
     kernel_text = os.uname().release
-    kernel_ok = kernel_release_matches(expected_kernel, kernel_text)
+    # kernel_release_mismatch_count is recorded, not a validation gate (same as
+    # system-config-amd). A container cannot change its host kernel, and the
+    # kernel release is not one of this workload's published metrics.
+    kernel_mismatch = 0 if kernel_release_matches(expected_kernel, kernel_text) else 1
     expected_driver = str(pv(sweep, "nvidia_driver_version", args.profile, sweep.get("driver_version", "580")))
     expected_cuda = str(pv(sweep, "cuda_version", args.profile, "12.6"))
     packages = [item.strip() for item in str(pv(sweep, "required_packages", args.profile, "nvidia-smi")).split(",") if item.strip()]
@@ -282,23 +286,29 @@ def main() -> int:
         "vbios_string_present",
         "driver_compliance_percent",
         "required_library_path_device_permission_errors",
+        "kernel_release_mismatch_count",
         "error_message",
     ]
-    kernel_error = "" if kernel_ok else f"uname -r {kernel_text} does not match kernel_version {expected_kernel}"
+    (run_dir / "kernel_check.txt").write_text(
+        f"uname -r: {kernel_text}\nkernel_version: {expected_kernel}\nkernel_release_mismatch_count: {kernel_mismatch}\n",
+        encoding="utf-8",
+    )
+    if kernel_mismatch:
+        print(
+            f"[WARN] uname -r {kernel_text} does not match kernel_version {expected_kernel}; "
+            "recorded as kernel_release_mismatch_count=1, not a failure",
+            file=sys.stderr,
+        )
     row = {
-        "status": "ok" if vbios_present == 1.0 and stack_mismatches == 0 and kernel_ok else "error",
+        "status": "ok" if vbios_present == 1.0 and stack_mismatches == 0 else "error",
         "cuda_package_version_mismatches_count": float(package_mismatch),
         "cuda_major_version_mismatch_count": float(cuda_mismatch),
         "nvidia_kernel_module_driver_version_mismatches_count": stack_mismatches,
         "vbios_string_present": vbios_present,
         "driver_compliance_percent": driver_compliance,
         "required_library_path_device_permission_errors": float(permission_errors),
-        "error_message": "; ".join(
-            part for part in (
-                "" if vbios else "VBIOS Version missing from nvidia-smi -q",
-                kernel_error,
-            ) if part
-        ),
+        "kernel_release_mismatch_count": float(kernel_mismatch),
+        "error_message": "" if vbios else "VBIOS Version missing from nvidia-smi -q",
     }
     write_csv(args.raw_file, header, [row])
     return 0

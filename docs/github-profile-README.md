@@ -84,7 +84,7 @@ Swap the workload numbers for your platform (107 → 207, 307 or 407). Logs go t
 ```bash
 git clone https://github.com/garys-gpu-benchmarks/gpu-bench-suite && cd gpu-bench-suite
 GPU_HOST=203.0.113.10                              # replace with your GPU host's IP
-./scripts/get_remote_info.sh --host $GPU_HOST      # copy ledgers, raw and parsed results, suite logs
+./scripts/get_benchmark_results.sh --host $GPU_HOST  # copy ledgers, raw and parsed results, suite logs
 ./scripts/show_metrics.sh 115 --host $GPU_HOST     # one workload's runs, per-profile means
 ```
 

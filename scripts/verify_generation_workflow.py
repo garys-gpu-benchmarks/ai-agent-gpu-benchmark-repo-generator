@@ -71,6 +71,15 @@ def check_catalog() -> None:
         raise AssertionError("Shared parameter catalog unexpectedly contains fewer than two parameters.")
 
 
+def suite_readme_link_resolves(path: Path, target: str) -> bool:
+    """templates/suite-tools/README.md becomes gpu-bench-suite/README.md, whose
+    scripts/<name> links point at the suite tools emitted from user_scripts/."""
+    suite_readme = path.parent.name == "suite-tools" and path.parent.parent.name == "templates"
+    if not suite_readme or not target.startswith("scripts/"):
+        return False
+    return (path.parents[2] / "user_scripts" / target.split("#", 1)[0].removeprefix("scripts/")).is_file()
+
+
 def check_markdown_links() -> None:
     checked: set[Path] = set()
     for directory in MARKDOWN_ROOTS:
@@ -84,7 +93,7 @@ def check_markdown_links() -> None:
             for target in LINK.findall(text):
                 if target.startswith(("http://", "https://", "mailto:")):
                     continue
-                if not link_resolves(path, target):
+                if not link_resolves(path, target) and not suite_readme_link_resolves(path, target):
                     raise AssertionError(f"Broken Markdown link in {path}: {target}")
 
 

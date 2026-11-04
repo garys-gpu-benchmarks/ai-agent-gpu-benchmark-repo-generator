@@ -55,6 +55,31 @@ nvidia_cuda_repo_id() {
   esac
 }
 
+# One apt index refresh per host per BENCHMARK_APT_INDEX_MAX_AGE_SEC (default 6 h)
+# (TEMPLATE_00_119). scripts/remote/host_bootstrap.sh and every NVIDIA setup.sh
+# record the time in ${BENCHMARK_HOST_STATE_DIR}/apt_updated_epoch. A host with
+# no stamp (any machine outside batch generation, or a first run) refreshes as
+# before. install_nvidia_cuda_toolkit still refreshes after adding the CUDA repo.
+nvidia_apt_update_once() {
+  local state stamp max_age now last
+  state="${BENCHMARK_HOST_STATE_DIR:-/var/lib/gpu-benchmark-host}"
+  stamp="${state}/apt_updated_epoch"
+  max_age="${BENCHMARK_APT_INDEX_MAX_AGE_SEC:-21600}"
+  now="$(date +%s)"
+  if [[ -r "${stamp}" ]]; then
+    last="$(cat "${stamp}" 2>/dev/null || true)"
+    if [[ "${last}" =~ ^[0-9]+$ ]] && (( now - last >= 0 && now - last < max_age )) \
+      && compgen -G "/var/lib/apt/lists/*_Packages" >/dev/null 2>&1; then
+      log_status "STEP|SETUP apt index refreshed $(( (now - last) / 60 )) min ago on this host; skipping apt-get update"
+      return 0
+    fi
+  fi
+  record_cmd "DEBIAN_FRONTEND=noninteractive apt-get update -y"
+  DEBIAN_FRONTEND=noninteractive apt-get update -y || return 1
+  { mkdir -p "${state}" && printf '%s\n' "${now}" > "${stamp}"; } 2>/dev/null || true
+  return 0
+}
+
 # DCGM 4 is published per CUDA major; datacenter-gpu-manager-4 itself is only a
 # virtual package and apt cannot install it by that name.
 nvidia_dcgm_package() {
@@ -115,11 +140,34 @@ PIN
   log_status "STEP|SETUP wrote ${NVIDIA_APT_PIN_FILE}: apt will not install Ubuntu NVIDIA driver packages over the host driver"
 }
 
+# apt packages that make up the toolkit for CUDA release X.Y (TEMPLATE_00_119).
+# The full cuda-toolkit-X-Y metapackage also pulls cuda-visual-tools (Nsight
+# Systems, Nsight Compute, nvvp), cuda-documentation and cuda-demo-suite: about
+# 4.7 GB at 13.3, and 15m48s of the first 26.04 setup on Nov 3. No workload uses
+# them. These four keep nvcc, every CUDA library with headers (cuBLAS, cuSOLVER,
+# cuFFT, cuRAND, cuSPARSE, NVRTC, cudart, CCCL), the command-line tools (CUPTI,
+# NVTX, cuda-gdb, compute-sanitizer) and NVML headers. Prints one name per line.
+nvidia_cuda_packages() {
+  local tag="${1/./-}"
+  printf '%s\n' "cuda-compiler-${tag}" "cuda-libraries-dev-${tag}" \
+    "cuda-command-line-tools-${tag}" "cuda-nvml-dev-${tag}"
+}
+
+# True when apt knows every package named in the arguments.
+nvidia_apt_has_all() {
+  local p
+  for p in "$@"; do
+    apt-cache show "${p}" >/dev/null 2>&1 || return 1
+  done
+  return 0
+}
+
 # Install (or confirm) the CUDA toolkit for this Ubuntu release and put its bin
 # directory first on PATH. Exports NVIDIA_CUDA_VERSION. Returns non-zero with a
 # [FAIL] line on any problem; the caller's set -e then stops setup.
 install_nvidia_cuda_toolkit() {
   local ver repo pkg nvcc_bin keyring_url keyring_deb current
+  local -a pkgs
   if ! ver="$(nvidia_cuda_version)"; then
     echo "[FAIL] No CUDA toolkit is defined for Ubuntu $(nvidia_os_version_id). Supported: 24.04 (CUDA 12.8), 26.04 (CUDA 13.3)." >&2
     return 1
@@ -135,7 +183,8 @@ install_nvidia_cuda_toolkit() {
   if [[ -x "${nvcc_bin}" ]] && "${nvcc_bin}" --version 2>/dev/null | grep -q "release ${ver}"; then
     log_status "STEP|SETUP already present: ${pkg}"
   else
-    if ! apt-cache show "${pkg}" >/dev/null 2>&1; then
+    mapfile -t pkgs < <(nvidia_cuda_packages "${ver}")
+    if ! nvidia_apt_has_all "${pkgs[@]}" && ! apt-cache show "${pkg}" >/dev/null 2>&1; then
       keyring_url="https://developer.download.nvidia.com/compute/cuda/repos/${repo}/x86_64/cuda-keyring_1.1-1_all.deb"
       keyring_deb="/tmp/cuda-keyring_1.1-1_all.deb"
       log_status "STEP|SETUP add NVIDIA CUDA ${repo} repository"
@@ -149,20 +198,28 @@ install_nvidia_cuda_toolkit() {
       record_cmd "DEBIAN_FRONTEND=noninteractive apt-get update -y"
       DEBIAN_FRONTEND=noninteractive apt-get update -y || return 1
     fi
-    if ! apt-cache show "${pkg}" >/dev/null 2>&1; then
-      echo "[FAIL] ${pkg} is not available from apt, even with NVIDIA's ${repo} CUDA repository configured." >&2
+    if ! nvidia_apt_has_all "${pkgs[@]}"; then
+      if ! apt-cache show "${pkg}" >/dev/null 2>&1; then
+        echo "[FAIL] ${pkg} is not available from apt, even with NVIDIA's ${repo} CUDA repository configured." >&2
+        return 1
+      fi
+      log_status "WARN NVIDIA's ${repo} repository is missing one of ${pkgs[*]}; installing the full ${pkg}"
+      pkgs=("${pkg}")
+    fi
+    # --force-unsafe-io: dpkg skips its fsync after every unpacked file, which is
+    # most of the unpack time on a container's overlay filesystem. A crash in the
+    # middle can leave files unsynced; nvidia_dpkg_consistent and the nvcc check
+    # below still catch an incomplete install.
+    log_status "STEP|SETUP apt-get install ${pkgs[*]}"
+    record_cmd "DEBIAN_FRONTEND=noninteractive apt-get install -y -o Dpkg::Options::=--force-unsafe-io ${pkgs[*]}"
+    if ! DEBIAN_FRONTEND=noninteractive apt-get install -y -o Dpkg::Options::=--force-unsafe-io "${pkgs[@]}"; then
+      echo "[FAIL] apt-get install ${pkgs[*]} failed." >&2
+      nvidia_dpkg_consistent "apt-get install ${pkgs[*]}" || true
       return 1
     fi
-    log_status "STEP|SETUP apt-get install ${pkg}"
-    record_cmd "DEBIAN_FRONTEND=noninteractive apt-get install -y ${pkg}"
-    if ! DEBIAN_FRONTEND=noninteractive apt-get install -y "${pkg}"; then
-      echo "[FAIL] apt-get install ${pkg} failed." >&2
-      nvidia_dpkg_consistent "apt-get install ${pkg}" || true
-      return 1
-    fi
-    nvidia_dpkg_consistent "apt-get install ${pkg}" || return 1
+    nvidia_dpkg_consistent "apt-get install ${pkgs[*]}" || return 1
     if ! "${nvcc_bin}" --version 2>/dev/null | grep -q "release ${ver}"; then
-      echo "[FAIL] ${pkg} installed, but ${nvcc_bin} does not report CUDA release ${ver}." >&2
+      echo "[FAIL] ${pkgs[*]} installed, but ${nvcc_bin} does not report CUDA release ${ver}." >&2
       return 1
     fi
   fi

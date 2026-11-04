@@ -15,16 +15,16 @@
     std::fprintf(stderr, "cuSOLVER status %d\n", (int)e); return 1; } } while (0)
 
 int main(int argc, char **argv) {
-    int n = 4096, nb = 256, p = 1, q = 1, pfact = 2;
+    // One dense LU solve on one GPU. The solver library picks its own blocking
+    // and panel factorization, so only N is an input. --NB, --P, --Q and
+    // --pfact are still accepted (and ignored) so an older command line runs.
+    int n = 4096;
     for (int i = 1; i < argc; i++) {
         if (!std::strcmp(argv[i], "--N") && i + 1 < argc) n = std::atoi(argv[++i]);
-        else if (!std::strcmp(argv[i], "--NB") && i + 1 < argc) nb = std::atoi(argv[++i]);
-        else if (!std::strcmp(argv[i], "--P") && i + 1 < argc) p = std::atoi(argv[++i]);
-        else if (!std::strcmp(argv[i], "--Q") && i + 1 < argc) q = std::atoi(argv[++i]);
-        else if (!std::strcmp(argv[i], "--pfact") && i + 1 < argc) pfact = std::atoi(argv[++i]);
+        else if ((!std::strcmp(argv[i], "--NB") || !std::strcmp(argv[i], "--P") ||
+                  !std::strcmp(argv[i], "--Q") || !std::strcmp(argv[i], "--pfact")) && i + 1 < argc) ++i;
     }
     if (n < 16) n = 16;
-    if (nb < 1) nb = 256;
     const size_t n64 = static_cast<size_t>(n);
     const size_t nn = n64 * n64;
     const size_t bytes = nn * sizeof(double);
@@ -87,11 +87,9 @@ int main(int argc, char **argv) {
     int passed = (info == 0 && resid <= thresh) ? 1 : 0;
     double flops = (2.0 / 3.0) * static_cast<double>(n64) * static_cast<double>(n64) * static_cast<double>(n64);
     double gflops = flops / seconds / 1.0e9;
-    std::printf("peak_fp64_tflops=%.4f peak_fp64_vector_tflops=%.4f sm_arch=%d.%d sm_count=%d clock_ghz=%.3f problem_size_N=%d block_size=%d\n",
-                peak_tflops, peak_vector_tflops, prop.major, prop.minor, prop.multiProcessorCount, clock_ghz, n, nb);
-    std::printf("T/V                N    NB     P     Q               Time                 Gflops\n");
-    std::printf("WR10R%dR2        %d   %d     %d     %d               %.4f              %.3e\n",
-                pfact, n, nb, p, q, seconds, gflops);
+    std::printf("peak_fp64_tflops=%.4f peak_fp64_vector_tflops=%.4f sm_arch=%d.%d sm_count=%d clock_ghz=%.3f problem_size_N=%d\n",
+                peak_tflops, peak_vector_tflops, prop.major, prop.minor, prop.multiProcessorCount, clock_ghz, n);
+    std::printf("RESULT problem_size_N=%d time_s=%.4f gflops=%.3e\n", n, seconds, gflops);
     std::printf("Final Score:    %.4e GFLOPS\n", gflops);
     std::printf("Residual Check: %s  residual=%.3e threshold=%.3e\n", passed ? "PASSED" : "FAILED", resid, thresh);
     cusolverDnDestroy(handle);

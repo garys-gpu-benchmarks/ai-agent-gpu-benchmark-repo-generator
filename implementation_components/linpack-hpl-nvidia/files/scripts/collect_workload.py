@@ -25,7 +25,10 @@ def parse_score(text: str) -> dict[str, float]:
     match = re.search(r"Final Score:\s*([0-9.eE+-]+)\s*GFLOPS", text)
     if match:
         gflops = float(match.group(1))
-    match = re.search(r"WR\S+\s+\d+\s+\d+\s+\d+\s+\d+\s+([0-9.eE+-]+)\s+([0-9.eE+-]+)", text)
+    # RESULT line since TEMPLATE_00_119; the HPL-style WR line from older binaries still parses.
+    match = re.search(r"RESULT\s+problem_size_N=\d+\s+time_s=([0-9.eE+-]+)\s+gflops=([0-9.eE+-]+)", text) or re.search(
+        r"WR\S+\s+\d+\s+\d+\s+\d+\s+\d+\s+([0-9.eE+-]+)\s+([0-9.eE+-]+)", text
+    )
     if match:
         seconds = float(match.group(1))
         if gflops is None:
@@ -112,12 +115,9 @@ def main() -> int:
         raise SystemExit("[FAIL] bin/nvhpl missing")
     problem_n = clamp_problem_n(int(float(args.problem_size_N or 4096)))
     command = [
+        # Single-GPU cuSOLVER solve: N is the only input (see src/nvhpl.cu).
         "bin/nvhpl",
         "--N", str(problem_n),
-        "--NB", args.block_size,
-        "--P", args.process_grid_P,
-        "--Q", args.process_grid_Q,
-        "--pfact", args.panel_factorization,
     ]
     repeats = timed_repeats(problem_n, int(args.num_iterations or 1), str(args.profile or "smoke"))
     print(f"[INFO] nvhpl N={problem_n} timed_repeats={repeats}", flush=True)

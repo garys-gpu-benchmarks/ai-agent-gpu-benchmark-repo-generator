@@ -44,7 +44,7 @@ jobs:
 
       - name: Lint shell scripts
         run: |
-          find scripts templates -name "*.sh" -type f -not -path 'scripts/templates/*' -print0 \
+          find scripts templates user_scripts -name "*.sh" -type f -not -path 'scripts/templates/*' -print0 \
             | xargs -0 shellcheck --severity=warning
 
       - name: Lint Python scripts
@@ -146,9 +146,11 @@ jobs:
           test -f templates/shared-workflows/.github/workflows/ci.yml
           test -f templates/shared-workflows/.github/workflows/gpu-smoke.yml
           test -f templates/shared-workflows/.github/workflows/self-test.yml
-          test -f templates/suite-tools/scripts/run_benchmark_suite.sh
-          test -f templates/suite-tools/scripts/get_remote_info.sh
-          test -f templates/suite-tools/scripts/show_metrics.sh
+          test -f user_scripts/run_benchmark_suite.sh
+          test -f user_scripts/get_benchmark_results.sh
+          test -f user_scripts/show_metrics.sh
+          test -f user_scripts/show_ledger_runs.sh
+          test -f user_scripts/publish_benchmarks_to_github.sh
           test -f scripts/generate_show_metrics.py
           test ! -f docs/examples/generated-repo-workflows/nightly.yml.example
           echo "✓ All required template files and directories present"

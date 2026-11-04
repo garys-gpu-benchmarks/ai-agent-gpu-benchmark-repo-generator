@@ -384,6 +384,8 @@ def main() -> int:
     gpu_load = int(float(pv(params, "gpu_load_percent", args.profile, 0) or 0))
     temp_limit = float(pv(params, "temp_threshold", args.profile, 100) or 100)
     power_limit = float(pv(params, "power_threshold", args.profile, 1000) or 1000)
+    # Seconds between amd-smi samples (same 0.5 s floor as the NVIDIA twin 203/403).
+    poll = max(0.5, float(pv(params, "poll_interval", args.profile, 1) or 1))
     Path(args.run_dir).mkdir(parents=True, exist_ok=True)
     stress = None
     gpu_proc = None
@@ -408,7 +410,7 @@ def main() -> int:
     start = time.time()
     while time.time() - start < seconds:
         rows.append(sample_row(int(time.time() - start)))
-        time.sleep(1)
+        time.sleep(poll)
     if stress is not None:
         stress.wait(timeout=max(5, seconds))
     if gpu_proc is not None:

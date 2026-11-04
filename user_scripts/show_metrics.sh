@@ -33,7 +33,7 @@
 # BenchmarkSpecDefinitions.xlsx in the repository generator; change a label
 # or name there, then run  python3 scripts/generate_show_metrics.py  in the
 # generator. The master copy of this script is
-# templates/suite-tools/scripts/show_metrics.sh.
+# user_scripts/show_metrics.sh.
 #
 # Exit codes:
 #   0  metrics shown
@@ -151,7 +151,7 @@ parse_args() {
 }
 
 # ------------------------------------------------------------------------------
-# ssh connection (same approach as get_remote_info.sh)
+# ssh connection (same approach as get_benchmark_results.sh)
 # ------------------------------------------------------------------------------
 probe_error=""
 try_login() {

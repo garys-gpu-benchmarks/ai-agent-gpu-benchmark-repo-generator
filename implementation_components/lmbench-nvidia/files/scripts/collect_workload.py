@@ -102,6 +102,20 @@ def profile_timeout(params, profile: str) -> int:
     return {"smoke": 120, "baseline": 180, "extended": 180}.get(profile, 180)
 
 
+def warmup_args(params, profile) -> list[str]:
+    """lmbench -W <warmup>: microseconds each benchmark runs untimed before its
+    timed repetitions (lmbench's benchmp warmup). lat_syscall, lat_ctx,
+    lat_mem_rd, bw_mem and bw_pipe all take it before their positional
+    arguments. lat_mem_rd warms up once per array size, so keep this small.
+    Empty or 0 passes nothing (lmbench's default of no warmup)."""
+    raw = pv(params, "warmup_duration_us", profile, "")
+    try:
+        value = int(float(raw)) if raw not in (None, "") else 0
+    except (TypeError, ValueError):
+        raise SystemExit(f"[FAIL] warmup_duration_us must be a number of microseconds, got {raw!r}")
+    return ["-W", str(value)] if value > 0 else []
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--run-dir", required=True)
@@ -116,6 +130,7 @@ def main() -> int:
     params = (yaml.safe_load(Path(args.config).read_text(encoding="utf-8")) or {}).get("sweep") or {}
     reps = max(1, int(float(pv(params, "repetitions", args.profile, 1) or 1)))
     timeout = profile_timeout(params, args.profile)
+    warm = warmup_args(params, args.profile)
     run_dir = Path(args.run_dir)
     run_dir.mkdir(parents=True, exist_ok=True)
     tests = [
@@ -136,7 +151,7 @@ def main() -> int:
                 raise SystemExit(f"[FAIL] lmbench binary {argv[0]} is missing")
             try:
                 completed = subprocess.run(
-                    [binary, *argv[1:]],
+                    [binary, *warm, *argv[1:]],
                     capture_output=True,
                     text=True,
                     timeout=timeout,

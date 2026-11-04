@@ -73,6 +73,7 @@ def main() -> int:
     for key, flag in (
         ("array_size", "--arraysize"), ("num_iterations", "--numtimes"),
         ("num_iterations", "-n"), ("device_id", "--device"),
+        ("block_size", "--block-size"), ("warmup_iters", "--warmup"),
     ):
         value = pv(params, key, args.profile, "")
         if value:

@@ -87,7 +87,12 @@ def expected_commands(definitions_sheet, values_by_workload) -> dict[int, dict[s
     for workload, info in definitions_rows(definitions_sheet).items():
         values = values_by_workload.get(workload)
         if not values:
-            raise SystemExit(f"[FAIL] {PROFILE_SHEET} has no rows for workload {workload}.")
+            # A workload whose Parameter_NN slots are all "-" (102/202/302/402 since
+            # TEMPLATE_00_119) legitimately has no rows: its command is the bare
+            # profile flag plus --validate.
+            if info["parameters"]:
+                raise SystemExit(f"[FAIL] {PROFILE_SHEET} has no rows for workload {workload}.")
+            values = {}
         expected[workload] = {
             profile: build_command(profile, info["parameters"], values) for profile in PROFILES
         }

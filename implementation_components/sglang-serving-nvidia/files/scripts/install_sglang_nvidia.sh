@@ -55,6 +55,27 @@ install_sglang_runtime_deps() {
     'tqdm' 'pydantic'
 }
 
+# True when torch 2.13.0+cu130 and sglang-kernel 0.4.6.post1 are installed and
+# sgl_kernel imports against that torch. Used to skip force-reinstalls that only
+# repeat what is already in the venv (TEMPLATE_00_119).
+cu130_stack_ok() {
+  "${PYTHON_BIN}" - <<'PY' >/dev/null 2>&1
+import importlib.metadata as md
+import sys
+import torch
+ok = torch.__version__.startswith("2.13.0") and "cu130" in torch.__version__
+ok = ok and md.version("sglang-kernel").startswith("0.4.6.post1")
+import sgl_kernel  # noqa: F401  (raises when built against another torch ABI)
+sys.exit(0 if ok else 1)
+PY
+}
+
+reinstall_sglang_kernel() {
+  "${PYTHON_BIN}" -m pip install --force-reinstall --no-deps 'sglang-kernel==0.4.6.post1' \
+    --index-url https://docs.sglang.ai/whl/cu130/ \
+    --extra-index-url https://pypi.org/simple
+}
+
 install_cu130_sglang() {
   "${PYTHON_BIN}" -m pip install ninja
   # sglang-kernel 0.4.6.post1 loads on torch 2.13. Kernel 0.4.1 was built
@@ -71,9 +92,11 @@ install_cu130_sglang() {
   if ! "${PYTHON_BIN}" -c "import sglang" >/dev/null 2>&1; then
     "${PYTHON_BIN}" -m pip install 'sglang==0.5.10.post1' --no-deps
   fi
-  "${PYTHON_BIN}" -m pip install --force-reinstall --no-deps 'sglang-kernel==0.4.6.post1' \
-    --index-url https://docs.sglang.ai/whl/cu130/ \
-    --extra-index-url https://pypi.org/simple
+  if cu130_stack_ok; then
+    echo "[INFO] sglang-kernel 0.4.6.post1 already loads on torch 2.13.0+cu130; not reinstalling"
+  else
+    reinstall_sglang_kernel
+  fi
   local site
   site="$("${PYTHON_BIN}" -c "import sysconfig; print(sysconfig.get_path('purelib'))")"
   if [[ -f "${REPO_ROOT}/scripts/sglang_py314_patch.py" && -f "${REPO_ROOT}/scripts/sglang_py314.pth" ]]; then
@@ -86,9 +109,11 @@ install_cu130_sglang() {
       'torch==2.13.0+cu130' 'torchvision==0.28.0+cu130' 'torchaudio==2.11.0+cu130' \
       --index-url https://download.pytorch.org/whl/cu130
   fi
-  "${PYTHON_BIN}" -m pip install --force-reinstall --no-deps 'sglang-kernel==0.4.6.post1' \
-    --index-url https://docs.sglang.ai/whl/cu130/ \
-    --extra-index-url https://pypi.org/simple
+  # The runtime deps can replace torch or the kernel. Reinstall the kernel only
+  # when the stack no longer loads, instead of every time.
+  if ! cu130_stack_ok; then
+    reinstall_sglang_kernel
+  fi
   if ! "${PYTHON_BIN}" -c "from sglang.srt.entrypoints.http_server import launch_server" >/dev/null 2>&1 \
     || ! "${PYTHON_BIN}" -c "from sglang.srt.layers.sampler import create_sampler" >/dev/null 2>&1 \
     || ! "${PYTHON_BIN}" -c "import sgl_kernel" >/dev/null 2>&1; then

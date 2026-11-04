@@ -122,7 +122,7 @@ class EmitterTests(unittest.TestCase):
                         "tests/fixtures/sample-workload/schemas/benchmark_specification.schema.json"):
                 self.assertTrue((shared / rel).is_file(), rel)
             suite = Path(tmp) / "gpu-bench-suite"
-            for rel in ("scripts/run_benchmark_suite.sh", "scripts/get_remote_info.sh",
+            for rel in ("scripts/run_benchmark_suite.sh", "scripts/get_benchmark_results.sh", "scripts/show_ledger_runs.sh",
                         "scripts/show_metrics.sh", "README.md"):
                 self.assertTrue((suite / rel).is_file(), rel)
             for path in list(shared.rglob("*")) + list(suite.rglob("*")):
@@ -140,7 +140,7 @@ class EmitterTests(unittest.TestCase):
                 emit_shared_workflows.main()
 
     def test_suite_scripts_carry_no_lab_hosts(self) -> None:
-        text = (ROOT / "templates" / "suite-tools" / "scripts" / "get_remote_info.sh").read_text(encoding="utf-8")
+        text = (ROOT / "user_scripts" / "get_benchmark_results.sh").read_text(encoding="utf-8")
         self.assertNotRegex(text, r"\b(?!203\.0\.113\.)\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}\b")
         self.assertNotIn("gmb-amd", text)
 

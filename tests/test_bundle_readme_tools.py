@@ -15,7 +15,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 # One publish script since 2026-10-19 (the former _manual variant, renamed).
-PUBLISH = [ROOT / "scripts" / "publish_benchmarks_to_github.sh"]
+PUBLISH = [ROOT / "user_scripts" / "publish_benchmarks_to_github.sh"]
 BASH = shutil.which("bash")
 
 
@@ -53,7 +53,7 @@ class BundleReadmeToolsTests(unittest.TestCase):
         """Step 7 rewrites the shared run_benchmark_suite.sh for each bundle with sed and
         stops the publish if an edit misses; run those functions on the real script here."""
         text = PUBLISH[0].read_text(encoding="utf-8")
-        suite = ROOT / "templates" / "suite-tools" / "scripts" / "run_benchmark_suite.sh"
+        suite = ROOT / "user_scripts" / "run_benchmark_suite.sh"
         for digit in "1234":
             program = "\n".join([
                 "set -u", "cd \"$1\"",
@@ -75,7 +75,7 @@ class BundleReadmeToolsTests(unittest.TestCase):
         for script in PUBLISH:
             with self.subTest(script=script.name):
                 self.assertEqual(shipped_scripts(script.read_text(encoding="utf-8")),
-                                 {"run_benchmark_suite.sh", "show_metrics.sh"})
+                                 {"run_benchmark_suite.sh", "show_metrics.sh", "get_benchmark_results.sh", "show_ledger_runs.sh"})
 
     def test_readme_explains_every_shipped_script(self) -> None:
         for script in PUBLISH:
@@ -85,7 +85,7 @@ class BundleReadmeToolsTests(unittest.TestCase):
                 with self.subTest(script=script.name, platform=digit):
                     for name in shipped:
                         self.assertIn(f"./{name} ", readme, f"{name} is shipped but not shown in the README")
-                    self.assertIn("./scripts/get_remote_info.sh --host ", readme)
+                    self.assertIn("./scripts/get_benchmark_results.sh --host ", readme)
                     self.assertIsNone(re.search(r"@[A-Z]+@", readme), "unfilled placeholder")
                     self.assertNotIn("./run.sh", readme)
 

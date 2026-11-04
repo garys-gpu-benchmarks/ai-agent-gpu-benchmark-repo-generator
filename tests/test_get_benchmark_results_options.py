@@ -1,10 +1,12 @@
 #!/usr/bin/env python3
-# File: tests/test_get_remote_info_options.py
-# Description: get_remote_info.sh connection options. Runs the real script
+# File: tests/test_get_benchmark_results_options.py
+# Description: get_benchmark_results.sh options. Runs the real script
 #   against a stand-in ssh that records its arguments and refuses the
 #   connection, so the script stops at its first login attempt. Checks that
 #   --host/--port/--user, their --option=VALUE forms and the positional form
 #   reach ssh, and that bad input is a usage error (exit 2) before ssh runs.
+#   Without a host it collects from this machine (local mode); that is run
+#   for real against a sample /opt/benchmarks-style folder, with no ssh.
 #   No network and no remote machine are used.
 from __future__ import annotations
 
@@ -17,7 +19,7 @@ import unittest
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-SCRIPT = ROOT / "templates" / "suite-tools" / "scripts" / "get_remote_info.sh"
+SCRIPT = ROOT / "user_scripts" / "get_benchmark_results.sh"
 BASH = shutil.which("bash")
 
 FAKE_SSH = """#!/usr/bin/env bash
@@ -29,7 +31,7 @@ exit 255
 
 
 @unittest.skipIf(BASH is None, "bash is not installed")
-class GetRemoteInfoOptionTests(unittest.TestCase):
+class GetBenchmarkResultsOptionTests(unittest.TestCase):
     def setUp(self) -> None:
         self.tmp = Path(tempfile.mkdtemp())
         self.addCleanup(shutil.rmtree, self.tmp, ignore_errors=True)
@@ -120,9 +122,51 @@ class GetRemoteInfoOptionTests(unittest.TestCase):
         self.assert_usage_error(("--host", "--port", "22"), "--host needs a value")
         self.assert_usage_error(("--host", "203.0.113.10", "--port"), "--port needs a value")
 
-    def test_no_host(self) -> None:
-        self.assert_usage_error((), "give the benchmark machine with --host HOST")
-        self.assert_usage_error(("--port", "22"), "give the benchmark machine with --host HOST")
+    def test_connection_options_without_host(self) -> None:
+        # Without --host the script collects locally, so these mean --host was forgotten.
+        self.assert_usage_error(("--port", "22"), "--port needs --host HOST")
+        self.assert_usage_error(("--user", "ubuntu"), "--user needs --host HOST")
+        key = self.tmp / "key"
+        key.write_text("k", encoding="utf-8")
+        self.assert_usage_error(("-i", str(key)), "--identity needs --host HOST")
+
+    def test_no_host_and_no_benchmark_folder(self) -> None:
+        result = self.run_script("-r", str(self.tmp / "missing"))
+        self.assertEqual(result.returncode, 1, result.stderr)
+        self.assertIn("does not exist on this machine", result.stderr)
+        self.assertIn("give --host HOST", result.stderr)
+        self.assertEqual(self.ssh_calls(), [])
+
+    def test_no_host_collects_from_this_machine(self) -> None:
+        root = self.tmp / "benchmarks"
+        for workload in ("101-sys-bench-a-ubu2404", "102-sys-bench-b-ubu2404"):
+            (root / workload / "results" / "raw" / "run1").mkdir(parents=True)
+            (root / workload / "results" / "raw" / "run1" / "raw_output.txt").write_text(workload, encoding="utf-8")
+        (root / "101-sys-bench-a-ubu2404" / "results" / "parsed").mkdir()
+        (root / "benchmark_suite_log").mkdir()
+        (root / "benchmark_suite_log" / "suite.log").write_text("log", encoding="utf-8")
+        ledger = root / "ledger.csv"
+        ledger.write_text(
+            "a,b,c,repo,profile,f,runtime,exit_code\n"
+            "1,2,3,/opt/benchmarks/101-sys-bench-a-ubu2404,smoke,x,00:01,0\n"
+            "1,2,3,/opt/benchmarks/102-sys-bench-b-ubu2404,smoke,x,00:02,1\n",
+            encoding="utf-8",
+        )
+        out = self.tmp / "out"
+        result = self.run_script("-r", str(root), "-l", str(ledger), "-o", str(out), "--no-xlsx")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(self.ssh_calls(), [], "local mode must not use ssh")
+        self.assertIn("No --host given: collecting from this machine", result.stdout)
+        self.assertIn("Runs in the ledger: 2   passed (exit code 0): 1   other: 1", result.stdout)
+        self.assertRegex(result.stdout, r"101-sys-bench-a-ubu2404\s+smoke\s+00:01\s+0")
+        self.assertIn("(this machine)", result.stdout)
+        directories = out / "DIRECTORIES"
+        for workload in ("101-sys-bench-a-ubu2404", "102-sys-bench-b-ubu2404"):
+            self.assertEqual((directories / workload / "results" / "raw" / "run1" / "raw_output.txt").read_text(encoding="utf-8"), workload)
+            self.assertEqual(len(list((directories / workload / "results").glob("runtime_ledger_101_102_*.csv"))), 1)
+        self.assertTrue((directories / "benchmark_suite_log" / "suite.log").is_file())
+        self.assertEqual(len(list((out / "RUNTIME_LEDGERS").glob("runtime_ledger_101_102_*.csv"))), 1)
+        self.assertFalse((directories / "_meta").exists())
 
     def test_too_many_arguments(self) -> None:
         self.assert_usage_error(("203.0.113.10", "22", "extra"), "too many arguments")

@@ -4,6 +4,7 @@ from __future__ import annotations
 import argparse
 import csv
 import io
+import os
 import shutil
 import subprocess
 import time
@@ -95,6 +96,25 @@ def parse_args():
     parser.add_argument("--output-format", default="csv")
     return parser.parse_args()
 
+# search_strategy uses the cuDNN twin's values (218/418: find, heuristic, get,
+# fixed, none). find keeps MIOpenDriver's default Find path (benchmark the
+# applicable solvers once, then reuse the find-db). The others skip that
+# benchmarking: MIOPEN_FIND_MODE=FAST answers from the find-db or, on a miss,
+# from MIOpen's immediate-mode heuristic. MIOpen has no separate get/fixed/none
+# path, so those three map to the same heuristic choice.
+SEARCH_FIND_MODE = {"find": None, "heuristic": "FAST", "get": "FAST", "fixed": "FAST", "none": "FAST"}
+
+
+def search_env(strategy: str) -> dict:
+    key = str(strategy or "find").strip().lower()
+    if key not in SEARCH_FIND_MODE:
+        raise SystemExit(f"[FAIL] unsupported search_strategy {strategy!r}; use one of {', '.join(SEARCH_FIND_MODE)}")
+    env = os.environ.copy()
+    if SEARCH_FIND_MODE[key]:
+        env["MIOPEN_FIND_MODE"] = SEARCH_FIND_MODE[key]
+    return env
+
+
 def main() -> int:
     args = parse_args()
     params = load_params(args.config)
@@ -120,6 +140,9 @@ def main() -> int:
     driver = shutil.which("MIOpenDriver") or "/opt/rocm/bin/MIOpenDriver"
     direction = str(pv(params, "conv_direction", args.profile, "all")).lower()
     flags = miopen_flags(direction)
+    strategy = str(pv(params, "search_strategy", args.profile, "find") or "find")
+    driver_env = search_env(strategy)
+    print(f"[INFO] MIOpenDriver: search_strategy={strategy} MIOPEN_FIND_MODE={driver_env.get('MIOPEN_FIND_MODE', 'default')} warmup_iters={warmup}", flush=True)
     rows = []
     texts = []
     if Path(driver).is_file():
@@ -133,7 +156,13 @@ def main() -> int:
                 "-l", "1", "-j", "1", "-g", str(groups), "-F", str(flag),
                 "-t", "1", "-i", str(iters),
             ]
-            completed = subprocess.run(cmd, capture_output=True, text=True, timeout=max(300, iters // 50 + 180))
+            if warmup > 0:
+                # Untimed run of the same shape: fills the find-db and kernel
+                # cache and brings the GPU out of idle before the timed run.
+                warm = cmd[:-4] + ["-t", "0", "-i", str(warmup)]
+                warm_done = subprocess.run(warm, capture_output=True, text=True, timeout=max(300, warmup // 50 + 180), env=driver_env)
+                texts.append("# warmup (untimed): " + " ".join(warm) + "\n" + (warm_done.stdout or "") + (warm_done.stderr or ""))
+            completed = subprocess.run(cmd, capture_output=True, text=True, timeout=max(300, iters // 50 + 180), env=driver_env)
             text = (completed.stdout or "") + "\n" + (completed.stderr or "")
             texts.append(text)
             for line in text.splitlines():

@@ -146,6 +146,25 @@ def print_batch_summary(project_root: Path, workloads: list[str]) -> None:
         f"{failed_attempts} failed attempt(s))",
         flush=True,
     )
+    bootstrap = batch.get("host_bootstrap") if isinstance(batch.get("host_bootstrap"), dict) else {}
+    if bootstrap:
+        seconds = int(bootstrap.get("seconds") or 0)
+        print(
+            f"[INFO] Host bootstrap before workload 1: {_hms(seconds)} ({seconds} sec; "
+            f"status {bootstrap.get('status', '?')}). Not included in the workload times above.",
+            flush=True,
+        )
+    preflight = batch.get("remote_host_preflight") if isinstance(batch.get("remote_host_preflight"), dict) else {}
+    if preflight:
+        estimate = preflight.get("estimate") or {}
+        print(
+            f"[INFO] Remote preflight estimate: {estimate.get('estimated_minutes', '?')} min "
+            f"(reference {estimate.get('reference_minutes', '?')} min); "
+            f"{len(preflight.get('warnings') or [])} warning(s)",
+            flush=True,
+        )
+        for warning in preflight.get("warnings") or []:
+            print(f"[WARN] preflight: {warning}", flush=True)
     batch["generation_successful_seconds"] = successful
     batch["generation_seconds_including_failed_attempts"] = everything
     path.write_text(json.dumps(batch, indent=2) + "\n", encoding="utf-8", newline="\n")

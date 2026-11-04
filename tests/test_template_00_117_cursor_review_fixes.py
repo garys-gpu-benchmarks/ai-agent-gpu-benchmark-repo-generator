@@ -69,7 +69,9 @@ class TemplateNoteStripTest(unittest.TestCase):
         for workload in ALL_WORKLOADS:
             values = profile(workload)
             with self.subTest(workload=workload):
-                self.assertTrue(values)
+                # x02 System Validation has no parameters since TEMPLATE_00_119.
+                if workload[1:] != "02":
+                    self.assertTrue(values)
                 for name, row in values.items():
                     for column, cell in row.items():
                         self.assertNotIn("TEMPLATE_00_", cell.upper(), f"{workload} {name} {column}")

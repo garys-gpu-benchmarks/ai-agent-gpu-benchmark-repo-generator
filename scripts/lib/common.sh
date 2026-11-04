@@ -27,6 +27,10 @@ fi
 if [[ -z "${PIP_CACHE_DIR:-}" ]]; then
   export PIP_CACHE_DIR="${HOME}/.cache/pip"
 fi
+# The Hugging Face xet client fetched bge-small-en-v1.5 one small range at a time
+# on the Nov 3 26.04 host (most of 432's 23 minutes). Plain HTTP downloads are the
+# default; set HF_HUB_DISABLE_XET=0 to use xet (TEMPLATE_00_119).
+export HF_HUB_DISABLE_XET="${HF_HUB_DISABLE_XET:-1}"
 
 # hipcc on Ubuntu 26.04 / ROCm 10.1.0 (Clang 24) still needs a GCC 15 host
 # pin so <cstdlib> is visible to the HIP wrapper. Export HIPCC_COMPILE_FLAGS_APPEND

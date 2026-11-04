@@ -61,6 +61,11 @@ def parse_args() -> argparse.Namespace:
         help="Wipe the remote repo including .venv/.cache before copy",
     )
     parser.add_argument(
+        "--skip-host-prep",
+        action="store_true",
+        help="Skip the one-time remote host preflight and bootstrap that run before a multi-workload batch",
+    )
+    parser.add_argument(
         "--keep-template-copy",
         action="store_true",
         help="Keep the nested <template>_copy/ generation workspace after the workload passes "
@@ -267,12 +272,12 @@ def remote_copy(ssh: str, repo_dir: Path, *, reuse: bool) -> int:
 
 
 # Installed beside the workload trees, not inside them. Bundles already ship both.
-REMOTE_SUITE_SCRIPTS = ("show_metrics.sh", "run_benchmark_suite.sh")
+REMOTE_SUITE_SCRIPTS = ("show_metrics.sh", "run_benchmark_suite.sh", "get_benchmark_results.sh", "show_ledger_runs.sh")
 
 
 def install_remote_suite_script(ssh: str, name: str) -> int:
-    """Install one templates/suite-tools/scripts/<name> at /opt/benchmarks/<name>."""
-    src = Path(__file__).resolve().parents[1] / "templates" / "suite-tools" / "scripts" / name
+    """Install one user_scripts/<name> at /opt/benchmarks/<name>."""
+    src = Path(__file__).resolve().parents[1] / "user_scripts" / name
     dest = f"{REMOTE_ROOT}/{name}"
     if not src.is_file():
         print(f"[FAIL] {src} is missing; cannot install {dest}", flush=True)
@@ -294,10 +299,12 @@ def install_remote_suite_script(ssh: str, name: str) -> int:
 
 
 def install_remote_suite_tools(ssh: str) -> int:
-    """Install show_metrics.sh and run_benchmark_suite.sh at /opt/benchmarks.
+    """Install the suite tools (REMOTE_SUITE_SCRIPTS) at /opt/benchmarks.
 
-    Workload trees live in /opt/benchmarks/<repo>. These two stay beside them,
-    where an operator runs `bash show_metrics.sh 101` or `bash run_benchmark_suite.sh`.
+    Workload trees live in /opt/benchmarks/<repo>. The tools stay beside them,
+    where an operator runs `bash show_metrics.sh 101`, `bash run_benchmark_suite.sh`,
+    `bash show_ledger_runs.sh` or `bash get_benchmark_results.sh -o ~/results`
+    (no --host: this machine).
     """
     for name in REMOTE_SUITE_SCRIPTS:
         rc = install_remote_suite_script(ssh, name)
@@ -668,6 +675,45 @@ def _stamp_generation_report(repo: Path, started: str, finished: str) -> None:
     manifest_path.write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8", newline="\n")
 
 
+def host_prep(ssh: str, workloads: list[str], template_root: Path, project_root: Path) -> None:
+    """Remote host preflight, then the one-time bootstrap (TEMPLATE_00_119).
+
+    Both only warn. Whatever they report, the workloads run next, and the batch
+    continues to the last workload.
+    """
+    preflight: dict | None = None
+    try:
+        from remote_host_preflight import run_preflight
+
+        preflight = run_preflight(ssh_run, ssh, workloads, template_root, project_root)
+    except Exception as exc:
+        print(f"[WARN] remote host preflight could not run: {exc!r}; continuing", flush=True)
+    try:
+        from remote_host_bootstrap import run_bootstrap
+
+        run_bootstrap(
+            ssh_run,
+            run_host_bash,
+            ssh,
+            normalize_ssh_command(ssh),
+            to_git_bash_path(str(template_root / "scripts")),
+            workloads,
+            project_root,
+            preflight,
+        )
+    except Exception as exc:
+        print(f"[WARN] host bootstrap could not run: {exc!r}; continuing", flush=True)
+
+
+def host_prefetch_report(ssh: str, project_root: Path) -> None:
+    try:
+        from remote_host_bootstrap import collect_prefetch_status
+
+        collect_prefetch_status(ssh_run, ssh, project_root)
+    except Exception as exc:
+        print(f"[WARN] could not read the background prefetch status: {exc!r}", flush=True)
+
+
 def main() -> int:
     global REMOTE_ROOT
     _configure_stdio()
@@ -680,6 +726,8 @@ def main() -> int:
     if not workloads:
         raise SystemExit("usage: create_one_workload.py --prompt-file <file> --workload <N> [<N>...]")
     ssh = _ssh_target(prompt)
+    if ssh and len(workloads) > 1 and not args.validate_only and not args.skip_host_prep:
+        host_prep(ssh, workloads, template_root, project_root)
     rc = 0
     for workload in workloads:
         item_rc = process_one(str(workload), args, template_root, project_root, ssh)
@@ -687,6 +735,8 @@ def main() -> int:
             rc = item_rc
     if rc == 0 and len(workloads) > 1 and ssh:
         rc = recheck_first_workload(str(workloads[0]), args, project_root, ssh)
+    if ssh and len(workloads) > 1 and not args.validate_only and not args.skip_host_prep:
+        host_prefetch_report(ssh, project_root)
     return rc
 
 

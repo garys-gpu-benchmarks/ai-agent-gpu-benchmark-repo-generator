@@ -56,7 +56,10 @@ def parse_score(text: str) -> dict[str, float]:
     match = re.search(r"Final Score:\s*([0-9.eE+-]+)\s*GFLOPS", text)
     if match:
         gflops = float(match.group(1))
-    match = re.search(r"WR\S+\s+\d+\s+\d+\s+\d+\s+\d+\s+([0-9.eE+-]+)\s+([0-9.eE+-]+)", text)
+    # RESULT line since TEMPLATE_00_119; the HPL-style WR line from older binaries still parses.
+    match = re.search(r"RESULT\s+problem_size_N=\d+\s+time_s=([0-9.eE+-]+)\s+gflops=([0-9.eE+-]+)", text) or re.search(
+        r"WR\S+\s+\d+\s+\d+\s+\d+\s+\d+\s+([0-9.eE+-]+)\s+([0-9.eE+-]+)", text
+    )
     if match:
         seconds = float(match.group(1))
         if gflops is None:
@@ -123,13 +126,12 @@ def main() -> int:
     )
     Path("HPL.dat").write_text(Path("HPL.dat").read_text(encoding="utf-8"), encoding="utf-8")
     command = [
-        "mpirun", "--allow-run-as-root", "-np", args.num_gpus,
+        # bin/rochpl is a single-GPU solve: always one rank. num_gpus, the P x Q
+        # grid, block size and panel factorization are not parameters any more
+        # (argparse above still accepts those flags and ignores them).
+        "mpirun", "--allow-run-as-root", "-np", "1",
         "bin/rochpl",
         "--N", args.problem_size_N,
-        "--NB", args.block_size,
-        "--P", args.process_grid_P,
-        "--Q", args.process_grid_Q,
-        "--pfact", args.panel_factorization,
     ]
     problem_n = clamp_problem_n(int(float(args.problem_size_N or 4096)))
     command[command.index("--N") + 1] = str(problem_n)

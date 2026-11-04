@@ -66,6 +66,30 @@ def parse_args():
 import re  # noqa: E402
 
 
+def numactl_or_plain(command: list[str]) -> tuple[list[str], str]:
+    """Keep a leading numactl only when the host accepts that exact bind.
+
+    Containers often ship numactl with no NUMA policy ("This system does not
+    support NUMA policy") or without permission to set one. The bind is probed
+    on /bin/true with the same flags; on failure the benchmark runs unbound and
+    the reason is returned so it can be logged.
+    """
+    if not command or command[0] != "numactl":
+        return list(command), ""
+    index = 1
+    while index < len(command) and command[index].startswith("-"):
+        index += 1
+    flags = command[1:index]
+    try:
+        probe = subprocess.run(["numactl", *flags, "true"], capture_output=True, text=True, check=False, timeout=30)
+    except (OSError, subprocess.SubprocessError) as exc:
+        return command[index:], f"numactl bind skipped: {exc}"
+    if probe.returncode == 0:
+        return list(command), ""
+    lines = ((probe.stderr or "") + (probe.stdout or "")).strip().splitlines()
+    return command[index:], "numactl bind skipped: " + (lines[0] if lines else f"rc={probe.returncode}")
+
+
 def main() -> int:
     args = parse_args()
     params = load_params(args.config)
@@ -98,6 +122,9 @@ def main() -> int:
             command.insert(1, f"{flag}={bind}")
         else:
             command = ["numactl", f"{flag}={bind}", *command]
+    command, numa_note = numactl_or_plain(command)
+    if numa_note:
+        print(f"[WARN] {numa_note}", file=sys.stderr)
     # 0.05 s per iteration was sized for a 10M-element array. Time per iteration
     # grows with the array, so scale the allowance (407 extended, 40M x 32000,
     # was killed at the old 1660 s limit).

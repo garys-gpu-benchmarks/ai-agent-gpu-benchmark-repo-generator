@@ -25,7 +25,7 @@ __global__ void k_triad(const double* a, const double* b, double* c, double scal
     if (i < n) c[i] = a[i] + scalar * b[i];
 }
 __global__ void k_dot(const double* a, const double* b, double* partial, size_t n) {
-    __shared__ double sh[256];
+    extern __shared__ double sh[];  // block_size doubles, sized at launch
     size_t i = blockIdx.x * blockDim.x + threadIdx.x;
     double sum = 0;
     if (i < n) sum = a[i] * b[i];
@@ -64,6 +64,12 @@ int main(int argc, char** argv) {
     CHECK(cudaMalloc(&a, bytes));
     CHECK(cudaMalloc(&b, bytes));
     CHECK(cudaMalloc(&c, bytes));
+    if (block < 32 || block > 1024 || (block & (block - 1)) != 0) {
+        std::fprintf(stderr, "block_size must be a power of two from 32 to 1024 (got %d)\n", block);
+        return 2;
+    }
+    if (warmup < 0) warmup = 0;
+    const size_t dot_shared = static_cast<size_t>(block) * sizeof(double);
     int grid = static_cast<int>((n + block - 1) / block);
     CHECK(cudaMalloc(&partial, static_cast<size_t>(grid) * sizeof(double)));
     CHECK(cudaMemset(a, 0, bytes));
@@ -112,11 +118,11 @@ int main(int argc, char** argv) {
     CHECK(cudaEventSynchronize(stop));
     float triad_ms = elapsed(start, stop) / static_cast<float>(iters);
 
-    for (int i = 0; i < warmup; ++i) k_dot<<<grid, block>>>(a, b, partial, n);
+    for (int i = 0; i < warmup; ++i) k_dot<<<grid, block, dot_shared>>>(a, b, partial, n);
     CHECK(cudaGetLastError());  // kernel launches are asynchronous; surface launch failures
     CHECK(cudaDeviceSynchronize());
     CHECK(cudaEventRecord(start));
-    for (int i = 0; i < iters; ++i) k_dot<<<grid, block>>>(a, b, partial, n);
+    for (int i = 0; i < iters; ++i) k_dot<<<grid, block, dot_shared>>>(a, b, partial, n);
     CHECK(cudaGetLastError());
     CHECK(cudaEventRecord(stop));
     CHECK(cudaEventSynchronize(stop));

@@ -6,7 +6,7 @@
 # Description: Emit the two persistent, suite-level repositories from their
 #   templates and config/ci_contract.yaml:
 #     <output-root>/shared-workflows/   reusable GitHub workflows (published once, tagged)
-#     <output-root>/gpu-bench-suite/    operator scripts (run_benchmark_suite.sh, get_remote_info.sh, show_metrics.sh)
+#     <output-root>/gpu-bench-suite/    operator scripts from user_scripts/ (run_benchmark_suite.sh, show_metrics.sh, show_ledger_runs.sh, get_benchmark_results.sh)
 #   publish_benchmarks_to_github.sh runs this with --output-root set to the
 #   publish folder that holds the run folder (Publishing/Publish_<YYYYMMDD>_<NN>).
 # Execution: python3 scripts/emit_shared_workflows.py --output-root <DIR> [--update] [--check]
@@ -28,11 +28,14 @@ from pathlib import Path
 
 from ci_contract import (
     SHARED_WORKFLOWS_REL,
+    SUITE_TOOL_SCRIPTS,
     SUITE_TOOLS_REL,
     TEMPLATE_ROOT,
+    USER_SCRIPTS_REL,
     WORKLOAD_WORKFLOWS_REL,
     ContractError,
     load_contract,
+    render_file,
     render_tree,
     shared_placeholders,
     workload_identity,
@@ -87,7 +90,14 @@ def build_shared_workflows(template_root: Path, contract: dict, dest: Path) -> N
 
 
 def build_suite_tools(template_root: Path, contract: dict, dest: Path) -> None:
-    render_tree(template_root / SUITE_TOOLS_REL, dest, shared_placeholders(contract))
+    # README.md comes from templates/suite-tools/ (it has placeholders); the
+    # scripts come from user_scripts/, their only master copy.
+    render_file(template_root / SUITE_TOOLS_REL / "README.md", dest / "README.md", shared_placeholders(contract))
+    for name in SUITE_TOOL_SCRIPTS:
+        src = template_root / USER_SCRIPTS_REL / name
+        if not src.is_file():
+            raise ContractError(f"{src} is missing; gpu-bench-suite needs it")
+        render_file(src, dest / "scripts" / name, shared_placeholders(contract))
     _copy_lf(template_root / "LICENSE", dest / "LICENSE")
 
 

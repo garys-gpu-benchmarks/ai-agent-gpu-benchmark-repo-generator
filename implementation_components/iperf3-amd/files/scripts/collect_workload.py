@@ -5,6 +5,7 @@ import argparse
 import csv
 import io
 import json
+import re
 import subprocess
 import time
 from pathlib import Path
@@ -50,6 +51,29 @@ def write_csv(path, header, rows):
 DEFAULT_UDP_RATE = "0"
 
 
+# iperf3 3.20 (Ubuntu 26.04) rejects a UDP -l above the 65507-byte payload limit.
+# buffer_length stays the workbook value for TCP; UDP is clamped to that limit.
+UDP_MAX_BLOCK_BYTES = 65507
+
+
+def block_bytes(length: str) -> int | None:
+    match = re.fullmatch(r"(\d+(?:\.\d+)?)([KMGkmg])?", str(length or "").strip())
+    if not match:
+        return None
+    scale = {"": 1, "K": 1024, "M": 1024 ** 2, "G": 1024 ** 3}[(match.group(2) or "").upper()]
+    return int(float(match.group(1)) * scale)
+
+
+def length_for_protocol(protocol: str, length: str) -> str:
+    text = str(length or "").strip()
+    if protocol != "udp" or not text:
+        return text
+    nbytes = block_bytes(text)
+    if nbytes is not None and nbytes > UDP_MAX_BLOCK_BYTES:
+        return str(UDP_MAX_BLOCK_BYTES)
+    return text
+
+
 def udp_rate(raw) -> str:
     """UDP -b target rate. iperf3 itself defaults UDP to 1 Mbit/s, which made the
     UDP metric report that cap instead of throughput. Empty or 0 uses DEFAULT_UDP_RATE,
@@ -58,35 +82,6 @@ def udp_rate(raw) -> str:
     if text in {"", "0", "0M", "0K", "0G"}:
         return DEFAULT_UDP_RATE
     return text
-
-
-def udp_block_length(raw) -> str:
-    """iperf3 UDP -l must be 16..65507 bytes. The shared buffer_length is a TCP
-    block size (128K in the profile) and is rejected for UDP, which produced no
-    JSON and an empty throughput. Clamp to the datagram maximum."""
-    text = str(raw or "").strip()
-    if not text:
-        return ""
-    number = text.upper().replace(" ", "")
-    mult = 1
-    if number.endswith("K"):
-        mult = 1024
-        number = number[:-1]
-    elif number.endswith("M"):
-        mult = 1024 * 1024
-        number = number[:-1]
-    elif number.endswith("G"):
-        mult = 1024 ** 3
-        number = number[:-1]
-    try:
-        size = int(float(number) * mult)
-    except ValueError:
-        return text
-    if size > 65507:
-        return "65507"
-    if size < 16:
-        return "16"
-    return str(size)
 
 
 def received_bps(end: dict, protocol: str) -> float:
@@ -143,11 +138,9 @@ def iperf(protocol: str, port: int, seconds: int, streams: int, reverse, bandwid
         ]
         if protocol == "udp":
             cmd += ["-u", "-b", bandwidth]
-            udp_len = udp_block_length(length)
-            if udp_len:
-                cmd += ["-l", udp_len]
-        elif str(length).strip():
-            cmd += ["-l", str(length).strip()]
+        block = length_for_protocol(protocol, length)
+        if block:
+            cmd += ["-l", block]
         if str(window).strip():
             cmd += ["-w", str(window).strip()]
         try:
@@ -165,13 +158,8 @@ def iperf(protocol: str, port: int, seconds: int, streams: int, reverse, bandwid
             last_error = f"iperf3 {protocol} client exceeded {budget}s"
             continue
         _stop(server)
-        stdout = completed.stdout or ""
-        if completed.returncode != 0 and not stdout.strip():
-            detail = (completed.stderr or "").strip().splitlines()
-            last_error = detail[0] if detail else "iperf3 client failed"
-            continue
         try:
-            payload = json.loads(stdout or "{}")
+            payload = json.loads(completed.stdout or "{}")
         except json.JSONDecodeError:
             last_error = "iperf3 produced invalid JSON"
             continue

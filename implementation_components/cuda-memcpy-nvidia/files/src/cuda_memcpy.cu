@@ -10,18 +10,32 @@
 
 int main(int argc, char **argv) {
     if (argc < 5) {
-        std::fprintf(stderr, "usage: cuda_memcpy <bytes> <warmup> <iters> <H2D|D2H|D2D|H2D_pageable>\n");
+        std::fprintf(stderr, "usage: cuda_memcpy <bytes> <warmup> <iters> <H2D|D2H|D2D|H2D_pageable|D2H_pageable>\n");
         return 2;
     }
     size_t bytes = strtoull(argv[1], 0, 10);
     int warmup = atoi(argv[2]);
     int iters = atoi(argv[3]);
     const char *kind = argv[4];
+    // H2D_pageable and D2H_pageable use malloc'd host memory instead of
+    // cudaMallocHost; the copy direction comes from the part before "_pageable".
+    char base[16] = {0};
+    std::strncpy(base, kind, sizeof(base) - 1);
+    char *suffix = std::strstr(base, "_pageable");
+    int pageable = suffix != 0;
+    if (suffix) *suffix = '\0';
+    if (std::strcmp(base, "H2D") && std::strcmp(base, "D2H") && std::strcmp(base, "D2D")) {
+        std::fprintf(stderr, "unknown copy kind %s\n", kind);
+        return 2;
+    }
+    if (pageable && std::strcmp(base, "D2D") == 0) {
+        std::fprintf(stderr, "D2D has no host buffer; D2D_pageable is not a copy kind\n");
+        return 2;
+    }
     if (bytes < 8) bytes = 8;
     if (warmup < 0) warmup = 0;
     if (iters < 1) iters = 1;
     void *h = 0, *d = 0, *d2 = 0;
-    int pageable = std::strcmp(kind, "H2D_pageable") == 0;
     if (pageable) {
         h = std::malloc(bytes);
         if (!h) return 2;
@@ -34,12 +48,12 @@ int main(int argc, char **argv) {
     cudaMemcpyKind dir = cudaMemcpyHostToDevice;
     void *dst = d;
     void *src = h;
-    if (std::strcmp(kind, "D2H") == 0) {
+    if (std::strcmp(base, "D2H") == 0) {
         dir = cudaMemcpyDeviceToHost;
         dst = h;
         src = d;
         CUDA_OK(cudaMemcpy(d, h, bytes, cudaMemcpyHostToDevice));
-    } else if (std::strcmp(kind, "D2D") == 0) {
+    } else if (std::strcmp(base, "D2D") == 0) {
         dir = cudaMemcpyDeviceToDevice;
         dst = d2;
         src = d;

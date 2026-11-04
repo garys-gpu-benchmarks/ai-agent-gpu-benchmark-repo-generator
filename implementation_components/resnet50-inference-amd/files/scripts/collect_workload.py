@@ -153,13 +153,28 @@ def main() -> int:
     Path(args.run_dir).mkdir(parents=True, exist_ok=True)
     import torch
     from torchvision.models import resnet50
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    # device_id and use_channels_last as in the NVIDIA twin (222/422). A config
+    # without use_channels_last keeps the old contiguous (NCHW) layout.
+    device_id = int(float(pv(params, "device_id", args.profile, 0) or 0))
+    channels_last = str(pv(params, "use_channels_last", args.profile, "false")).strip().lower() in {"true", "1", "yes", "on"}
+    if torch.cuda.is_available():
+        if device_id >= torch.cuda.device_count():
+            raise SystemExit(f"[FAIL] device_id {device_id} is not visible; {torch.cuda.device_count()} GPU(s) found")
+        device = torch.device(f"cuda:{device_id}")
+        torch.cuda.set_device(device)
+    else:
+        device = torch.device("cpu")
+    print(f"[INFO] resnet50 inference: device={device} use_channels_last={str(channels_last).lower()}", flush=True)
     dtype = torch.bfloat16 if "bf16" in str(pv(params, "dtype", args.profile, "bf16")).lower() else torch.float16
     model = resnet50().to(device=device, dtype=dtype).eval()
+    if channels_last:
+        model = model.to(memory_format=torch.channels_last)
     rows = []
     with torch.no_grad():
         for batch in batches:
             x = torch.randn(batch, 3, image, image, device=device, dtype=dtype)
+            if channels_last:
+                x = x.to(memory_format=torch.channels_last)
             for _ in range(max(0, warmup)):
                 model(x)
             if device.type == "cuda":

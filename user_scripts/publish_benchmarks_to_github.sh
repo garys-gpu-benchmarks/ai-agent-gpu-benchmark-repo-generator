@@ -19,7 +19,7 @@ if grep -q $'\r' "$0"; then echo "This file has Windows (CRLF) line endings. Fix
 #                               its 32 workloads as pinned git submodules
 #   shared-workflows            the CI every workload calls (@v1)
 #   gpu-bench-suite             operator tools (run_benchmark_suite.sh,
-#                               get_remote_info.sh)
+#                               get_benchmark_results.sh)
 #   the generator               ai-agent-gpu-benchmark-repo-generator
 #   the profile repository      github.com/garymichaelbass/garymichaelbass
 #                               receives BenchmarkSpecDefinitions.xlsx only
@@ -75,7 +75,7 @@ if grep -q $'\r' "$0"; then echo "This file has Windows (CRLF) line endings. Fix
 #   2. Copy this script into Publishing\ (from the generator in the run folder)
 #      and run it from there, naming the run folder relative to Publishing\:
 #        cd /z/ServersProcsMemory/Github_Garys_GPU_Repos/Publishing
-#        cp 20261019_02/src_380_381_382_383/ai-agent-gpu-benchmark-repo-generator/scripts/publish_benchmarks_to_github.sh .
+#        cp 20261019_02/src_380_381_382_383/ai-agent-gpu-benchmark-repo-generator/user_scripts/publish_benchmarks_to_github.sh .
 #        ./publish_benchmarks_to_github.sh 20261019_02/src_380_381_382_383
 #   3. Check: the run ends with FINISHED (no STOPPED); then on GitHub, green CI.
 #
@@ -733,6 +733,22 @@ cd /opt/benchmarks
 ./show_metrics.sh --help             # all options
 ```
 
+To list every run on this machine (workload, profile, runtime, exit code)
+without copying anything:
+
+```bash
+./show_ledger_runs.sh              # every run
+./show_ledger_runs.sh --failed     # only runs whose exit code is not 0
+```
+
+To copy every result on this machine into one folder (the ledger as a
+timestamped CSV, each benchmark's `results/raw` and `results/parsed`, and the
+suite logs):
+
+```bash
+./get_benchmark_results.sh -o ~/results    # no --host: collects from this machine
+```
+
 To copy the results to your laptop, see [Results](#results).
 
 ## Run everything
@@ -791,13 +807,14 @@ expected:
 | Which release is installed | `git -C /opt/benchmarks describe --tags` |
 
 To copy the ledger, every benchmark's `results/` and the suite logs to your
-laptop (Git Bash on Windows), use `get_remote_info.sh` from
+laptop (Git Bash on Windows), use `get_benchmark_results.sh` from
 [gpu-bench-suite](https://github.com/@ORG@/gpu-bench-suite). It writes
 `RUNTIME_LEDGERS/` and `DIRECTORIES/` in the folder you run it from:
 
 ```bash
 git clone https://github.com/@ORG@/gpu-bench-suite && cd gpu-bench-suite
-./scripts/get_remote_info.sh --host 203.0.113.10       # this machine's address; --port PORT if ssh is not on 22
+./scripts/show_ledger_runs.sh --host 203.0.113.10     # just the run table; copies nothing
+./scripts/get_benchmark_results.sh --host 203.0.113.10  # this machine's address; --port PORT if ssh is not on 22
 ./scripts/show_metrics.sh @S@07 --host 203.0.113.10      # the same table, read over ssh
 ```
 
@@ -925,10 +942,10 @@ if [[ ! -d "${GEN}/${GENREPO}" ]]; then
 fi
 [[ -f "${GEN}/${GENREPO}/${PROFILE_SPEC}" ]] || stop "${GENREPO}/${PROFILE_SPEC} is missing from the run folder. Step 10 copies that file to ${PROFILE_REPO}."
 # The generator being published should hold the master copy of this script.
-if [[ ! -f "${GEN}/${GENREPO}/scripts/${SCRIPT_NAME}" ]]; then
-  echo "NOTE: ${GENREPO}/scripts/ has no ${SCRIPT_NAME}. Consider adding this script there as the master copy."
-elif ! cmp -s "${SCRIPT_DIR}/${SCRIPT_NAME}" "${GEN}/${GENREPO}/scripts/${SCRIPT_NAME}"; then
-  echo "NOTE: this script differs from ${GENREPO}/scripts/${SCRIPT_NAME} in the run folder."
+if [[ ! -f "${GEN}/${GENREPO}/user_scripts/${SCRIPT_NAME}" ]]; then
+  echo "NOTE: ${GENREPO}/user_scripts/ has no ${SCRIPT_NAME}. Consider adding this script there as the master copy."
+elif ! cmp -s "${SCRIPT_DIR}/${SCRIPT_NAME}" "${GEN}/${GENREPO}/user_scripts/${SCRIPT_NAME}"; then
+  echo "NOTE: this script differs from ${GENREPO}/user_scripts/${SCRIPT_NAME} in the run folder."
   echo "      The generator holds the master copy; copy it over this one if it is newer."
 fi
 # The generator's CI runs ruff; catch a lint error now, before hours of
@@ -1004,6 +1021,21 @@ for d in [1-4][0-9][0-9]-*/; do
   if [[ -d "${d}/.git" ]] && ! in_list "${d}" _logs/ready.txt; then bad="${bad} ${d}"; fi
 done
 [[ -z "${bad}" ]] || stop "these copies have an old .git folder although this run has not prepared them yet:${bad}. Delete those folders from ${PUB} so they are copied fresh, and run again."
+# Every workload ships show_metrics.sh at its top level. Replace each copy with
+# the generator's master, so all workloads carry the same, current version
+# (workloads generated before TEMPLATE_00_119 get it here for the first time).
+WORKLOAD_METRICS="${GEN}/${GENREPO}/user_scripts/show_metrics.sh"
+[[ -f "${WORKLOAD_METRICS}" ]] || stop "${GENREPO}/user_scripts/show_metrics.sh is missing from the run folder; every workload ships a copy"
+refreshed=0
+for d in [1-4][0-9][0-9]-*/; do
+  d=${d%/}
+  if ! cmp -s <(tr -d '\r' <"${WORKLOAD_METRICS}") "${d}/show_metrics.sh" 2>/dev/null; then
+    tr -d '\r' <"${WORKLOAD_METRICS}" >"${d}/show_metrics.sh" || stop "cannot write ${d}/show_metrics.sh"
+    chmod +x "${d}/show_metrics.sh"
+    refreshed=$((refreshed + 1))
+  fi
+done
+echo "show_metrics.sh in each workload: ${refreshed} updated, $((copies - refreshed)) already current"
 
 
 # ==============================================================================
@@ -1129,7 +1161,7 @@ fi
 #   tag is vN.0.0, each later change the next vN.x.0, and vN is moved to it.
 #
 # gpu-bench-suite: operator tools (scripts/run_benchmark_suite.sh for the GPU
-#   host, scripts/get_remote_info.sh for the laptop). Tagged with this run's
+#   host, scripts/get_benchmark_results.sh for the laptop or the host). Tagged with this run's
 #   version. Step 7 copies its run_benchmark_suite.sh into every bundle.
 #
 # Runs every time; nothing is pushed or tagged when nothing changed.
@@ -1239,6 +1271,13 @@ SUITE_SCRIPT="${TOOLS_DIR:+${TOOLS_DIR}/scripts/run_benchmark_suite.sh}"
 # /opt/benchmarks (the README says so).
 METRICS_SCRIPT="${TOOLS_DIR:+${TOOLS_DIR}/scripts/show_metrics.sh}"
 [[ -n "${METRICS_SCRIPT}" && -f "${METRICS_SCRIPT}" ]] || METRICS_SCRIPT="${SCRIPT_DIR}/show_metrics.sh"
+# get_benchmark_results.sh too: on the GPU host it collects from this machine
+# when it is run without --host.
+RESULTS_SCRIPT="${TOOLS_DIR:+${TOOLS_DIR}/scripts/get_benchmark_results.sh}"
+[[ -n "${RESULTS_SCRIPT}" && -f "${RESULTS_SCRIPT}" ]] || RESULTS_SCRIPT="${SCRIPT_DIR}/get_benchmark_results.sh"
+# show_ledger_runs.sh prints the ledger's run table without copying anything.
+RUNS_SCRIPT="${TOOLS_DIR:+${TOOLS_DIR}/scripts/show_ledger_runs.sh}"
+[[ -n "${RUNS_SCRIPT}" && -f "${RUNS_SCRIPT}" ]] || RUNS_SCRIPT="${SCRIPT_DIR}/show_ledger_runs.sh"
 cd "${PUB}" || stop "cannot open ${PUB}"
 
 
@@ -1320,6 +1359,8 @@ if is_done bundles; then skipped 7; else
   [[ -f "${SUITE_SCRIPT}" ]] || stop "no run_benchmark_suite.sh found (looked for ${SUITE_SCRIPT}); the bundles need it to list and run their workloads"
   echo "run_benchmark_suite.sh for the bundles: ${SUITE_SCRIPT}"
   if [[ -f "${METRICS_SCRIPT}" ]]; then echo "show_metrics.sh for the bundles: ${METRICS_SCRIPT}"; else echo "NOTE: no show_metrics.sh found; the bundles will not include it"; fi
+  if [[ -f "${RESULTS_SCRIPT}" ]]; then echo "get_benchmark_results.sh for the bundles: ${RESULTS_SCRIPT}"; else echo "NOTE: no get_benchmark_results.sh found; the bundles will not include it"; fi
+  if [[ -f "${RUNS_SCRIPT}" ]]; then echo "show_ledger_runs.sh for the bundles: ${RUNS_SCRIPT}"; else echo "NOTE: no show_ledger_runs.sh found; the bundles will not include it"; fi
   rm -f "${WORK}/run.sh.template"
   for spec in "amd-ubuntu-2404:1" "nvidia-ubuntu-2404:2" "amd-ubuntu-2604:3" "nvidia-ubuntu-2604:4"; do
     IFS=: read -r name s <<<"${spec}"
@@ -1374,9 +1415,19 @@ if is_done bundles; then skipped 7; else
       tr -d '\r' <"${METRICS_SCRIPT}" >show_metrics.sh
       suite_files="${suite_files} show_metrics.sh"
     fi
-    printf 'results/\nbenchmark_suite_log/\n' >.gitignore
+    if [[ -f "${RESULTS_SCRIPT}" ]]; then
+      tr -d '\r' <"${RESULTS_SCRIPT}" >get_benchmark_results.sh
+      suite_files="${suite_files} get_benchmark_results.sh"
+    fi
+    if [[ -f "${RUNS_SCRIPT}" ]]; then
+      tr -d '\r' <"${RUNS_SCRIPT}" >show_ledger_runs.sh
+      suite_files="${suite_files} show_ledger_runs.sh"
+    fi
+    # DIRECTORIES/ and RUNTIME_LEDGERS/ are what get_benchmark_results.sh writes
+    # when it is run here without -o.
+    printf 'results/\nbenchmark_suite_log/\nDIRECTORIES/\nRUNTIME_LEDGERS/\n' >.gitignore
     bundle_readme "${s}" "${bundle}" "${want}" "${rows}" >README.md
-    # shellcheck disable=SC2086  # suite_files is one or two names
+    # shellcheck disable=SC2086  # suite_files is one to four names
     again git add .gitmodules .gitignore README.md ${suite_files} || stop "git add failed in ${bundle}"
     # shellcheck disable=SC2086
     git update-index --chmod=+x ${suite_files}
@@ -1417,7 +1468,7 @@ if is_done enduser-test; then skipped 8; else
       "https://github.com/${ORG}/${bundle}.git" "${WORK}/_test_clone" </dev/null ||
       stop "cloning ${bundle} at ${VERSION} failed"
     [[ -x "${WORK}/_test_clone/run_benchmark_suite.sh" ]] || stop "run_benchmark_suite.sh in ${bundle} is missing or not executable"
-    for f in run_benchmark_suite.sh show_metrics.sh; do
+    for f in run_benchmark_suite.sh show_metrics.sh get_benchmark_results.sh show_ledger_runs.sh; do
       [[ ! -f "${WORK}/_test_clone/${f}" || -x "${WORK}/_test_clone/${f}" ]] || stop "${f} in ${bundle} is not executable"
     done
     [[ ! -e "${WORK}/_test_clone/run.sh" ]] || stop "${bundle} still has run.sh; step 7 should have removed it"
@@ -1499,7 +1550,8 @@ if is_done generator; then skipped 9; else
   # Python caches come along with cp -a whenever the generator's scripts or
   # tests were run before the copy. They are never published.
   removed=$(find . -path ./.git -prune -o -type d \( -name __pycache__ -o -name .pytest_cache -o -name .ruff_cache -o -name .mypy_cache \) -prune -print -exec rm -rf {} + | wc -l)
-  removed=$((removed + $(find . -path ./.git -prune -o -type f -name '*.py[co]' -print -delete | wc -l)))
+  # -delete turns on -depth, which disables -prune, so skip .git with a -path test instead.
+  removed=$((removed + $(find . -type f -name '*.py[co]' -not -path './.git/*' -print -delete | wc -l)))
   echo "--- Python cache folders and files removed: ${removed}"
   # The copy is kept between runs, so lint it too: it is what gets pushed.
   lint_generator "${PUB}/${GENREPO}"

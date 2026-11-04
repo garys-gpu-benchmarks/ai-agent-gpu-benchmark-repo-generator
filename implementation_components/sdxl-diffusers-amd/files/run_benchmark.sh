@@ -52,6 +52,8 @@ Workload options:
   --num-inference-steps <n>     Denoising steps per image
   --guidance-scale <n>          Classifier-free guidance scale (0.0)
   --seed <n>                    RNG seed (42)
+  --prompt-len <n>              Synthetic prompt length in words (32)
+  --batch-size <n>              Images per pipeline call (1)
 
 Information:
   --specification               Print this workload's specification and exit
@@ -118,6 +120,8 @@ while [[ $# -gt 0 ]]; do
     --num-inference-steps) NUM_INFERENCE_STEPS="${2:-}"; shift 2 ;;
     --guidance-scale) GUIDANCE_SCALE="${2:-}"; shift 2 ;;
     --seed) SEED="${2:-}"; shift 2 ;;
+    --prompt-len) PROMPT_LEN="${2:-}"; shift 2 ;;
+    --batch-size) BATCH_SIZE="${2:-}"; shift 2 ;;
     --help|--specification|--matrix-definition|--benchmark-specification|--benchmark-definition) shift ;;
     --remote|--ssh|--host) die "This repository is local-only and does not support remote execution." ;;
     *) die "Unknown option: $1" ;;
@@ -166,6 +170,12 @@ NUM_IMAGES="${NUM_IMAGES:-$(yaml_get num_images)}"
 NUM_INFERENCE_STEPS="${NUM_INFERENCE_STEPS:-$(yaml_get num_inference_steps)}"
 GUIDANCE_SCALE="${GUIDANCE_SCALE:-$(yaml_get guidance_scale)}"
 SEED="${SEED:-$(yaml_get seed)}"
+# infer_sdxl.py reads "true" as its own default (full synthetic prompt, batch 1),
+# so a config without these keys behaves as before.
+PROMPT_LEN="${PROMPT_LEN:-$(yaml_get prompt_len)}"
+PROMPT_LEN="${PROMPT_LEN:-true}"
+BATCH_SIZE="${BATCH_SIZE:-$(yaml_get batch_size)}"
+BATCH_SIZE="${BATCH_SIZE:-true}"
 OUTPUT_FORMAT="${OUTPUT_FORMAT:-csv}"
 BACKEND="sdxl"
 IMAGE_RESOLUTION="${IMAGE_RESOLUTION:-256}"
@@ -181,6 +191,7 @@ BENCHMARK_RUN_COMMAND+=" --model-name ${MODEL_NAME} --precision ${PRECISION} --s
 BENCHMARK_RUN_COMMAND+=" --prompt-source ${PROMPT_SOURCE} --image-resolution ${IMAGE_RESOLUTION}"
 BENCHMARK_RUN_COMMAND+=" --num-images ${NUM_IMAGES} --num-inference-steps ${NUM_INFERENCE_STEPS}"
 BENCHMARK_RUN_COMMAND+=" --guidance-scale ${GUIDANCE_SCALE} --seed ${SEED}"
+BENCHMARK_RUN_COMMAND+=" --prompt-len ${PROMPT_LEN} --batch-size ${BATCH_SIZE}"
 set_benchmark_run_command "${BENCHMARK_RUN_COMMAND}"
 
 HOSTNAME_VALUE="$(hostname -s 2>/dev/null || hostname)"
@@ -210,6 +221,8 @@ chmod +x "${COMMAND_LOG}"
   echo "num_inference_steps=${NUM_INFERENCE_STEPS}"
   echo "guidance_scale=${GUIDANCE_SCALE}"
   echo "seed=${SEED}"
+  echo "prompt_len=${PROMPT_LEN}"
+  echo "batch_size=${BATCH_SIZE}"
 } > "${RUN_DIR}/cli_options.env"
 export PYTHONUNBUFFERED=1
 export HF_HOME="${HF_HOME:-${REPO_ROOT}/.cache/huggingface}"
@@ -232,6 +245,7 @@ run_collection() {
     --prompt-source "${PROMPT_SOURCE}" --image-resolution "${IMAGE_RESOLUTION}" \
     --num-images "${NUM_IMAGES}" --num-inference-steps "${NUM_INFERENCE_STEPS}" \
     --guidance-scale "${GUIDANCE_SCALE}" --seed "${SEED}" \
+    --prompt-len "${PROMPT_LEN}" --batch-size "${BATCH_SIZE}" \
     --output "${RUN_DIR}/sdxl.csv"
   echo "[RUN] ${collect_cmd}"
   echo "${collect_cmd}" >> "${COMMAND_LOG}"
@@ -241,6 +255,7 @@ run_collection() {
     --prompt-source "${PROMPT_SOURCE}" --image-resolution "${IMAGE_RESOLUTION}" \
     --num-images "${NUM_IMAGES}" --num-inference-steps "${NUM_INFERENCE_STEPS}" \
     --guidance-scale "${GUIDANCE_SCALE}" --seed "${SEED}" \
+    --prompt-len "${PROMPT_LEN}" --batch-size "${BATCH_SIZE}" \
     --output "${RUN_DIR}/sdxl.csv" | tee "${RAW_FILE}"
 }
 

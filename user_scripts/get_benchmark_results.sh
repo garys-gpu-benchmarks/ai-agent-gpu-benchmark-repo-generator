@@ -1,9 +1,10 @@
 #!/usr/bin/env bash
 # ==============================================================================
-# get_remote_info.sh
+# get_benchmark_results.sh
 #
-# Collects benchmark results from one remote benchmark machine (any of the four
-# platforms) into the current folder:
+# Collects benchmark results from a benchmark machine (any of the four
+# platforms) into the current folder. With --host it collects from that remote
+# machine over ssh; without --host it collects from this machine:
 #
 #   RUNTIME_LEDGERS/runtime_ledger_<first>_<last>_<time>.csv  (and .xlsx)
 #   DIRECTORIES/<workload>/results/raw/...
@@ -11,13 +12,15 @@
 #   DIRECTORIES/<workload>/results/runtime_ledger_<first>_<last>_<time>.csv
 #   DIRECTORIES/benchmark_suite_log/...         (run_benchmark_suite.sh logs)
 #
-# Everything comes over ONE ssh connection as ONE compressed tar stream.
-# Workloads and the ledger are found on the remote machine; nothing is
-# hard-coded per platform.
+# Remotely, everything comes over ONE ssh connection as ONE compressed tar
+# stream. Locally, the same collection runs on this machine with no ssh.
+# Workloads and the ledger are found automatically; nothing is hard-coded
+# per platform.
 #
-# Usage:   ./get_remote_info.sh --host HOST [--port PORT] [options]
-#          ./get_remote_info.sh [options] HOST [PORT]      (same, positional)
-# Help:    ./get_remote_info.sh --help
+# Usage:   ./get_benchmark_results.sh --host HOST [--port PORT] [options]   (remote)
+#          ./get_benchmark_results.sh [options] HOST [PORT]   (remote, positional)
+#          ./get_benchmark_results.sh [options]               (this machine)
+# Help:    ./get_benchmark_results.sh --help
 #
 # Exit codes:
 #   0  results collected
@@ -37,6 +40,7 @@ remote_user="root"
 remote_host=""
 remote_port="22"
 ssh_key=""
+local_mode=false
 out_dir="."
 remote_root="/opt/benchmarks"
 remote_ledger=""
@@ -47,19 +51,22 @@ timestamp="$(date '+%Y%m%d_%H%M%S')"
 
 usage() {
   cat <<EOF
-Usage: ${SCRIPT_NAME} --host HOST [--port PORT] [options]
-       ${SCRIPT_NAME} [options] HOST [PORT]
+Usage: ${SCRIPT_NAME} --host HOST [--port PORT] [options]    remote machine
+       ${SCRIPT_NAME} [options] HOST [PORT]                 remote machine
+       ${SCRIPT_NAME} [options]                             this machine
 
-Copies from the benchmark machine HOST (ssh port PORT, default 22):
+Copies from the benchmark machine HOST (ssh port PORT, default 22), or from
+this machine when no host is given:
   - the runtime ledger, saved as a timestamped CSV (and an Excel copy)
   - every workload's results/raw and results/parsed folders
   - run_benchmark_suite.sh logs
 into RUNTIME_LEDGERS/ and DIRECTORIES/ under the output folder.
 
-Connection:
+Connection (remote machine only):
       --host HOST       Benchmark machine: IP address or name, optionally
                         with a user (user@host). HOST may instead be given
-                        as the first argument.
+                        as the first argument. Leave it out to collect from
+                        this machine.
   -p, --port PORT       SSH port, 1-65535. Default: 22. PORT may instead be
                         given as the second argument.
       --user USER       Remote user. Default: the user in user@host, else root.
@@ -68,9 +75,9 @@ Connection:
 
 Output:
   -o, --output DIR      Output folder. Default: the current folder.
-  -r, --remote-root DIR Folder holding the workloads on the remote machine.
+  -r, --remote-root DIR Folder holding the workloads on the benchmark machine.
                         Default: /opt/benchmarks
-  -l, --ledger FILE     Ledger path on the remote machine.
+  -l, --ledger FILE     Ledger path on the benchmark machine.
                         Default: the first that exists of
                         ${LEDGER_CANDIDATES[*]}
       --no-xlsx         Do not create the Excel (.xlsx) copy of the ledger.
@@ -83,6 +90,8 @@ Examples:
   ./${SCRIPT_NAME} --host 203.0.113.20 --port 13178        # cloud pod on port 13178
   ./${SCRIPT_NAME} --host ubuntu@203.0.113.30 -i ~/.ssh/id_ed25519 -o ~/results
   ./${SCRIPT_NAME} 203.0.113.20 13178                      # positional form, same as above
+  ./${SCRIPT_NAME}                                         # this machine, from /opt/benchmarks
+  ./${SCRIPT_NAME} -r /opt/benchmarks -o ~/results         # this machine, into ~/results
 EOF
 }
 
@@ -139,7 +148,15 @@ parse_args() {
   fi
   remote_host=${host_opt:-${pos_host}}
   remote_port=${port_opt:-${pos_port:-22}}
-  [[ -n "${remote_host}" ]] || die_usage "give the benchmark machine with --host HOST"
+  if [[ -z "${remote_host}" ]]; then
+    # No host: collect from this machine. Connection options without a host
+    # usually mean --host was forgotten, so say so instead of ignoring them.
+    [[ -z "${port_opt}" ]] || die_usage "--port needs --host HOST (without --host, results are collected from this machine)"
+    [[ -z "${user_opt}" ]] || die_usage "--user needs --host HOST (without --host, results are collected from this machine)"
+    [[ -z "${ssh_key}" ]] || die_usage "--identity needs --host HOST (without --host, results are collected from this machine)"
+    local_mode=true
+    return 0
+  fi
 
   if [[ "${remote_host}" == *@* ]]; then
     local host_user=${remote_host%@*}
@@ -188,6 +205,11 @@ explain_ssh_error() {
 }
 
 connect() {
+  if [[ "${local_mode}" == true ]]; then
+    echo "No --host given: collecting from this machine ($(hostname))"
+    [[ -d "${remote_root}" ]] || die "${remote_root} does not exist on this machine. To collect from a benchmark machine, give --host HOST; for another folder here, give -r DIR."
+    return 0
+  fi
   ssh_cmd=(ssh -p "${remote_port}"
     -o ConnectTimeout=15 -o ServerAliveInterval=30 -o StrictHostKeyChecking=accept-new)
 
@@ -218,14 +240,14 @@ connect() {
   die "none of the keys in ${HOME}/.ssh were accepted"
 }
 
-# Runs on the remote machine. Writes one gzip-compressed tar stream to stdout
+# Runs on the benchmark machine (over ssh, or locally without --host). Writes one gzip-compressed tar stream to stdout
 # and progress to stderr. Arguments: workload root, ledger path ('' = search).
 read -r -d '' REMOTE_SCRIPT <<'REMOTE'
 set -uo pipefail
 root=$1
 ledger=$2
 shift 2
-cd "${root}" || { echo "ERROR: cannot open ${root} on the remote machine" >&2; exit 3; }
+cd "${root}" || { echo "ERROR: cannot open ${root} on the benchmark machine" >&2; exit 3; }
 tmp=$(mktemp -d) || exit 4
 trap 'rm -rf "${tmp}"' EXIT
 mkdir -p "${tmp}/_meta"
@@ -279,7 +301,11 @@ transfer() {
   rm -rf "${dest}/_meta"
 
   echo
-  echo "Collecting from ${remote_root} on the remote machine..."
+  if [[ "${local_mode}" == true ]]; then
+    echo "Collecting from ${remote_root} on this machine..."
+  else
+    echo "Collecting from ${remote_root} on the remote machine..."
+  fi
   # ssh joins its arguments into one remote command line, so quote them.
   local remote_args
   remote_args=$(printf '%q ' "${remote_root}" "${remote_ledger}" "${LEDGER_CANDIDATES[@]}")
@@ -288,11 +314,15 @@ transfer() {
   # Those warnings are harmless; hide them.
   local -a untar=(tar -xf - -C "${dest}")
   if tar --version 2>/dev/null | grep -q 'GNU tar'; then untar+=(--warning=no-timestamp); fi
-  "${ssh_cmd[@]}" "${remote_user}@${remote_host}" "bash -s -- ${remote_args}" <<<"${REMOTE_SCRIPT}" \
+  # Locally the same collection script runs under bash, so the result is
+  # identical to a remote collection.
+  local -a collector=(bash -s -- "${remote_root}" "${remote_ledger}" "${LEDGER_CANDIDATES[@]}")
+  [[ "${local_mode}" == true ]] || collector=("${ssh_cmd[@]}" "${remote_user}@${remote_host}" "bash -s -- ${remote_args}")
+  "${collector[@]}" <<<"${REMOTE_SCRIPT}" \
     | gzip -dc \
     | "${untar[@]}"
   local -a status=("${PIPESTATUS[@]}")
-  [[ "${status[0]}" -eq 0 ]] || die "the remote collection failed (exit code ${status[0]})"
+  [[ "${status[0]}" -eq 0 ]] || die "the collection failed (exit code ${status[0]})"
   [[ "${status[1]}" -eq 0 && "${status[2]}" -eq 0 ]] || die "the transfer was incomplete (unpacking failed)"
   [[ -d "${dest}/_meta" ]] || die "the transfer was incomplete (no metadata received)"
 }
@@ -344,7 +374,7 @@ finish() {
   local label remote_name ledger_csv="" ledger_xlsx="" wl copies=0
 
   label=$(workload_label "${meta}/workloads.txt")
-  remote_name=$(cat "${meta}/hostname.txt" 2>/dev/null || echo "${remote_host}")
+  remote_name=$(cat "${meta}/hostname.txt" 2>/dev/null || echo "${remote_host:-localhost}")
 
   if [[ -f "${meta}/runtime_ledger.csv" ]]; then
     ledger_csv="${out_dir}/RUNTIME_LEDGERS/runtime_ledger_${label}_${timestamp}.csv"
@@ -363,7 +393,11 @@ finish() {
 
   echo
   echo "======================================================================"
-  echo "Collected from ${remote_name} (${remote_host}, port ${remote_port})"
+  if [[ "${local_mode}" == true ]]; then
+    echo "Collected from ${remote_name} (this machine)"
+  else
+    echo "Collected from ${remote_name} (${remote_host}, port ${remote_port})"
+  fi
   echo "Workload results:  ${dest}/"
   if [[ -n "${ledger_csv}" ]]; then
     echo "Runtime ledger:    ${ledger_csv}"
@@ -371,7 +405,7 @@ finish() {
     [[ "${make_xlsx}" == true && -z "${ledger_xlsx}" ]] && echo "Excel copy:        not created (needs Windows with Excel)"
     echo "Ledger also copied into ${copies} workload results folders"
   else
-    echo "Runtime ledger:    not found on the remote machine"
+    echo "Runtime ledger:    not found on the benchmark machine"
   fi
   echo "Completed: $(date)"
   echo "======================================================================"
@@ -380,7 +414,7 @@ finish() {
 main() {
   parse_args "$@"
   echo "======================================================================"
-  echo "get_remote_info: collecting benchmark results"
+  echo "get_benchmark_results: collecting benchmark results"
   echo "Started: $(date)"
   echo "======================================================================"
   connect

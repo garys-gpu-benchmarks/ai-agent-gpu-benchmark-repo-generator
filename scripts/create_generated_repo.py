@@ -206,16 +206,17 @@ def _copy_template(source: Path, destination: Path) -> None:
 
 
 # Laptop-side tools the operator runs from the project folder (the folder that
-# holds the template/workload folder). get_remote_info.sh writes DIRECTORIES/ and
+# holds the template/workload folder). get_benchmark_results.sh writes DIRECTORIES/ and
 # RUNTIME_LEDGERS/ next to itself; show_metrics.sh prints one workload's metrics
 # from a runtime ledger (local or over ssh). The master copies stay in
-# templates/suite-tools/scripts/ (published as gpu-bench-suite); they are never
+# user_scripts/ (the suite tools are published as gpu-bench-suite); they are never
 # copied into a workload. The VM copy is separate: create_one_workload.py and
 # the bundle publish both install show_metrics.sh and run_benchmark_suite.sh
 # at /opt/benchmarks.
 OPERATOR_TOOLS = (
-    "templates/suite-tools/scripts/get_remote_info.sh",
-    "templates/suite-tools/scripts/show_metrics.sh",
+    "user_scripts/get_benchmark_results.sh",
+    "user_scripts/show_ledger_runs.sh",
+    "user_scripts/show_metrics.sh",
 )
 
 
@@ -245,6 +246,28 @@ def refresh_show_metrics(source_root: Path) -> bool:
         )
         return False
     return True
+
+
+# Every workload repository carries a copy of show_metrics.sh at its top level,
+# next to run_benchmark.sh, so a single downloaded repository can show its own
+# runs (`./show_metrics.sh 101`). The master copy stays in user_scripts/; this
+# copy is always replaced, and the publish script refreshes it again.
+WORKLOAD_TOOLS = ("user_scripts/show_metrics.sh",)
+
+
+def install_workload_tools(source_root: Path, repo_root: Path) -> list[Path]:
+    """Copy WORKLOAD_TOOLS to the top of the workload repository (LF, executable)."""
+    installed: list[Path] = []
+    for rel in WORKLOAD_TOOLS:
+        src = source_root / rel
+        if not src.is_file():
+            raise SystemExit(f"[FAIL] {rel} is missing from the template; every workload ships it.")
+        dst = repo_root / src.name
+        dst.write_bytes(src.read_bytes().replace(b"\r\n", b"\n"))
+        dst.chmod(dst.stat().st_mode | 0o111)
+        installed.append(dst)
+        print(f"[INFO] Installed {src.name} in the workload: {dst}")
+    return installed
 
 
 def install_operator_tools(source_root: Path, project_root: Path) -> list[Path]:
@@ -450,6 +473,7 @@ def main() -> int:
         ensure_gitkeep(repo_root)
         normalize_text_tree(repo_root)
         refresh_show_metrics(source_root)
+        install_workload_tools(source_root, repo_root)
         install_operator_tools(source_root, project_root)
         print(f"[PASS] Created generated repository: {repo_root}")
         print(f"[PASS] Active template copy: {active_copy}")

@@ -25,6 +25,42 @@ def pv(params, key, profile, default=""):
     return default if raw is None else raw
 
 
+DIRECTIONS = ("H2D", "D2H", "D2D")
+
+
+def copy_plan(direction_raw, pinned_raw):
+    """Directions to report, the copy kind that measures each, and every kind to run.
+
+    direction: "all" or a comma list of H2D, D2H, D2D (same values as hip_memcpy_bw).
+    pinned_memory: true uses cudaMallocHost for H2D/D2H; false uses malloc'd
+    (pageable) host memory. D2D has no host buffer. Pinned and pageable H2D both
+    run whenever H2D is reported, because the pinned-vs-pageable ratio needs both.
+    """
+    text = str(direction_raw or "all").strip()
+    if text.lower() in {"all", "true", ""}:
+        directions = list(DIRECTIONS)
+    else:
+        directions = []
+        for token in text.replace(";", ",").split(","):
+            token = token.strip().upper()
+            if not token:
+                continue
+            if token not in DIRECTIONS:
+                raise SystemExit(f"[FAIL] direction {token!r} is not one of all, H2D, D2H, D2D")
+            if token not in directions:
+                directions.append(token)
+        if not directions:
+            raise SystemExit("[FAIL] direction selected no copies")
+    pinned = str(pinned_raw if pinned_raw is not None else "true").strip().lower() not in {"false", "0", "no", "off"}
+    main = {d: d if (pinned or d == "D2D") else f"{d}_pageable" for d in directions}
+    kinds = list(dict.fromkeys(main.values()))
+    if "H2D" in directions:
+        for kind in ("H2D", "H2D_pageable"):
+            if kind not in kinds:
+                kinds.append(kind)
+    return directions, main, kinds, pinned
+
+
 def parse_line(text: str) -> dict[str, float]:
     out = {}
     for key in ("bandwidth_gb_s", "latency_us", "elapsed_s", "bytes"):
@@ -62,13 +98,16 @@ def main() -> int:
         subprocess.run(["bash", "scripts/build.sh"], check=True)
     if not Path("bin/cuda_memcpy").is_file():
         raise SystemExit("[FAIL] bin/cuda_memcpy missing; host memset is not a CUDA memcpy result")
+    directions, main_kind, kinds, pinned = copy_plan(
+        pv(sweep, "direction", args.profile, "all"), pv(sweep, "pinned_memory", args.profile, "true"))
+    print(f"[INFO] cuda_memcpy: directions={','.join(directions)} pinned_memory={str(pinned).lower()} kinds={','.join(kinds)}", flush=True)
     rows = []
     device_env = os.environ.copy()
     device_env["CUDA_VISIBLE_DEVICES"] = str(pv(sweep, "device_id", args.profile, "0") or "0")
     size = min_bytes
     while size <= max_bytes:
         metrics = {}
-        for kind in ("H2D", "D2H", "D2D", "H2D_pageable"):
+        for kind in kinds:
             completed = subprocess.run(
                 ["bin/cuda_memcpy", str(size), str(warmup), str(iters), kind],
                 check=False, capture_output=True, text=True, timeout=3600, env=device_env,
@@ -79,12 +118,15 @@ def main() -> int:
             if completed.returncode != 0 or "bandwidth_gb_s" not in parsed:
                 raise SystemExit(f"[FAIL] cuda_memcpy {kind} {size}: {text[-300:]}")
             metrics[kind] = parsed
+        ratio = ""
+        if "H2D" in metrics and "H2D_pageable" in metrics:
+            ratio = metrics["H2D"]["bandwidth_gb_s"] / max(metrics["H2D_pageable"]["bandwidth_gb_s"], 1e-9)
         rows.append({
             "status": "ok",
             "transfer_size_bytes": size,
             "_metrics": metrics,
-            "pinned_vs_pageable_host_memory_bandwidth_gb_s": metrics["H2D"]["bandwidth_gb_s"] / max(metrics["H2D_pageable"]["bandwidth_gb_s"], 1e-9),
-            "pinned_vs_pageable_bandwidth_ratio": metrics["H2D"]["bandwidth_gb_s"] / max(metrics["H2D_pageable"]["bandwidth_gb_s"], 1e-9),
+            "pinned_vs_pageable_host_memory_bandwidth_gb_s": ratio,
+            "pinned_vs_pageable_bandwidth_ratio": ratio,
             "error_message": "",
         })
         nxt = size * step
@@ -101,17 +143,16 @@ def main() -> int:
     largest = rows[-1]["transfer_size_bytes"] if rows else None
     for row in rows:
         metrics = row.pop("_metrics")
+        # A direction left out of yaml direction stays blank (not measured).
         if row["transfer_size_bytes"] == largest:
-            row["bandwidth_h2d_gbps"] = metrics["H2D"]["bandwidth_gb_s"]
-            row["bandwidth_d2h_gbps"] = metrics["D2H"]["bandwidth_gb_s"]
-            row["bandwidth_d2d_gbps"] = metrics["D2D"]["bandwidth_gb_s"]
+            for d in directions:
+                row[f"bandwidth_{d.lower()}_gbps"] = metrics[main_kind[d]]["bandwidth_gb_s"]
         else:
             row["pinned_vs_pageable_host_memory_bandwidth_gb_s"] = ""
             row["pinned_vs_pageable_bandwidth_ratio"] = ""
         if row["transfer_size_bytes"] == smallest:
-            row["latency_h2d_us"] = metrics["H2D"]["latency_us"]
-            row["latency_d2h_us"] = metrics["D2H"]["latency_us"]
-            row["latency_d2d_us"] = metrics["D2D"]["latency_us"]
+            for d in directions:
+                row[f"latency_{d.lower()}_us"] = metrics[main_kind[d]]["latency_us"]
     header = [
         "sample_index", "status", "transfer_size_bytes", "bandwidth_h2d_gbps",
         "bandwidth_d2h_gbps", "bandwidth_d2d_gbps", "latency_h2d_us",

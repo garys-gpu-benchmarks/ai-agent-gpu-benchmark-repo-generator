@@ -36,6 +36,16 @@ CONTRACT_REL = Path("config") / "ci_contract.yaml"
 WORKLOAD_WORKFLOWS_REL = Path("templates") / "workload" / ".github" / "workflows"
 SHARED_WORKFLOWS_REL = Path("templates") / "shared-workflows"
 SUITE_TOOLS_REL = Path("templates") / "suite-tools"
+# Master copies of the operator scripts, in one place at the generator root.
+# Generation never copies this folder into a workload (init_generated_repo.py
+# SHARED_DIRS). The suite tools below are emitted to gpu-bench-suite/scripts/.
+USER_SCRIPTS_REL = Path("user_scripts")
+SUITE_TOOL_SCRIPTS = (
+    "run_benchmark_suite.sh",
+    "show_metrics.sh",
+    "show_ledger_runs.sh",
+    "get_benchmark_results.sh",
+)
 
 PLACEHOLDER_RE = re.compile(r"__[A-Z][A-Z0-9_]*__")
 OS_LABEL_RE = re.compile(r"ubu(\d{2})(\d{2})$")

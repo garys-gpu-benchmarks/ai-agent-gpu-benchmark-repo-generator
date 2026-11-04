@@ -96,6 +96,10 @@ def _from_definition(path: Path) -> tuple[str, list[str], dict, str]:
         if fields.get(name) not in ("", None, "—", "-", "--")
     ]
     raw = fields.get("Profile Parameter Values", "")
+    if (not raw or raw in ("--", "TBD")) and not parameters:
+        # A workload with every Parameter_NN slot "-" (102/202/302/402 since
+        # TEMPLATE_00_119) has nothing to sweep; its config gets an empty sweep.
+        return workload, parameters, {}, str(fields.get("Execution Domain", "")).strip()
     if not raw or raw in ("--", "TBD"):
         raise SystemExit("[FAIL] benchmark_specification.json has no Profile Parameter Values.")
     values = json.loads(raw)

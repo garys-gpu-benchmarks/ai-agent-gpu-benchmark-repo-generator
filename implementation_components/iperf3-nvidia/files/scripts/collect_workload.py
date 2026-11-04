@@ -8,6 +8,7 @@ import csv
 import io
 import json
 import os
+import re
 import shutil
 import subprocess
 import time
@@ -31,6 +32,29 @@ def as_list(value):
 # throughput metric report the cap: 9.99 Gbit/s on every profile while TCP on
 # the same loopback reached 55 Gbit/s.
 DEFAULT_UDP_RATE = "0"
+
+
+# iperf3 3.20 (Ubuntu 26.04) rejects a UDP -l above the 65507-byte payload limit.
+# buffer_length stays the workbook value for TCP; UDP is clamped to that limit.
+UDP_MAX_BLOCK_BYTES = 65507
+
+
+def block_bytes(length: str) -> int | None:
+    match = re.fullmatch(r"(\d+(?:\.\d+)?)([KMGkmg])?", str(length or "").strip())
+    if not match:
+        return None
+    scale = {"": 1, "K": 1024, "M": 1024 ** 2, "G": 1024 ** 3}[(match.group(2) or "").upper()]
+    return int(float(match.group(1)) * scale)
+
+
+def length_for_protocol(protocol: str, length: str) -> str:
+    text = str(length or "").strip()
+    if protocol != "udp" or not text:
+        return text
+    nbytes = block_bytes(text)
+    if nbytes is not None and nbytes > UDP_MAX_BLOCK_BYTES:
+        return str(UDP_MAX_BLOCK_BYTES)
+    return text
 
 
 def udp_rate(raw) -> str:
@@ -99,8 +123,9 @@ def iperf(protocol: str, port: int, seconds: int, streams: int, reverse, bandwid
         ]
         if protocol == "udp":
             cmd += ["-u", "-b", bandwidth]
-        if str(length).strip():
-            cmd += ["-l", str(length).strip()]
+        block = length_for_protocol(protocol, length)
+        if block:
+            cmd += ["-l", block]
         if str(window).strip():
             cmd += ["-w", str(window).strip()]
         try:
