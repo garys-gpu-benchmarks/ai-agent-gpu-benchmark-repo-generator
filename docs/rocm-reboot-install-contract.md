@@ -204,7 +204,11 @@ cat /opt/benchmarks/<repo-name>/results/install_status.txt
 
 with a blank line before and after the two guidance lines.
 
-After successful completion, perform one final MOTD sync so the complete step history and `SETUP complete` marker are visible on the next login. The MOTD/status should indicate completion, and the script prints `setup.sh now complete` to its own output. It does not use `wall`: the broadcast rang the terminal bell and printed a "Broadcast message from root" banner on every logged-in terminal.
+At the start of setup, when `amdgpu-dkms` is installed but is not the module now running (or is not installed at all), print a notice that a reboot may be required and that the operator will be told 30 seconds before it happens. Skip that notice when the DKMS module is already the running driver, when ROCm setup is skipped, and on the systemd resume after the reboot. The first workload that installs the driver is the one that prints it.
+
+Immediately before the reboot, print the 30-second warning with the local clock time of the reboot, wait until that time, and then reboot. When `run_benchmark_suite.sh` is an ancestor process, the warning's rerun line is that process's directory and arguments (`cd <cwd> && ./run_benchmark_suite.sh --baseline` when those were the arguments), saved in `results/benchmark_suite_command.txt` so the post-boot completion banner repeats the same command. The warning goes to setup's own output, to `/dev/tty` when that is a different destination, and once through `wall`.
+
+After successful completion, perform one final MOTD sync so the complete step history and `SETUP complete` marker are visible on the next login. The MOTD/status should indicate completion, and the script prints `setup.sh now complete` to its own output. It does not use `wall`: the broadcast rang the terminal bell and printed a "Broadcast message from root" banner on every logged-in terminal. When this run is the systemd resume after the reboot (`--resume-from-service`), that line is followed by a banner naming the repository, the local finish time, and the saved `run_benchmark_suite.sh` command. A run that reloaded amdgpu in place does not print the banner.
 
 ## Completion Cleanup
 
@@ -230,7 +234,7 @@ test ! -f /etc/systemd/system/<repo-name>-setup-resume.service
 source ~/.bashrc
 which rvs
 rvs --version
-bash run_benchmark.sh --smoke --validate
+bash run_benchmark.sh --smoke
 ```
 
 Expected setup markers:

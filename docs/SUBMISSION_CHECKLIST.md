@@ -148,8 +148,7 @@
            131/231 use concurrent `sglang.bench_serving` or `scripts/bench_serving.py`.
            For 130/131, setup must verify `import aiter` and the runner must call
            `wait_for_server` (default 600 s). Do not run 130 and 131 together, or
-           230 and 231 together (shared port 30000). LLM Serving yaml
-           `sweep.profile` must be `baseline`. Call `begin_benchmark_run` so
+           230 and 231 together (shared port 30000). Call `begin_benchmark_run` so
            `die()` appends a ledger row, and call `mark_benchmark_measure_start`
            after `ensure_setup.sh` returns. For 101/301 use `rvs --version` or `rvs -g`;
            for 112/312 use 30s/60s/120s timeouts plus retry; for 117/317 map to
@@ -256,6 +255,8 @@
            `YYYY-MM-DD HH:MM:SS  PHASE|STEP|SETUP` formatting.
 - [ ] 3.40i On successful local completion, setup prints `setup.sh now complete`
            to its own output (no `wall` broadcast) and writes persistent completion status to `/etc/motd`.
+           After the reboot, the systemd resume also prints the `SETUP COMPLETE:` banner
+           with the repository name, local finish time, and the suite command.
 - [ ] 3.40k For ROCm runtime setup flows, `setup.sh` follows
            `docs/rocm-reboot-install-contract.md`: installs/enables a systemd oneshot
            auto-resume service before reboot-capable ROCm steps, resumes with
@@ -333,7 +334,7 @@
 - [ ] 3.68 `gpu-smoke.yml` triggers on `workflow_dispatch` only (never `pull_request`), has
            `permissions: contents: read`, and its only job calls
            `<owner>/shared-workflows/.github/workflows/gpu-smoke.yml@<ref>`, which runs
-           `run_benchmark.sh --<profile> --validate` on `[self-hosted, gpu, <vendor>, <os_label>]`
+           `run_benchmark.sh --<profile>` on `[self-hosted, gpu, <vendor>, <os_label>]`
            and uploads `results/summary.json`, `results/environment.json` and `results/parsed/`.
 - [ ] 3.69 No workflow uses `continue-on-error: true` or `|| true` on a lint or validation step.
            `python3 scripts/ci_contract.py --check-callers <repo>` passes.

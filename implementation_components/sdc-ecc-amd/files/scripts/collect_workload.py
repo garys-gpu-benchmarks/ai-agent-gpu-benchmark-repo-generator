@@ -171,8 +171,8 @@ def main() -> int:
         for _ in range(iters):
             buf = torch.zeros(n, device=device, dtype=torch.int32)
             if pattern in {"walking-1s", "walking-ones", "walking_1s"}:
-                shifts = torch.arange(n, device=device) % 32
-                expected = (torch.ones(n, device=device, dtype=torch.int32) << shifts)
+                shifts = (torch.arange(n, device=device) % 32).to(dtype=torch.int32)
+                expected = (torch.ones(n, device=device, dtype=torch.int32) << shifts).to(dtype=torch.int32)
                 buf.copy_(expected)
                 mismatch_count = int((buf != expected).sum().item())
             else:

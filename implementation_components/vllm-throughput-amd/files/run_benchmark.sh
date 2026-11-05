@@ -2,7 +2,7 @@
 # File: run_benchmark.sh
 # Version: 1.0.0
 # Description: Every profile launches a real vLLM OpenAI-compatible server.
-# Execution: bash run_benchmark.sh [--smoke|--baseline|--extended] [--validate]
+# Execution: bash run_benchmark.sh [--smoke|--baseline|--extended]
 set -euo pipefail
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_NAME="$(basename "${REPO_ROOT}")"
@@ -24,21 +24,12 @@ Every profile starts python -m vllm.entrypoints.openai.api_server.
 Smoke reduces request dimensions but does not substitute the server.
 The client is scripts/benchmark_serving.py.
 
-Profiles:
+Profiles (default: --smoke):
   --smoke                       Run smoke profile
   --baseline                    Run baseline profile
   --extended                    Run extended profile
 
-Execution:
-  --config <file>               Config file (default: config/benchmark_config.yaml)
-
-Validation and logging:
-  --validate                    Enable result validation (default)
-  --no-validate                 Skip result validation
-  --quiet                       Suppress nonessential stdout
-  --log-level <level>           ERROR|WARN|INFO|DEBUG (default: INFO)
-
-Workload options:
+Parameters (override the profile's value):
   --model-name <name>           LLM weights
   --dtype <name>                Compute precision (vLLM wants bfloat16, not bf16)
   --tensor-parallel-size <n>    Tensor parallel GPUs
@@ -49,9 +40,18 @@ Workload options:
   --max-num-seqs <n>            Server-side sequences
   --max-concurrency <n>         In-flight client requests
 
-Information:
+General options:
+  --config <file>               Config file (default: config/benchmark_config.yaml)
+  --quiet                       Suppress nonessential stdout
+  --log-level <level>           ERROR|WARN|INFO|DEBUG (default: INFO)
   --specification               Print this workload's specification and exit
   --help                        Show this help and exit
+
+Examples:
+  bash run_benchmark.sh --smoke
+  bash run_benchmark.sh --baseline
+  bash run_benchmark.sh --extended
+  bash run_benchmark.sh --baseline --max-concurrency 4
 USAGE
 }
 
@@ -82,7 +82,6 @@ done
 
 PROFILE="smoke"
 CONFIG_FILE="config/benchmark_config.yaml"
-VALIDATE=1
 QUIET=0
 LOG_LEVEL_VALUE="INFO"
 MODEL_NAME=""
@@ -101,8 +100,7 @@ while [[ $# -gt 0 ]]; do
     --baseline) PROFILE="baseline"; shift ;;
     --extended) PROFILE="extended"; shift ;;
     --config) CONFIG_FILE="${2:-}"; shift 2 ;;
-    --validate) VALIDATE=1; shift ;;
-    --no-validate) VALIDATE=0; shift ;;
+    --validate) shift ;;  # ignored; result validation always runs
     --quiet) QUIET=1; shift ;;
     --log-level) LOG_LEVEL_VALUE="${2:-}"; shift 2 ;;
     --model-name) MODEL_NAME="${2:-}"; shift 2 ;;
@@ -174,6 +172,7 @@ DTYPE="${DTYPE:-$(yaml_get dtype)}"
 TENSOR_PARALLEL_SIZE="${TENSOR_PARALLEL_SIZE:-$(yaml_get tensor_parallel_size)}"
 GPU_MEMORY_UTILIZATION="${GPU_MEMORY_UTILIZATION:-$(yaml_get gpu_memory_utilization)}"
 PROMPT_SOURCE="${PROMPT_SOURCE:-$(yaml_get prompt_source)}"
+PROMPT_SOURCE="${PROMPT_SOURCE:-synthetic}"
 INPUT_LEN="${INPUT_LEN:-$(yaml_get input_len)}"
 OUTPUT_LEN="${OUTPUT_LEN:-$(yaml_get output_len)}"
 MAX_NUM_SEQS="${MAX_NUM_SEQS:-$(yaml_get max_num_seqs)}"
@@ -187,7 +186,6 @@ case "${DTYPE}" in
 esac
 
 BENCHMARK_RUN_COMMAND="bash run_benchmark.sh --${PROFILE}"
-[[ "${VALIDATE}" -eq 1 ]] && BENCHMARK_RUN_COMMAND+=" --validate"
 BENCHMARK_RUN_COMMAND+=" --model-name ${MODEL_NAME} --dtype ${DTYPE} --tensor-parallel-size ${TENSOR_PARALLEL_SIZE} --gpu-memory-utilization ${GPU_MEMORY_UTILIZATION} --prompt-source ${PROMPT_SOURCE} --input-len ${INPUT_LEN} --output-len ${OUTPUT_LEN} --max-num-seqs ${MAX_NUM_SEQS} --max-concurrency ${MAX_CONCURRENCY}"
 set_benchmark_run_command "${BENCHMARK_RUN_COMMAND}"
 
@@ -252,7 +250,7 @@ run_validate() {
 
 run_collection
 run_parse
-[[ "${VALIDATE}" -eq 1 ]] && run_validate
+run_validate
 record_benchmark_stop
 capture_journal_warnings "${RUN_DIR}" "${BENCHMARK_START_DATETIME}" "${STOP_TIME}"
 bash scripts/collect_hw_sw_info.sh "${RUN_DIR}"

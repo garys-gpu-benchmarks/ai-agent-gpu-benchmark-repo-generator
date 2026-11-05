@@ -132,7 +132,7 @@ def is_sweep_value(text: str) -> bool:
 def build_command(profile: str, parameters: list[str], values: dict[str, dict[str, str]]) -> str:
     if profile not in PROFILES:
         raise ValueError(profile)
-    parts = ["bash run_benchmark.sh", f"--{profile}", "--validate"]
+    parts = ["bash run_benchmark.sh", f"--{profile}"]
     missing: list[str] = []
     for parameter in parameters:
         value = (values.get(parameter) or {}).get(profile, "")
@@ -166,18 +166,11 @@ def coerce_scalar(text: str) -> Any:
     return text
 
 
-def default_profile_for_domain(execution_domain: str) -> str:
-    return "baseline" if "llm serving" in execution_domain.lower() else "smoke"
-
-
 def values_to_sweep(
     parameters: list[str],
     values: dict[str, dict[str, str]],
-    default_profile: str = "smoke",
 ) -> dict[str, Any]:
-    if default_profile not in PROFILES:
-        raise SystemExit(f"[FAIL] Invalid default profile {default_profile!r}.")
-    sweep: dict[str, Any] = {"profile": default_profile}
+    sweep: dict[str, Any] = {}
     for parameter in parameters:
         item = values.get(parameter)
         if not item:

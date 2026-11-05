@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # File: run_benchmark.sh
 # Description: Every profile loads real SDXL; smoke uses reduced resolution and steps.
-# Execution: bash run_benchmark.sh [--smoke|--baseline|--extended] [--validate]
+# Execution: bash run_benchmark.sh [--smoke|--baseline|--extended]
 set -euo pipefail
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_NAME="$(basename "${REPO_ROOT}")"
@@ -18,21 +18,12 @@ Measure Stable Diffusion XL inference latency, images/sec, and peak VRAM.
 Every profile loads stabilityai/stable-diffusion-xl-base-1.0.
 Smoke uses reduced resolution and steps, but never substitutes a tiny model.
 
-Profiles:
+Profiles (default: --smoke):
   --smoke                       Run smoke profile
   --baseline                    Run baseline profile
   --extended                    Run extended profile
 
-Execution:
-  --config <file>               Config file (default: config/benchmark_config.yaml)
-
-Validation and logging:
-  --validate                    Enable result validation (default)
-  --no-validate                 Skip result validation
-  --quiet                       Suppress nonessential stdout
-  --log-level <level>           ERROR|WARN|INFO|DEBUG (default: INFO)
-
-Workload options:
+Parameters (override the profile's value):
   --model-name <name>           SDXL variant token (sdxl-base-1.0)
   --precision <token>           Weight and activation precision (fp16)
   --scheduler <name>            Denoising scheduler (euler)
@@ -45,15 +36,23 @@ Workload options:
   --prompt-len <n>              Synthetic prompt length in words (32)
   --batch-size <n>              Images per pipeline call (1)
 
-Information:
+General options:
+  --config <file>               Config file (default: config/benchmark_config.yaml)
+  --quiet                       Suppress nonessential stdout
+  --log-level <level>           ERROR|WARN|INFO|DEBUG (default: INFO)
   --specification               Print this workload's specification and exit
   --help                        Show this help and exit
+
+Examples:
+  bash run_benchmark.sh --smoke
+  bash run_benchmark.sh --baseline
+  bash run_benchmark.sh --extended
+  bash run_benchmark.sh --baseline --batch-size 2
 USAGE
 }
 
 PROFILE="smoke"
 CONFIG_FILE="config/benchmark_config.yaml"
-VALIDATE=1
 QUIET=0
 LOG_LEVEL_VALUE="INFO"
 MODEL_NAME=""
@@ -82,8 +81,7 @@ while [[ $# -gt 0 ]]; do
     --baseline) PROFILE="baseline"; shift ;;
     --extended) PROFILE="extended"; shift ;;
     --config) CONFIG_FILE="${2:-}"; shift 2 ;;
-    --validate) VALIDATE=1; shift ;;
-    --no-validate) VALIDATE=0; shift ;;
+    --validate) shift ;;  # ignored; result validation always runs
     --quiet) QUIET=1; shift ;;
     --log-level) LOG_LEVEL_VALUE="${2:-}"; shift 2 ;;
     --model-name) MODEL_NAME="${2:-}"; shift 2 ;;
@@ -150,7 +148,6 @@ NUM_INFERENCE_STEPS="${NUM_INFERENCE_STEPS:-2}"
 (( NUM_INFERENCE_STEPS < 2 )) && NUM_INFERENCE_STEPS=2
 
 BENCHMARK_RUN_COMMAND="bash run_benchmark.sh --${PROFILE}"
-[[ "${VALIDATE}" -eq 1 ]] && BENCHMARK_RUN_COMMAND+=" --validate" || BENCHMARK_RUN_COMMAND+=" --no-validate"
 BENCHMARK_RUN_COMMAND+=" --model-name ${MODEL_NAME} --precision ${PRECISION} --scheduler ${SCHEDULER}"
 BENCHMARK_RUN_COMMAND+=" --prompt-source ${PROMPT_SOURCE} --image-resolution ${IMAGE_RESOLUTION}"
 BENCHMARK_RUN_COMMAND+=" --num-images ${NUM_IMAGES} --num-inference-steps ${NUM_INFERENCE_STEPS}"
@@ -237,7 +234,7 @@ run_validate() {
 
 run_collection
 run_parse
-[[ "${VALIDATE}" -eq 1 ]] && run_validate
+run_validate
 
 record_benchmark_stop
 capture_journal_warnings "${RUN_DIR}" "${BENCHMARK_START_DATETIME}" "${STOP_TIME}"

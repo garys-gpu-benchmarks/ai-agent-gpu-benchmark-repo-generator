@@ -179,7 +179,7 @@ Every one of the 128 repositories follows the same structure, so once you have r
 ```text
 <NNN>-<repo>/
 ├── setup.sh              # installs the ROCm/CUDA + Python stack (run_benchmark.sh calls it on first use)
-├── run_benchmark.sh      # bash run_benchmark.sh --smoke|--baseline|--extended [--validate]
+├── run_benchmark.sh      # bash run_benchmark.sh --smoke|--baseline|--extended
 ├── config/               # benchmark_config.yaml, hardware profiles
 ├── scripts/              # parse_results.py, validate_results.py, ...
 ├── tests/                # correctness thresholds
@@ -196,7 +196,7 @@ Every one of the 128 repositories follows the same structure, so once you have r
 git clone https://github.com/garys-gpu-benchmarks/115-gpu-bench-amd-babelstream-hbm-bandwidth-ubu2404
 cd 115-gpu-bench-amd-babelstream-hbm-bandwidth-ubu2404
 bash setup.sh --assume-yes
-bash run_benchmark.sh --smoke --validate           # ~1 min
+bash run_benchmark.sh --smoke           # ~1 min
 bash run_benchmark.sh --baseline                   # 3–5 min
 bash run_benchmark.sh --extended                   # 8–15 min
 ```

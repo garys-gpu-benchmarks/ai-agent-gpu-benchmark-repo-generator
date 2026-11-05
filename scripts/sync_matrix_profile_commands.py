@@ -89,7 +89,7 @@ def expected_commands(definitions_sheet, values_by_workload) -> dict[int, dict[s
         if not values:
             # A workload whose Parameter_NN slots are all "-" (102/202/302/402 since
             # TEMPLATE_00_119) legitimately has no rows: its command is the bare
-            # profile flag plus --validate.
+            # profile flag.
             if info["parameters"]:
                 raise SystemExit(f"[FAIL] {PROFILE_SHEET} has no rows for workload {workload}.")
             values = {}

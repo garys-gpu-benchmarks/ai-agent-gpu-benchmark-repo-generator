@@ -18,7 +18,7 @@ reusable workflows cannot drift apart.
 | Workflow | Runs on | Trigger in the caller | What it does |
 |---|---|---|---|
 | [`ci.yml`](.github/workflows/ci.yml) | GitHub-hosted `__HOSTED_RUNNER__` | `pull_request`, `push` to `main` | shellcheck, ruff __RUFF_VERSION__, `bash -n` / `compileall` / `run_benchmark.sh --help`, specification schema and config parse, `validate_results.py --seed-fixture`, required-file check, actionlint __ACTIONLINT_VERSION__, and a job summary table. Never installs a GPU stack or runs the benchmark. |
-| [`gpu-smoke.yml`](.github/workflows/gpu-smoke.yml) | self-hosted `[self-hosted, gpu, <vendor>, <os_label>]` | `workflow_dispatch` only | Verifies the pre-provisioned GPU stack (installs nothing), records `results/environment.json` (driver, ROCm/CUDA, kernel, GPU), runs `run_benchmark.sh --<profile> --validate`, puts headline metrics in the job summary, and uploads the results. |
+| [`gpu-smoke.yml`](.github/workflows/gpu-smoke.yml) | self-hosted `[self-hosted, gpu, <vendor>, <os_label>]` | `workflow_dispatch` only | Verifies the pre-provisioned GPU stack (installs nothing), records `results/environment.json` (driver, ROCm/CUDA, kernel, GPU), runs `run_benchmark.sh --<profile>`, puts headline metrics in the job summary, and uploads the results. |
 | [`self-test.yml`](.github/workflows/self-test.yml) | GitHub-hosted | push / pull request to this repository | Runs actionlint on these workflows and runs `ci.yml` against [`tests/fixtures/sample-workload`](tests/fixtures/sample-workload). |
 
 ### Inputs

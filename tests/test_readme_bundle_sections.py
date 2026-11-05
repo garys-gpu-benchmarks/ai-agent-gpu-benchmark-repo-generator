@@ -45,7 +45,7 @@ class ReadmeBundleSectionTests(unittest.TestCase):
                 flat = section.replace("\r\n", "\n")
                 self.assertIn("apt-get update && apt-get install -y git\ngit clone --recurse-submodules", flat)
                 self.assertIn(f"{number}-{repo} smoke run passed", flat)
-                self.assertIn("  && bash run_benchmark.sh --smoke --validate \\\n  && cd /opt/benchmarks \\\n  && echo \"Done:", flat)
+                self.assertIn("  && bash run_benchmark.sh --smoke \\\n  && cd /opt/benchmarks \\\n  && echo \"Done:", flat)
                 self.assertIn(f"./run_benchmark_suite.sh -w {example} --baseline", flat)
                 self.assertIn(f"workload {example}, baseline profile", flat)
                 for line in flat.splitlines():

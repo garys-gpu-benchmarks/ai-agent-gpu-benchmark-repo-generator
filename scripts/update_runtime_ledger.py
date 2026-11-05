@@ -774,7 +774,7 @@ def reconstruct_run_benchmark_command(
     """Fully resolved invocation from Profile Parameter Values, or an explicit string."""
     if (explicit or "").strip():
         return explicit.strip()
-    parts = ["bash run_benchmark.sh", f"--{profile}", "--validate"]
+    parts = ["bash run_benchmark.sh", f"--{profile}"]
     for flag, value in _yaml_profile_flags(fields, profile):
         parts.append(_format_flag(flag, value))
     return " ".join(parts)

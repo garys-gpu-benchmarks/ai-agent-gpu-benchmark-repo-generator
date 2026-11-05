@@ -16,7 +16,7 @@
 # Copy usage() and the early --help loop into generated run_benchmark.sh.
 # Do not source this file unchanged.
 # Replace the description line with this workload's header Description field.
-# Use default CLI profile smoke. YAML sweep.profile stays baseline for LLM Serving.
+# Use default CLI profile smoke.
 # Immediately after sourcing common.sh, call
 # capture_benchmark_run_command_submitted "$@" so the ledger records argv as
 # entered. After argument parsing, call begin_benchmark_run "${profile}" so
@@ -32,11 +32,13 @@
 # (default 600 s; HTTP 503 is not ready). Do not hardcode a 180 s wait.
 # Keep the script-header Options: field as a compact comma-separated inventory.
 # Document -h only if the parser accepts it.
-# Include Workload options only for flags this runner actually parses.
+# Include Parameters only for flags this runner actually parses.
 # materialize_generated_harness.py fills that section from Parameter_01..Parameter_20:
 # flag, short description, and the smoke, baseline, and extended values.
 # A value shared by all three profiles is printed once. Profile notes are omitted.
-# Include Expected environment overrides only when those flags exist.
+# The fourth example is one --baseline override of a single parameter.
+# Omit that line when the workload has no parameters.
+# If the runner parses an expected-environment flag, list it under General options.
 
 usage() {
   cat <<'USAGE'
@@ -44,38 +46,26 @@ Usage: bash run_benchmark.sh [OPTIONS]
 
 Run the configured benchmark and persist validated results.
 
-Profiles:
+Profiles (default: --smoke):
   --smoke                       Run smoke profile
   --baseline                    Run baseline profile
   --extended                    Run extended profile
 
-Execution:
-  --config <file>               Config file (default: config/benchmark_config.yaml)
-
-Validation and logging:
-  --validate                    Enable result validation (default)
-  --no-validate                 Skip result validation
-  --quiet                       Suppress nonessential stdout
-  --log-level <level>           ERROR|WARN|INFO|DEBUG (default: INFO)
-
-Expected environment overrides:
-  --kernel-version <ver>        Expected kernel version
-  --driver-version <ver>        Expected GPU driver version
-  --rocm-version <ver>          Expected ROCm version
-  --required-packages <list>    Expected ROCm package list
-
-Workload options:
+Parameters (override the profile's value):
   --<flag> <n>                  Short description (smoke <v>, baseline <v>, extended <v>)
 
-Information:
+General options:
+  --config <file>               Config file (default: config/benchmark_config.yaml)
+  --quiet                       Suppress nonessential stdout
+  --log-level <level>           ERROR|WARN|INFO|DEBUG (default: INFO)
   --specification               Print this workload's specification and exit
   --help                        Show this help and exit
 
 Examples:
-  bash run_benchmark.sh --smoke --validate
-  bash run_benchmark.sh --baseline --validate
-  bash run_benchmark.sh --extended --validate
-  bash run_benchmark.sh --specification
+  bash run_benchmark.sh --smoke
+  bash run_benchmark.sh --baseline
+  bash run_benchmark.sh --extended
+  bash run_benchmark.sh --baseline --num-threads 8
 USAGE
 }
 

@@ -354,7 +354,7 @@ recon = module.reconstruct_run_benchmark_command(
     "smoke",
     "",
 )
-if recon != "bash run_benchmark.sh --smoke --validate --kernel-version 6.8.0 --cuda-version 12.6":
+if recon != "bash run_benchmark.sh --smoke --kernel-version 6.8.0 --cuda-version 12.6":
     raise SystemExit("[FAIL] run_benchmark_command reconstruction is incorrect.")
 if module.reconstruct_run_benchmark_command({}, "baseline", "bash run_benchmark.sh --baseline --validate") != (
     "bash run_benchmark.sh --baseline --validate"
@@ -512,7 +512,6 @@ fields = {
 domain = fields.get("Execution Domain", "").lower()
 framework = fields.get("Framework", "").lower()
 runner = Path("run_benchmark.sh").read_text(encoding="utf-8", errors="replace")
-yaml_text = Path("config/benchmark_config.yaml").read_text(encoding="utf-8", errors="replace")
 if "begin_benchmark_run" not in runner:
     raise SystemExit("[FAIL] run_benchmark.sh must call begin_benchmark_run so die() writes a ledger row.")
 common = Path("scripts/lib/common.sh").read_text(encoding="utf-8", errors="replace")
@@ -522,10 +521,6 @@ if "benchmark_run_err_trap" not in common or "trap" not in common:
         "runtime ledger and still exits 1 (do not mask the failure)."
     )
 if "llm serving" in domain:
-    if re.search(r"profile:\s*smoke\b", yaml_text):
-        raise SystemExit("[FAIL] LLM Serving yaml default profile must be baseline, not smoke.")
-    if "profile: baseline" not in yaml_text:
-        raise SystemExit("[FAIL] LLM Serving yaml must seed sweep.profile as baseline.")
     if "wait_for_server" not in runner:
         raise SystemExit("[FAIL] LLM Serving run_benchmark.sh must call wait_for_server.")
     if re.search(r"wait_for_server[^\n]*\b180\b", runner):
@@ -533,7 +528,7 @@ if "llm serving" in domain:
     if "sglang" in framework and "600" not in runner and "BENCHMARK_READY_WAIT_SEC" not in runner:
         # default lives in common.sh; an explicit 600 or the helper default is enough
         pass
-print("[PASS] runtime ledger-on-error and LLM default/ready-wait contracts")
+print("[PASS] runtime ledger-on-error and LLM ready-wait contracts")
 PY
 
 echo "[INFO] Validating STREAM checksum and leftover-DB parse contracts..."

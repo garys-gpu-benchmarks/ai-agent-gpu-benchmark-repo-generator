@@ -7,7 +7,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from workload_option_help import option_help_lines, replace_workload_options
+from workload_option_help import option_help_lines, override_example, replace_override_example, replace_workload_options
 
 
 def _is_empty(path: Path) -> bool:
@@ -937,7 +937,18 @@ def write_runner(repo: Path, fields: dict[str, str]) -> None:
         return
     params = _parameters(fields)
     description = (fields.get("Execution Description With Parameters") or "Run the configured benchmark.").split(".")[0] + "."
-    option_lines = option_help_lines(fields) or ["  (none)"]
+    option_lines = option_help_lines(fields)
+    parameters_section = ""
+    if option_lines:
+        parameters_section = "Parameters (override the profile's value):\n" + "\n".join(option_lines) + "\n\n"
+    example_lines = [
+        "  bash run_benchmark.sh --smoke",
+        "  bash run_benchmark.sh --baseline",
+        "  bash run_benchmark.sh --extended",
+    ]
+    example = override_example(fields)
+    if example:
+        example_lines.append(f"  {example}")
     parse_cases = "\n".join(f'    {_flag_of(name)}) {name.upper()}="${{2:-}}"; shift 2 ;;' for name in params)
     yaml_assigns = "\n".join(
         f'{name.upper()}="${{{name.upper()}:-$(yaml_get {name})}}"' for name in params
@@ -956,8 +967,8 @@ def write_runner(repo: Path, fields: dict[str, str]) -> None:
         f"""#!/usr/bin/env bash
 # File: run_benchmark.sh
 # Description: {description}
-# Execution: bash run_benchmark.sh [--smoke|--baseline|--extended] [--validate]
-# Options: --smoke, --baseline, --extended, --config, --validate, --help
+# Execution: bash run_benchmark.sh [--smoke|--baseline|--extended]
+# Options: --smoke, --baseline, --extended, --config, --help
 # Requirements: bash, python3, repository-local .venv
 # Dependencies: common.sh, collect_workload.py
 # License: Apache-2.0
@@ -975,31 +986,20 @@ Usage: bash run_benchmark.sh [OPTIONS]
 
 {description}
 
-Profiles:
+Profiles (default: --smoke):
   --smoke                       Run smoke profile
   --baseline                    Run baseline profile
   --extended                    Run extended profile
 
-Execution:
+{parameters_section}General options:
   --config <file>               Config file (default: config/benchmark_config.yaml)
-
-Validation and logging:
-  --validate                    Enable result validation (default)
-  --no-validate                 Skip result validation
   --quiet                       Suppress nonessential stdout
   --log-level <level>           ERROR|WARN|INFO|DEBUG (default: INFO)
-
-Workload options:
-{chr(10).join(option_lines)}
-
-Information:
   --specification               Print this workload's specification and exit
   --help                        Show this help and exit
 
 Examples:
-  bash run_benchmark.sh --smoke --validate
-  bash run_benchmark.sh --baseline --validate
-  bash run_benchmark.sh --extended --validate
+{chr(10).join(example_lines)}
 USAGE
 }}
 
@@ -1015,7 +1015,6 @@ done
 
 PROFILE="smoke"
 CONFIG_FILE="config/benchmark_config.yaml"
-VALIDATE=1
 QUIET=0
 LOG_LEVEL_VALUE="INFO"
 {param_inits}
@@ -1026,8 +1025,7 @@ while [[ $# -gt 0 ]]; do
     --baseline) PROFILE="baseline"; shift ;;
     --extended) PROFILE="extended"; shift ;;
     --config) CONFIG_FILE="${{2:-}}"; shift 2 ;;
-    --validate) VALIDATE=1; shift ;;
-    --no-validate) VALIDATE=0; shift ;;
+    --validate) shift ;;  # ignored; result validation always runs
     --quiet) QUIET=1; shift ;;
     --log-level) LOG_LEVEL_VALUE="${{2:-}}"; shift 2 ;;
 {parse_cases}
@@ -1067,7 +1065,6 @@ OUTPUT_FORMAT="$(yaml_get output_format)"
 OUTPUT_FORMAT="${{OUTPUT_FORMAT:-csv}}"
 
 BENCHMARK_RUN_COMMAND="bash run_benchmark.sh --${{PROFILE}}"
-[[ "${{VALIDATE}}" -eq 1 ]] && BENCHMARK_RUN_COMMAND+=" --validate"
 {resolved_parts}
 set_benchmark_run_command "${{BENCHMARK_RUN_COMMAND}}"
 
@@ -1128,7 +1125,7 @@ run_validate() {{
 
 run_collection
 run_parse
-[[ "${{VALIDATE}}" -eq 1 ]] && run_validate
+run_validate
 record_benchmark_stop
 capture_journal_warnings "${{RUN_DIR}}" "${{BENCHMARK_START_DATETIME}}" "${{STOP_TIME}}"
 bash scripts/collect_hw_sw_info.sh "${{RUN_DIR}}"
@@ -1166,7 +1163,7 @@ finish_benchmark_run
 
 
 def _refresh_workload_option_help(repo_root: Path, fields: dict[str, str]) -> None:
-    """Fill Workload options in an overlay runner that write_runner left in place."""
+    """Fill Parameters and the fourth example in an overlay runner that write_runner left in place."""
     path = repo_root / "run_benchmark.sh"
     if not path.is_file() or path.stat().st_size == 0:
         return
@@ -1174,6 +1171,7 @@ def _refresh_workload_option_help(repo_root: Path, fields: dict[str, str]) -> No
         return
     text = path.read_text(encoding="utf-8")
     updated = replace_workload_options(text, option_help_lines(fields))
+    updated = replace_override_example(updated, override_example(fields))
     if updated != text:
         _write(path, updated)
 

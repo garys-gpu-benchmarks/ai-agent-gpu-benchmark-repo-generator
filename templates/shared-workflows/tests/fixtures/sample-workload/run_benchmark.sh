@@ -4,7 +4,7 @@ set -euo pipefail
 
 usage() {
   cat <<'USAGE'
-Usage: bash run_benchmark.sh [--smoke|--baseline|--extended] [--validate] [--help]
+Usage: bash run_benchmark.sh [--smoke|--baseline|--extended] [--help]
 USAGE
 }
 
@@ -15,7 +15,7 @@ while [[ $# -gt 0 ]]; do
     --smoke) PROFILE="smoke"; shift ;;
     --baseline) PROFILE="baseline"; shift ;;
     --extended) PROFILE="extended"; shift ;;
-    --validate) shift ;;
+    --validate) shift ;;  # ignored; result validation always runs
     *) echo "[FAIL] unknown option: $1" >&2; exit 1 ;;
   esac
 done

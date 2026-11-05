@@ -172,7 +172,7 @@ def expand_generate(instruction: str, fields: dict[str, str]) -> str:
         return f"{body} Sweep dimensions: {sweep}."
 
     if "command line" in text or "invocation" in text:
-        command = cmdline or "bash run_benchmark.sh --smoke --validate"
+        command = cmdline or "bash run_benchmark.sh --smoke"
         return f"```bash\n{command}\n```"
 
     if (
@@ -239,7 +239,7 @@ def expand_generate(instruction: str, fields: dict[str, str]) -> str:
             f"git clone https://github.com/{org}/{slug}.git\n"
             f"cd {slug}\n"
             f"sudo bash setup.sh --assume-yes\n"
-            f"bash run_benchmark.sh --smoke --validate\n"
+            f"bash run_benchmark.sh --smoke\n"
             f"```\n"
             f"Results are written to `results/benchmark.db` and `results/summary.json`."
         )
@@ -280,9 +280,9 @@ def expand_generate(instruction: str, fields: dict[str, str]) -> str:
         return (
             "```bash\n"
             "bash run_benchmark.sh --help\n"
-            "bash run_benchmark.sh --smoke --validate\n"
-            "bash run_benchmark.sh --baseline --validate\n"
-            "bash run_benchmark.sh --extended --validate\n"
+            "bash run_benchmark.sh --smoke\n"
+            "bash run_benchmark.sh --baseline\n"
+            "bash run_benchmark.sh --extended\n"
             "```\n"
             "`run_benchmark.sh --help` prints usage and exits. "
             "The harness calls `scripts/ensure_setup.sh` when `.setup_state` is absent."

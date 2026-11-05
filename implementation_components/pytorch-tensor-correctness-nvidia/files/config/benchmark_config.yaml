@@ -4,10 +4,8 @@
 # when the runner needs structured sweeps; keep the same tokens and numbers.
 # Command columns on Workload_Definitions are generated display. Sweep/list flags in those
 # commands are documentary; omit them so yaml expands cases.
-# sweep.profile is baseline for LLM Serving and smoke otherwise.
 # Add thresholds: or baselines: from hardware_profile.mi300x.yaml and Workload Type.
 sweep:
-  profile: smoke
   device_id: 0
   op_name: matmul,conv2d
   dtype:

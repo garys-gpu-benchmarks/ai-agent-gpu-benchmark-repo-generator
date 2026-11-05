@@ -47,9 +47,6 @@ README Overview was generated from leftover SDC text.
 A bare `bash run_benchmark.sh` is **smoke** (tiny local server). It must not
 download Mistral. Pass `--baseline` or `--extended` to start the real model.
 
-Yaml `sweep.profile` remains `baseline` so `self_check` still sees a baseline
-yaml default.
-
 Do not run 130 and 131 together, 230 and 231 together, 330 and 331
 together, or 430 and 431 together (shared port 30000). Sequential runs
 in one orchestrator are fine. On Ubuntu 26.04, 430/431 use torch

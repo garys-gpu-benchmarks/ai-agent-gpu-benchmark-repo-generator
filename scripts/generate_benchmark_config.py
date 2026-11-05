@@ -19,7 +19,6 @@ from matrix_profile_values import (  # noqa: E402
     DEFINITIONS_SHEET_ALIASES,
     PROFILE_SHEET,
     PROFILE_SHEET_ALIASES,
-    default_profile_for_domain,
     definitions_rows,
     load_profile_values,
     profile_values_json,
@@ -146,6 +145,10 @@ def _sweep_already_matches(existing: dict, sweep: dict) -> bool:
     current = existing.get("sweep")
     if not isinstance(current, dict):
         return False
+    # A string `profile: smoke` or `profile: baseline` is the old seed, not a
+    # workbook parameter. Keep merging so that seed is removed.
+    if "profile" not in sweep and isinstance(current.get("profile"), str):
+        return False
     for key, value in sweep.items():
         if key not in current or _norm_sweep(current[key]) != _norm_sweep(value):
             return False
@@ -172,14 +175,13 @@ def _refresh_locked_yaml_hash(output: Path) -> None:
 def main(argv: list[str]) -> int:
     args = parse_args(argv)
     if args.benchmark_definition:
-        workload, parameters, values, domain = _from_definition(args.benchmark_definition)
+        workload, parameters, values, _domain = _from_definition(args.benchmark_definition)
     elif args.matrix and args.workload:
-        workload, parameters, values, domain = _from_matrix(args.matrix, args.workload)
+        workload, parameters, values, _domain = _from_matrix(args.matrix, args.workload)
     else:
         raise SystemExit("[FAIL] Provide --benchmark-specification or --matrix plus --workload.")
 
-    default_profile = default_profile_for_domain(domain)
-    sweep = values_to_sweep(parameters, values, default_profile=default_profile)
+    sweep = values_to_sweep(parameters, values)
     args.output.parent.mkdir(parents=True, exist_ok=True)
     if _yaml_is_locked_overlay(args) and args.output.is_file():
         existing = yaml.safe_load(args.output.read_text(encoding="utf-8")) or {}
@@ -194,6 +196,10 @@ def main(argv: list[str]) -> int:
         else:
             for key, value in sweep.items():
                 current_sweep[key] = value
+            # Drop a leftover seed such as `profile: smoke`. The CLI flag
+            # chooses the profile. A real parameter named profile stays.
+            if "profile" not in sweep and isinstance(current_sweep.get("profile"), str):
+                current_sweep.pop("profile", None)
             existing["sweep"] = current_sweep
         header = (
             f"# Merged sweep from Parameters_SmokeBaselineExtend for workload {workload}.\n"
@@ -215,7 +221,6 @@ def main(argv: list[str]) -> int:
         "# when the runner needs structured sweeps; keep the same tokens and numbers.\n"
         "# Command columns on Workload_Definitions are generated display. Sweep/list flags in those\n"
         "# commands are documentary; omit them so yaml expands cases.\n"
-        "# sweep.profile is baseline for LLM Serving and smoke otherwise.\n"
         "# Add thresholds: or baselines: from hardware_profile.mi300x.yaml and Workload Type.\n"
     )
     body = yaml.safe_dump(payload, sort_keys=False, allow_unicode=True)

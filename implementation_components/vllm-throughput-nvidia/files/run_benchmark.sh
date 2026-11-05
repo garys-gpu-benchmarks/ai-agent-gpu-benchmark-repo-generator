@@ -2,8 +2,8 @@
 # File: run_benchmark.sh
 # Version: 1.0.0
 # Description: Every profile launches a real vLLM OpenAI-compatible server.
-# Execution: bash run_benchmark.sh [--smoke|--baseline|--extended] [--validate]
-# Options: --smoke, --baseline, --extended, --config, --validate, --no-validate, --quiet, --log-level, --serving-engine, --model-name, --dtype, --kv-cache-dtype, --gpu-memory-utilization, --max-model-len, --dataset-name, --input-len, --output-len, --num-prompts, --concurrency, --seed, --specification, --help
+# Execution: bash run_benchmark.sh [--smoke|--baseline|--extended]
+# Options: --smoke, --baseline, --extended, --config, --quiet, --log-level, --serving-engine, --model-name, --dtype, --kv-cache-dtype, --gpu-memory-utilization, --max-model-len, --dataset-name, --input-len, --output-len, --num-prompts, --concurrency, --seed, --specification, --help
 set -euo pipefail
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_NAME="$(basename "${REPO_ROOT}")"
@@ -22,21 +22,12 @@ Usage: bash run_benchmark.sh [OPTIONS]
 Run smoke/baseline/extended profile
 Run 1) Git provided Python vLLM inference server (vllm.entrypoints.openai.api_server.py), and 2) User-created Python http prompt-serving benchmark (benchmark_serving.py).
 
-Profiles:
+Profiles (default: --smoke):
   --smoke                       Run smoke profile
   --baseline                    Run baseline profile
   --extended                    Run extended profile
 
-Execution:
-  --config <file>               Config file (default: config/benchmark_config.yaml)
-
-Validation and logging:
-  --validate                    Enable result validation (default)
-  --no-validate                 Skip result validation
-  --quiet                       Suppress nonessential stdout
-  --log-level <level>           ERROR|WARN|INFO|DEBUG (default: INFO)
-
-Workload options:
+Parameters (override the profile's value):
   --serving-engine <name>       Inference server
   --model-name <name>           LLM weights
   --dtype <name>                Compute precision
@@ -50,21 +41,23 @@ Workload options:
   --concurrency <n>             In-flight requests
   --seed <n>                    RNG seed
 
-Information:
+General options:
+  --config <file>               Config file (default: config/benchmark_config.yaml)
+  --quiet                       Suppress nonessential stdout
+  --log-level <level>           ERROR|WARN|INFO|DEBUG (default: INFO)
   --specification               Print this workload's specification and exit
   --help                        Show this help and exit
 
 Examples:
-  bash run_benchmark.sh --smoke --validate
-  bash run_benchmark.sh --baseline --validate
-  bash run_benchmark.sh --extended --validate
-  bash run_benchmark.sh --specification
+  bash run_benchmark.sh --smoke
+  bash run_benchmark.sh --baseline
+  bash run_benchmark.sh --extended
+  bash run_benchmark.sh --baseline --max-concurrency 4
 USAGE
 }
 
 PROFILE="smoke"
 CONFIG_FILE="config/benchmark_config.yaml"
-VALIDATE=1
 QUIET=0
 LOG_LEVEL_VALUE="INFO"
 SERVING_ENGINE=""
@@ -103,8 +96,7 @@ while [[ $# -gt 0 ]]; do
     --baseline) PROFILE="baseline"; shift ;;
     --extended) PROFILE="extended"; shift ;;
     --config) CONFIG_FILE="${2:-}"; shift 2 ;;
-    --validate) VALIDATE=1; shift ;;
-    --no-validate) VALIDATE=0; shift ;;
+    --validate) shift ;;  # ignored; result validation always runs
     --quiet) QUIET=1; shift ;;
     --log-level) LOG_LEVEL_VALUE="${2:-}"; shift 2 ;;
     --serving-engine) SERVING_ENGINE="${2:-}"; shift 2 ;;
@@ -128,7 +120,6 @@ done
 set_log_level "${LOG_LEVEL_VALUE}"
 begin_benchmark_run "${PROFILE}"
 BENCHMARK_RUN_COMMAND="bash run_benchmark.sh --${PROFILE}"
-[[ "${VALIDATE}" -eq 1 ]] && BENCHMARK_RUN_COMMAND+=" --validate"
 set_benchmark_run_command "${BENCHMARK_RUN_COMMAND}"
 bash scripts/ensure_setup.sh
 mark_benchmark_measure_start
@@ -152,6 +143,7 @@ DTYPE="${DTYPE:-$(yaml_get dtype)}"
 TENSOR_PARALLEL_SIZE="${TENSOR_PARALLEL_SIZE:-$(yaml_get tensor_parallel_size)}"
 GPU_MEMORY_UTILIZATION="${GPU_MEMORY_UTILIZATION:-$(yaml_get gpu_memory_utilization)}"
 PROMPT_SOURCE="${PROMPT_SOURCE:-$(yaml_get prompt_source)}"
+PROMPT_SOURCE="${PROMPT_SOURCE:-synthetic}"
 INPUT_LEN="${INPUT_LEN:-$(yaml_get input_len)}"
 OUTPUT_LEN="${OUTPUT_LEN:-$(yaml_get output_len)}"
 MAX_NUM_SEQS="${MAX_NUM_SEQS:-$(yaml_get max_num_seqs)}"
@@ -159,7 +151,6 @@ MAX_CONCURRENCY="${MAX_CONCURRENCY:-$(yaml_get max_concurrency)}"
 REQUEST_RATE="${REQUEST_RATE:-$(yaml_get request_rate)}"
 OUTPUT_FORMAT="${OUTPUT_FORMAT:-csv}"
 BENCHMARK_RUN_COMMAND="bash run_benchmark.sh --${PROFILE}"
-[[ "${VALIDATE}" -eq 1 ]] && BENCHMARK_RUN_COMMAND+=" --validate"
 BENCHMARK_RUN_COMMAND+=" --model-name ${MODEL_NAME} --dtype ${DTYPE} --tensor-parallel-size ${TENSOR_PARALLEL_SIZE} --gpu-memory-utilization ${GPU_MEMORY_UTILIZATION} --input-len ${INPUT_LEN} --output-len ${OUTPUT_LEN} --max-concurrency ${MAX_CONCURRENCY}"
 set_benchmark_run_command "${BENCHMARK_RUN_COMMAND}"
 HOSTNAME_VALUE="$(hostname -s 2>/dev/null || hostname)"
@@ -223,7 +214,7 @@ run_validate() {
 }
 run_collection
 run_parse
-[[ "${VALIDATE}" -eq 1 ]] && run_validate
+run_validate
 record_benchmark_stop
 capture_journal_warnings "${RUN_DIR}" "${BENCHMARK_START_DATETIME}" "${STOP_TIME}"
 bash scripts/collect_hw_sw_info.sh "${RUN_DIR}"

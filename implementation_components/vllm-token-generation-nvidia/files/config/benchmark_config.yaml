@@ -1,6 +1,5 @@
 # Generated from BenchmarkSpecDefinitions.xlsx::Parameters_SmokeBaselineExtend
 sweep:
-  profile: baseline
   model_name: mistralai/Mistral-7B-v0.3
   dtype: bfloat16
   tensor_parallel_size: 1

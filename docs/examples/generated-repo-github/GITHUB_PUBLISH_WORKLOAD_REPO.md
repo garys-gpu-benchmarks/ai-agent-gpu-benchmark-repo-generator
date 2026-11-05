@@ -45,7 +45,7 @@ Before committing, review `git status` carefully. The nested `TEMPLATE_*_copy/` 
 Both workflow files are short callers stamped by the generator. The steps live once, for the whole suite, in the `shared-workflows` repository, pinned at a major tag (`@v1`).
 
 - `.github/workflows/ci.yml` runs on every pull request and push to `main`, on a GitHub-hosted runner: shellcheck, ruff, `bash -n`, `compileall`, `run_benchmark.sh --help`, specification schema, the results validator on a seeded fixture, required files, and actionlint. It never installs GPU software or runs the benchmark.
-- `.github/workflows/gpu-smoke.yml` runs only when started by hand (**Actions → GPU Smoke Benchmark → Run workflow**). It targets a self-hosted runner labeled `gpu`, the vendor (`amd` / `nvidia`) and the OS (`ubu2404` / `ubu2604`), verifies the pre-provisioned GPU stack, records `results/environment.json`, runs the chosen profile with `--validate`, and uploads the results. It is never triggered by pull requests, so code from a fork cannot reach the GPU host.
+- `.github/workflows/gpu-smoke.yml` runs only when started by hand (**Actions → GPU Smoke Benchmark → Run workflow**). It targets a self-hosted runner labeled `gpu`, the vendor (`amd` / `nvidia`) and the OS (`ubu2404` / `ubu2604`), verifies the pre-provisioned GPU stack, records `results/environment.json`, runs the chosen profile, and uploads the results. It is never triggered by pull requests, so code from a fork cannot reach the GPU host.
 
 Do not edit these two files by hand; change `config/ci_contract.yaml` or the templates in the generator and regenerate.
 

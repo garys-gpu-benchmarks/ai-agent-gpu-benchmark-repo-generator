@@ -18,7 +18,7 @@ bash -n setup.sh run_benchmark.sh
 
 ```bash
 bash setup.sh
-bash run_benchmark.sh --smoke --validate
+bash run_benchmark.sh --smoke
 ```
 
 ## Benchmark contract changes

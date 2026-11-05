@@ -375,7 +375,7 @@ if ! command -v rg >/dev/null 2>&1; then
   DEBIAN_FRONTEND=noninteractive apt-get update -y
   DEBIAN_FRONTEND=noninteractive apt-get install -y ripgrep
 fi
-bash run_benchmark.sh --smoke --validate
+bash run_benchmark.sh --smoke
 bash scripts/self_check_generated_repo.sh
 bash scripts/check_github_publish_ready.sh
 echo {REMOTE_OK}

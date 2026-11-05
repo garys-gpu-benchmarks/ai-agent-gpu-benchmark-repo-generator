@@ -103,33 +103,31 @@ Usage: bash run_benchmark.sh [OPTIONS]
 
 <Description from the run_benchmark.sh header>
 
-Profiles:
+Profiles (default: --smoke):
   --smoke                       Run smoke profile
   --baseline                    Run baseline profile
   --extended                    Run extended profile
 
-Execution:
-  --config <file>               Config file (default: config/benchmark_config.yaml)
+Parameters (override the profile's value):
+  --<flag> <n>                  Short description (smoke <v>, baseline <v>, extended <v>)
 
-Validation and logging:
-  --validate                    Enable result validation (default)
-  --no-validate                 Skip result validation
+General options:
+  --config <file>               Config file (default: config/benchmark_config.yaml)
   --quiet                       Suppress nonessential stdout
   --log-level <level>           ERROR|WARN|INFO|DEBUG (default: INFO)
-
-Information:
   --specification               Print this workload's specification and exit
   --help                        Show this help and exit
 
 Examples:
-  bash run_benchmark.sh --smoke --validate
-  bash run_benchmark.sh --baseline --validate
-  bash run_benchmark.sh --extended --validate
+  bash run_benchmark.sh --smoke
+  bash run_benchmark.sh --baseline
+  bash run_benchmark.sh --extended
+  bash run_benchmark.sh --baseline --num-threads 8
 ```
 
-5. Use CLI default profile `smoke`. For LLM Serving, yaml `sweep.profile` remains `baseline`; pass `--baseline` to start the real model server.
-6. Include `Expected environment overrides:` only when the runner accepts `--kernel-version`, `--driver-version`, `--rocm-version`, or `--required-packages`. Those flags take values; they do not mean "enable this check."
-7. Include `Workload options:` for every Parameter_01..Parameter_20 flag this runner parses. Omit the section when there are none. Each line has the flag, a short description, and the smoke, baseline, and extended values used when the flag is omitted. Take the description from `config/workload_parameters.yaml` when the parameter is shared; otherwise take it from `Execution Description With Parameters`. When all three profiles share one value, print `smoke/baseline/extended: <value>`. When they differ, print `smoke <v>, baseline <v>, extended <v>`. Do not print Profile Parameter Values notes.
+5. Use CLI default profile `smoke`. The Profiles heading says `default: --smoke`. For LLM Serving, pass `--baseline` to start the real model server.
+6. Put `--config`, `--quiet`, `--log-level`, `--specification`, and `--help` under `General options:`. If the runner also parses `--kernel-version`, `--driver-version`, `--rocm-version`, or `--required-packages`, list those there too. Those flags take values.
+7. Include `Parameters (override the profile's value):` for every Parameter_01..Parameter_20 flag this runner parses. Omit the section when there are none. Each line has the flag, a short description, and the smoke, baseline, and extended values used when the flag is omitted. Take the description from `config/workload_parameters.yaml` when the parameter is shared; otherwise take it from `Execution Description With Parameters`. When all three profiles share one value, print `smoke/baseline/extended: <value>`. When they differ, print `smoke <v>, baseline <v>, extended <v>`. Do not print Profile Parameter Values notes. The fourth example is `bash run_benchmark.sh --baseline` plus one parameter override. Omit that line when the workload has no parameters.
 8. Do not document `-h` unless the parser accepts it.
 9. The harness creates `results/raw/<timestamp>_<repo>_<hostname>/raw_output.txt` for the run. Operators do not pass a raw-file path.
 

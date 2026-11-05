@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # File: run_benchmark.sh
 # Description: Every profile loads real SDXL; smoke uses reduced resolution and steps.
-# Execution: bash run_benchmark.sh [--smoke|--baseline|--extended] [--validate]
+# Execution: bash run_benchmark.sh [--smoke|--baseline|--extended]
 set -euo pipefail
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_NAME="$(basename "${REPO_ROOT}")"
@@ -18,21 +18,12 @@ Measure Stable Diffusion XL inference latency, images/sec, and peak VRAM.
 Every profile loads stabilityai/stable-diffusion-xl-base-1.0.
 Smoke uses reduced resolution and steps, but never substitutes a tiny model.
 
-Profiles:
+Profiles (default: --smoke):
   --smoke                       Run smoke profile
   --baseline                    Run baseline profile
   --extended                    Run extended profile
 
-Execution:
-  --config <file>               Config file (default: config/benchmark_config.yaml)
-
-Validation and logging:
-  --validate                    Enable result validation (default)
-  --no-validate                 Skip result validation
-  --quiet                       Suppress nonessential stdout
-  --log-level <level>           ERROR|WARN|INFO|DEBUG (default: INFO)
-
-Workload options:
+Parameters (override the profile's value):
   --model-name <name>           SDXL variant token (sdxl-base-1.0)
   --precision <token>           Weight and activation precision (fp16)
   --scheduler <name>            Denoising scheduler (euler)
@@ -45,15 +36,23 @@ Workload options:
   --guidance-scale <n>          Classifier-free guidance scale (0.0)
   --seed <n>                    RNG seed (42)
 
-Information:
+General options:
+  --config <file>               Config file (default: config/benchmark_config.yaml)
+  --quiet                       Suppress nonessential stdout
+  --log-level <level>           ERROR|WARN|INFO|DEBUG (default: INFO)
   --specification               Print this workload's specification and exit
   --help                        Show this help and exit
+
+Examples:
+  bash run_benchmark.sh --smoke
+  bash run_benchmark.sh --baseline
+  bash run_benchmark.sh --extended
+  bash run_benchmark.sh --baseline --batch-size 2
 USAGE
 }
 
 PROFILE="smoke"
 CONFIG_FILE="config/benchmark_config.yaml"
-VALIDATE=1
 QUIET=0
 LOG_LEVEL_VALUE="INFO"
 MODEL_NAME=""
@@ -84,8 +83,7 @@ while [[ $# -gt 0 ]]; do
     --baseline) PROFILE="baseline"; shift ;;
     --extended) PROFILE="extended"; shift ;;
     --config) CONFIG_FILE="${2:-}"; shift 2 ;;
-    --validate) VALIDATE=1; shift ;;
-    --no-validate) VALIDATE=0; shift ;;
+    --validate) shift ;;  # ignored; result validation always runs
     --quiet) QUIET=1; shift ;;
     --log-level) LOG_LEVEL_VALUE="${2:-}"; shift 2 ;;
     --model-name) MODEL_NAME="${2:-}"; shift 2 ;;
@@ -150,7 +148,6 @@ NUM_INFERENCE_STEPS="${NUM_INFERENCE_STEPS:-2}"
 (( NUM_INFERENCE_STEPS < 2 )) && NUM_INFERENCE_STEPS=2
 
 BENCHMARK_RUN_COMMAND="bash run_benchmark.sh --${PROFILE}"
-[[ "${VALIDATE}" -eq 1 ]] && BENCHMARK_RUN_COMMAND+=" --validate" || BENCHMARK_RUN_COMMAND+=" --no-validate"
 BENCHMARK_RUN_COMMAND+=" --model-name ${MODEL_NAME} --precision ${PRECISION} --scheduler ${SCHEDULER}"
 BENCHMARK_RUN_COMMAND+=" --prompt-source ${PROMPT_SOURCE} --prompt-len ${PROMPT_LEN}"
 BENCHMARK_RUN_COMMAND+=" --image-resolution ${IMAGE_RESOLUTION} --batch-size ${BATCH_SIZE}"
@@ -160,7 +157,7 @@ set_benchmark_run_command "${BENCHMARK_RUN_COMMAND}"
 
 HOSTNAME_VALUE="$(hostname -s 2>/dev/null || hostname)"
 STAMP="$(date -u +"%Y%m%d_%H%M%S")"
-if [[ -z "${RAW_FILE:-}" ]]; then
+if [[ -z "${RAW_FILE}" ]]; then
   RUN_DIR="${REPO_ROOT}/results/raw/${STAMP}_${REPO_NAME}_${HOSTNAME_VALUE}"
   mkdir -p "${RUN_DIR}"
   RAW_FILE="${RUN_DIR}/sdxl_infer_raw.txt"
@@ -239,7 +236,7 @@ run_validate() {
 
 run_collection
 run_parse
-[[ "${VALIDATE}" -eq 1 ]] && run_validate
+run_validate
 
 if [[ -f "${RAW_FILE}" ]]; then
   cp "${RAW_FILE}" "${RUN_DIR}/run.log"

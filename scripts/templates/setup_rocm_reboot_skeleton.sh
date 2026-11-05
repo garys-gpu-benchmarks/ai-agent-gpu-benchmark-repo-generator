@@ -212,6 +212,10 @@ GPU_CHECKS_AFTER_REBOOT=0
 RESUME_SERVICE_NAME="${REPO_NAME}-setup-resume.service"
 RESUME_SERVICE_FILE="/etc/systemd/system/${RESUME_SERVICE_NAME}"
 RESUME_LOG="results/reboot_resume.log"
+# The suite command that started this setup, saved before a reboot so the
+# post-boot resume can repeat it. The resume service is a new process and
+# cannot see the original command line.
+SUITE_RERUN_FILE="results/benchmark_suite_command.txt"
 RUNTIME_STAGE_FILE=".rocm_runtime_stage.env"
 STATUS_FILE="results/install_status.txt"
 COMMANDS_FILE="results/install_commands.txt"
@@ -323,6 +327,186 @@ install_status_log_setup() {
 log_resume_event() {
   mkdir -p results
   echo "[$(date -u +%Y-%m-%dT%H:%M:%SZ)] $*" >> "${RESUME_LOG}"
+}
+
+# The AMD driver this setup installs is amdgpu-dkms. It is already updated when
+# that package is installed and the module now running is that DKMS build.
+# A fresh image, and any later workload on that image before the first reboot,
+# still has Ubuntu's in-tree amdgpu and fails this check.
+amdgpu_driver_is_updated() {
+  local path loaded="" ondisk=""
+  command -v dpkg-query >/dev/null 2>&1 || return 1
+  dpkg-query -W amdgpu-dkms >/dev/null 2>&1 || return 1
+  path="$(modinfo -n amdgpu 2>/dev/null || true)"
+  [[ "${path}" == *"/updates/"* ]] || return 1
+  if [[ -r /sys/module/amdgpu/srcversion ]]; then
+    loaded="$(cat /sys/module/amdgpu/srcversion 2>/dev/null || true)"
+    ondisk="$(modinfo -F srcversion amdgpu 2>/dev/null || true)"
+  fi
+  if [[ -z "${loaded}" || -z "${ondisk}" ]]; then
+    [[ -r /sys/module/amdgpu/version ]] || return 1
+    loaded="$(cat /sys/module/amdgpu/version 2>/dev/null || true)"
+    ondisk="$(modinfo -F version amdgpu 2>/dev/null || true)"
+  fi
+  [[ -n "${loaded}" && "${loaded}" == "${ondisk}" ]]
+}
+
+# Early notice for whichever workload is the one that still has to install the
+# driver. Later workloads see the DKMS module already running and stay quiet.
+# The systemd resume after the reboot does not print it again.
+print_amdgpu_reboot_may_be_required() {
+  [[ "${SKIP_ROCM}" == 1 || "${RESUME_FROM_SERVICE}" == 1 ]] && return 0
+  amdgpu_driver_is_updated && return 0
+  printf '\n%s\n%s\n\n' \
+    "NOTICE: A system reboot may be required during initial setup to load the new AMD GPU driver." \
+    "If a reboot is required, you will be notified 30 seconds before it occurs."
+  # The suite hides setup's stdout. /dev/tty is the SSH window that started it.
+  if [[ ! -t 1 && -w /dev/tty ]]; then
+    printf '\n%s\n%s\n\n' \
+      "NOTICE: A system reboot may be required during initial setup to load the new AMD GPU driver." \
+      "If a reboot is required, you will be notified 30 seconds before it occurs." >/dev/tty || true
+  fi
+}
+
+# Record ./run_benchmark_suite.sh and the arguments the operator actually
+# passed. Walks parent processes because the suite does not export its command.
+# On the systemd resume the parents are gone, so a missing match leaves the
+# file written before the reboot alone.
+save_benchmark_suite_command() {
+  local pid ppid script cwd script_dir display line arg i
+  local -a args rest
+  pid=$$
+  while [[ -n "${pid}" && "${pid}" != "0" && "${pid}" != "1" ]]; do
+    args=()
+    if [[ -r "/proc/${pid}/cmdline" ]]; then
+      while IFS= read -r -d '' arg || [[ -n "${arg}" ]]; do
+        args+=("${arg}")
+      done < "/proc/${pid}/cmdline"
+    fi
+    script=""
+    rest=()
+    if ((${#args[@]} > 0)); then
+    for i in "${!args[@]}"; do
+      case "${args[$i]}" in
+        *run_benchmark_suite.sh)
+          script="${args[$i]}"
+          if (( i + 1 < ${#args[@]} )); then
+            rest=("${args[@]:$((i + 1))}")
+          fi
+          break
+          ;;
+      esac
+    done
+    fi
+    if [[ -n "${script}" ]]; then
+      cwd="$(readlink "/proc/${pid}/cwd" 2>/dev/null || true)"
+      script_dir=""
+      if [[ "${script}" == /* ]]; then
+        script_dir="$(cd "$(dirname "${script}")" 2>/dev/null && pwd || true)"
+      elif [[ -n "${cwd}" ]]; then
+        script_dir="$(cd "${cwd}" && cd "$(dirname "${script}")" 2>/dev/null && pwd || true)"
+      fi
+      if [[ -n "${cwd}" && "${script_dir}" == "${cwd}" ]]; then
+        display="./run_benchmark_suite.sh"
+      else
+        display="${script}"
+      fi
+      line="$(printf '%q' "${display}")"
+      if ((${#rest[@]} > 0)); then
+        for arg in "${rest[@]}"; do
+          line+=" $(printf '%q' "${arg}")"
+        done
+      fi
+      if [[ -n "${cwd}" ]]; then
+        line="cd $(printf '%q' "${cwd}") && ${line}"
+      fi
+      mkdir -p results
+      printf '%s\n' "${line}" > "${SUITE_RERUN_FILE}"
+      return 0
+    fi
+    ppid="$(awk '/^PPid:/ {print $2; exit}' "/proc/${pid}/status" 2>/dev/null || true)"
+    [[ -n "${ppid}" && "${ppid}" != "${pid}" ]] || break
+    pid="${ppid}"
+  done
+  if [[ "${RESUME_FROM_SERVICE}" != 1 ]]; then
+    rm -f "${SUITE_RERUN_FILE}"
+  fi
+  return 0
+}
+
+benchmark_suite_rerun_command() {
+  if [[ -f "${SUITE_RERUN_FILE}" ]]; then
+    cat "${SUITE_RERUN_FILE}"
+    return 0
+  fi
+  printf '%s\n' "cd /opt/benchmarks && ./run_benchmark_suite.sh --smoke"
+}
+
+# Printed to the suite log, the SSH window, and once through wall. Then waits
+# until the clock time named in the banner before the caller reboots.
+announce_amdgpu_reboot() {
+  local when rerun banner target now delay
+  save_benchmark_suite_command
+  target="$(( $(date +%s) + 30 ))"
+  when="$(date -d "@${target}" '+%H:%M:%S %Z')"
+  rerun="$(benchmark_suite_rerun_command)"
+  if [[ -f "${SUITE_RERUN_FILE}" ]]; then
+    banner="$(cat <<EOF
+================================================================
+This machine will reboot once in 30 seconds, at ${when}.
+The new AMD GPU driver could not be loaded without a reboot.
+This SSH session will close. Setup resumes by itself after boot.
+The run_benchmark_suite.sh command does not auto-resume.
+SSH back in, then run:
+  tail -f ${REPO_ROOT}/results/reboot_resume.log
+That log prints SETUP COMPLETE when setup is finished. Then run:
+  ${rerun}
+================================================================
+EOF
+)"
+  else
+    banner="$(cat <<EOF
+================================================================
+This machine will reboot once in 30 seconds, at ${when}.
+The new AMD GPU driver could not be loaded without a reboot.
+This SSH session will close. Setup of ${REPO_NAME} resumes by itself after boot.
+Do not start setup.sh again.
+SSH back in, then run:
+  tail -f ${REPO_ROOT}/results/reboot_resume.log
+That log prints SETUP COMPLETE when setup is finished.
+================================================================
+EOF
+)"
+  fi
+  printf '%s\n' "${banner}"
+  if [[ ! -t 1 && -w /dev/tty ]]; then
+    printf '%s\n' "${banner}" >/dev/tty || true
+  fi
+  if command -v wall >/dev/null 2>&1; then
+    printf '%s\n' "${banner}" | wall >/dev/null 2>&1 || true
+  fi
+  now="$(date +%s)"
+  delay="$(( target - now ))"
+  if (( delay > 0 )); then
+    sleep "${delay}"
+  fi
+}
+
+# Printed only by the systemd resume after the one postponed reboot. Stdout of
+# that service is results/reboot_resume.log, which is what tail -f is watching.
+print_setup_complete_after_reboot() {
+  local finished rerun
+  finished="$(date '+%a %b %e %H:%M %Z %Y')"
+  rerun="$(benchmark_suite_rerun_command)"
+  cat <<EOF
+================================================================
+SETUP COMPLETE: ${REPO_NAME}
+Finished ${finished}, after one reboot.
+The workload is ready to run.
+Next (if watching with tail -f, press Ctrl+C first):
+  ${rerun}
+================================================================
+EOF
 }
 
 # A check that needs a working GPU failed. Before the postponed reboot the GPU
@@ -451,6 +635,8 @@ if [[ ! -f "${STATUS_FILE}" || "${RESUME_FROM_SERVICE}" != 1 && ! -f "${RUNTIME_
 fi
 
 install_status_log_phase "setup.sh start"
+save_benchmark_suite_command
+print_amdgpu_reboot_may_be_required
 
 if [[ "${ASSUME_YES}" != 1 && "${SKIP_ROCM}" != 1 ]]; then
   echo "This setup reloads the amdgpu driver in place of a reboot. If the reload cannot"
@@ -1065,6 +1251,7 @@ if [[ "${GPU_CHECKS_AFTER_REBOOT}" == 1 ]]; then
   fi
   install_status_log_phase "All software installed. Rebooting once to load the amdgpu driver; after the reboot setup builds the workload, checks the GPU, and reports SETUP complete"
   log_resume_event "Rebooting once now that everything is installed (postponed amdgpu reboot)"
+  announce_amdgpu_reboot
   run_privileged reboot
   exit 0
 fi
@@ -1082,3 +1269,6 @@ if ! cleanup_resume_service; then
 fi
 install_status_sync_motd
 log_pass "setup.sh now complete"
+if [[ "${RESUME_FROM_SERVICE}" == 1 ]]; then
+  print_setup_complete_after_reboot
+fi

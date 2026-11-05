@@ -4,8 +4,8 @@
 # Author: AI Agent GPU Benchmark Repo Generator
 # Date: 2026-08-27
 # Description: Smoke uses scripts/tiny_sglang_server.py; baseline/extended launch python -m sglang.launch_server.
-# Execution: bash run_benchmark.sh [--smoke|--baseline|--extended] [--validate]
-# Options: --smoke, --baseline, --extended, --config, --validate, --no-validate, --quiet, --log-level, --dtype, --input-len, --output-len, --num-prompts, --seed, --streaming, --specification, --help
+# Execution: bash run_benchmark.sh [--smoke|--baseline|--extended]
+# Options: --smoke, --baseline, --extended, --config, --quiet, --log-level, --dtype, --input-len, --output-len, --num-prompts, --seed, --streaming, --specification, --help
 # Requirements: bash, repository-local .venv after setup.sh
 # Environment: Local generated repository. Remote SSH execution is not supported.
 # Dependencies: scripts/lib/common.sh, ensure_setup helper, scripts/tiny_sglang_server.py, scripts/prompt_response_client.py, scripts/parse_results.py, scripts/validate_results.py, scripts/update_runtime_ledger.py, scripts/collect_hw_sw_info.sh, scripts/print_run_metadata.sh, scripts/print_metric_summary.py
@@ -28,21 +28,12 @@ Smoke starts scripts/tiny_sglang_server.py. Baseline and extended start
 python -m sglang.launch_server with mistralai/Mistral-7B-v0.3. The client is
 scripts/prompt_response_client.py (sequential, one request in flight).
 
-Profiles:
+Profiles (default: --smoke):
   --smoke                       Run smoke profile
   --baseline                    Run baseline profile
   --extended                    Run extended profile
 
-Execution:
-  --config <file>               Config file (default: config/benchmark_config.yaml)
-
-Validation and logging:
-  --validate                    Enable result validation (default)
-  --no-validate                 Skip result validation
-  --quiet                       Suppress nonessential stdout
-  --log-level <level>           ERROR|WARN|INFO|DEBUG (default: INFO)
-
-Workload options:
+Parameters (override the profile's value):
   --dtype <name>                Compute precision (bfloat16)
   --input-len <n>               Prompt tokens
   --output-len <n>              Generated tokens
@@ -50,15 +41,18 @@ Workload options:
   --seed <n>                    RNG seed
   --streaming <true|false>      Stream responses for TTFT
 
-Information:
+General options:
+  --config <file>               Config file (default: config/benchmark_config.yaml)
+  --quiet                       Suppress nonessential stdout
+  --log-level <level>           ERROR|WARN|INFO|DEBUG (default: INFO)
   --specification               Print this workload's specification and exit
   --help                        Show this help and exit
 
 Examples:
-  bash run_benchmark.sh --smoke --validate
-  bash run_benchmark.sh --baseline --validate
-  bash run_benchmark.sh --extended --validate
-  bash run_benchmark.sh --specification
+  bash run_benchmark.sh --smoke
+  bash run_benchmark.sh --baseline
+  bash run_benchmark.sh --extended
+  bash run_benchmark.sh --baseline --num-prompts 2
 USAGE
 }
 
@@ -81,7 +75,6 @@ done
 
 PROFILE="smoke"
 CONFIG_FILE="config/benchmark_config.yaml"
-VALIDATE=1
 QUIET=0
 LOG_LEVEL_VALUE="INFO"
 DTYPE=""
@@ -99,8 +92,7 @@ while [[ $# -gt 0 ]]; do
     --baseline) PROFILE="baseline"; shift ;;
     --extended) PROFILE="extended"; shift ;;
     --config) CONFIG_FILE="${2:-}"; shift 2 ;;
-    --validate) VALIDATE=1; shift ;;
-    --no-validate) VALIDATE=0; shift ;;
+    --validate) shift ;;  # ignored; result validation always runs
     --quiet) QUIET=1; shift ;;
     --log-level) LOG_LEVEL_VALUE="${2:-}"; shift 2 ;;
     --dtype) DTYPE="${2:-}"; shift 2 ;;
@@ -184,7 +176,6 @@ case "${DTYPE}" in
 esac
 
 BENCHMARK_RUN_COMMAND="bash run_benchmark.sh --${PROFILE}"
-[[ "${VALIDATE}" -eq 1 ]] && BENCHMARK_RUN_COMMAND+=" --validate"
 BENCHMARK_RUN_COMMAND+=" --model-name ${MODEL_NAME} --dtype ${DTYPE} --input-len ${INPUT_LEN} --output-len ${OUTPUT_LEN} --num-prompts ${NUM_PROMPTS} --seed ${SEED} --max-total-tokens ${MAX_TOTAL_TOKENS} --max-running-requests ${MAX_RUNNING_REQUESTS}"
 set_benchmark_run_command "${BENCHMARK_RUN_COMMAND}"
 
@@ -282,7 +273,7 @@ run_validate() {
 
 run_collection
 run_parse
-[[ "${VALIDATE}" -eq 1 ]] && run_validate
+run_validate
 record_benchmark_stop
 capture_journal_warnings "${RUN_DIR}" "${BENCHMARK_START_DATETIME}" "${STOP_TIME}"
 bash scripts/collect_hw_sw_info.sh "${RUN_DIR}"

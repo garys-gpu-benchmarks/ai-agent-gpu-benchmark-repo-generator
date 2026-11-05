@@ -160,6 +160,64 @@ class DeferredRebootSkeletonTests(unittest.TestCase):
         self.assertIn('if [[ "${GPU_CHECKS_AFTER_REBOOT}" == 1 ]]; then', self.text)
         self.assertIn('torch.zeros(1, device="cuda")', self.text)
 
+    def test_reboot_notice_prints_only_when_amdgpu_driver_is_not_updated(self):
+        notice = self.text[self._pos("print_amdgpu_reboot_may_be_required() {") : self._pos("print_setup_complete_after_reboot() {")]
+        self.assertIn("amdgpu_driver_is_updated && return 0", notice)
+        self.assertIn('"${RESUME_FROM_SERVICE}" == 1', notice)
+        self.assertIn("dpkg-query -W amdgpu-dkms", self.text[self._pos("amdgpu_driver_is_updated() {") : self._pos("print_amdgpu_reboot_may_be_required() {")])
+        self.assertIn(
+            "NOTICE: A system reboot may be required during initial setup to load the new AMD GPU driver.",
+            notice,
+        )
+        self.assertIn(
+            "If a reboot is required, you will be notified 30 seconds before it occurs.",
+            notice,
+        )
+        start = self._pos('install_status_log_phase "setup.sh start"')
+        call = self._pos("print_amdgpu_reboot_may_be_required\n")
+        apt = self._pos("run_privileged env DEBIAN_FRONTEND=noninteractive apt-get update -y")
+        self.assertLess(start, call)
+        self.assertLess(call, apt)
+
+    def test_reboot_resume_prints_setup_complete_banner_last(self):
+        complete = self._pos('log_pass "setup.sh now complete"')
+        guard = self._pos('if [[ "${RESUME_FROM_SERVICE}" == 1 ]]; then\n  print_setup_complete_after_reboot')
+        self.assertLess(complete, guard)
+        banner = self.text[self._pos("print_setup_complete_after_reboot() {") : self._pos("gpu_check_failed() {")]
+        for line in (
+            "SETUP COMPLETE: ${REPO_NAME}",
+            "Finished ${finished}, after one reboot.",
+            "The workload is ready to run.",
+            "Next (if watching with tail -f, press Ctrl+C first):",
+            "${rerun}",
+            "date '+%a %b %e %H:%M %Z %Y'",
+        ):
+            self.assertIn(line, banner)
+        self.assertIn(
+            "cd /opt/benchmarks && ./run_benchmark_suite.sh --smoke",
+            self.text[self._pos("benchmark_suite_rerun_command() {") : self._pos("announce_amdgpu_reboot() {")],
+        )
+
+    def test_reboot_warning_repeats_the_suite_command(self):
+        warning = self.text[self._pos("announce_amdgpu_reboot() {") : self._pos("print_setup_complete_after_reboot() {")]
+        for line in (
+            "This machine will reboot once in 30 seconds, at ${when}.",
+            "The new AMD GPU driver could not be loaded without a reboot.",
+            "This SSH session will close. Setup resumes by itself after boot.",
+            "The run_benchmark_suite.sh command does not auto-resume.",
+            "tail -f ${REPO_ROOT}/results/reboot_resume.log",
+            "That log prints SETUP COMPLETE when setup is finished. Then run:",
+            "${rerun}",
+            "date -d \"@${target}\" '+%H:%M:%S %Z'",
+            'sleep "${delay}"',
+        ):
+            self.assertIn(line, warning)
+        walker = self.text[self._pos("save_benchmark_suite_command() {") : self._pos("benchmark_suite_rerun_command() {")]
+        self.assertIn("run_benchmark_suite.sh", walker)
+        self.assertIn('> "${SUITE_RERUN_FILE}"', walker)
+        reboot = self._pos("  announce_amdgpu_reboot\n  run_privileged reboot\n  exit 0\n")
+        self.assertLess(self._pos('install_status_log_phase "All software installed.'), reboot)
+
 
 if __name__ == "__main__":
     unittest.main()

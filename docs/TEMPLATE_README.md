@@ -90,7 +90,7 @@ Each generated repository uses its own isolated Python environment at `<repo-roo
 ```bash
 export BENCHMARK_PYTHON=/usr/bin/python3.14
 bash setup.sh
-bash run_benchmark.sh --smoke --validate
+bash run_benchmark.sh --smoke
 ```
 
 If `.venv` is missing, setup creates it rather than installing Python packages globally or silently using another environment. The AI coding agent may run `setup.sh` and install packages during generation when useful, but must set the repository-local `.venv` first. The same rule applies to operators provisioning the repository after generation.

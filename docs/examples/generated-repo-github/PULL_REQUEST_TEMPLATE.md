@@ -9,7 +9,7 @@
 - [ ] `bash scripts/check_github_publish_ready.sh` passes
 - [ ] `bash -n setup.sh run_benchmark.sh` passes
 - [ ] Setup/build changes were tested on an appropriate GPU host when required
-- [ ] Smoke benchmark changes were validated with `bash run_benchmark.sh --smoke --validate` when hardware was available
+- [ ] Smoke benchmark changes were validated with `bash run_benchmark.sh --smoke` when hardware was available
 
 ## Contract and safety
 

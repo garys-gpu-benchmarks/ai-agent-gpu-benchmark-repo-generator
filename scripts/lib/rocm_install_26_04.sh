@@ -425,6 +425,9 @@ rocm_install_runtime() {
             return 0
         fi
         _rocm_log "Reboot once to load amdgpu firmware (driver reload not possible or not verified)."
+        if declare -f announce_amdgpu_reboot >/dev/null 2>&1; then
+            announce_amdgpu_reboot
+        fi
         run_noninteractive_root reboot  # Single reboot after firmware install (fallback)
         # ── execution stops here; caller must reconnect ──
     fi
@@ -442,6 +445,9 @@ rocm_install_runtime() {
                 return 0
             fi
             _rocm_log "Postponed amdgpu reboot has not happened yet; rebooting now."
+            if declare -f announce_amdgpu_reboot >/dev/null 2>&1; then
+                announce_amdgpu_reboot
+            fi
             run_noninteractive_root reboot  # Single reboot after driver install (postponed earlier)
             return 0
         fi

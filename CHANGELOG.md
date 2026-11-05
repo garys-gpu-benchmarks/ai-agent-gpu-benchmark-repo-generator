@@ -1,5 +1,34 @@
 # Changelog
 
+## 2026-11-05 — run_benchmark.sh --help uses Profiles, Parameters, and General options
+
+- **`run_benchmark.sh --help` uses one layout for every workload.** `Profiles (default: --smoke)`, then `Parameters (override the profile's value)` when the workload has parameters, then `General options` (`--config`, `--quiet`, `--log-level`, `--specification`, `--help`). The fourth example is `bash run_benchmark.sh --baseline` plus one simple parameter override, such as `--num-threads 8`. Workloads with no parameters omit that line.
+
+## 2026-11-05 — help labels workbook parameters as Parameters
+
+- **`run_benchmark.sh --help` names that section `Parameters:`.** The flags under it are still Parameter_01..Parameter_20. The heading is no longer `Workload options:`.
+
+## 2026-11-05 — benchmark_config.yaml has no profile seed
+
+- **`config/benchmark_config.yaml` no longer contains `sweep.profile`.** Smoke, baseline, and extended still come from `--smoke`, `--baseline`, and `--extended`. `scripts/generate_benchmark_config.py` does not write the key, and a locked overlay loses a leftover `profile: smoke` or `profile: baseline` when its sweep is merged. LLM Serving self-check no longer requires `profile: baseline`.
+
+## 2026-11-05 — run_benchmark.sh always validates
+
+- **`run_benchmark.sh` no longer documents `--validate` or `--no-validate`.** Result validation always runs after parse. `--no-validate` is rejected. `--validate` is still accepted and ignored, so a published GPU smoke workflow or an older command that passes it does not stop before the measurement.
+- **Callers:** `gpu-smoke.yml`, generation smoke, README and help examples, profile command reconstruction, and the runtime-ledger command now use `bash run_benchmark.sh --<profile>`. `create_one_workload.py --validate-only` is unchanged.
+
+## 2026-11-05 — ROCm reboot warning repeats the suite command
+
+- **`scripts/templates/setup_rocm_reboot_skeleton.sh`:** thirty seconds before the amdgpu reboot, setup prints the warning with the local reboot time. If `run_benchmark_suite.sh` started this setup, the rerun line is that command (`--baseline`, `-w`, and the rest), not a fixed `--smoke`. The command is saved for the post-boot `SETUP COMPLETE` banner. The same warning is used when `ROCM_DEFER_REBOOT=0` reboots from the 24.04 or 26.04 installer.
+
+## 2026-11-05 — ROCm setup warns once when the AMD driver is not yet loaded
+
+- **`scripts/templates/setup_rocm_reboot_skeleton.sh`:** at the start of every AMD workload, setup prints the reboot notice only when `amdgpu-dkms` is not the module now running. The workload that installs the driver prints it. Later workloads, and the resume after the reboot, do not. The suite's hidden stdout is copied to `/dev/tty` when that is a different destination.
+
+## 2026-11-05 — ROCm setup prints a completion banner after the reboot
+
+- **`scripts/templates/setup_rocm_reboot_skeleton.sh`:** when setup is the systemd resume after the postponed reboot, the last lines of `results/reboot_resume.log` name the repository, the local finish time, and the suite command to run next. A run that reloads amdgpu in place still ends at `[PASS] setup.sh now complete` and does not claim a reboot. No `wall`.
+
 ## 2026-11-04 — TEMPLATE_00_120: run_benchmark.sh profile flags only
 
 - **`run_benchmark.sh --help` lists each workload parameter with a short description and its smoke, baseline, and extended values.** A value shared by all three profiles is printed once. Profile notes are omitted. `materialize_generated_harness.py` fills the section for a new runner and for an overlay runner.
