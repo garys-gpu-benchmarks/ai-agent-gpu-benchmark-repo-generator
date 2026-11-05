@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # File: scripts/generated_repo_directory.py
 # Description: Shared local-folder and GitHub-slug naming for generated workload repositories.
-# The top directory is <Workload Number>-<Repo Name>. Workbook Repo Name stays unprefixed.
+# The top directory is <Workload Number>-<Repo Base Name>. Workbook Repo Base Name stays unprefixed.
 from __future__ import annotations
 
 from pathlib import Path

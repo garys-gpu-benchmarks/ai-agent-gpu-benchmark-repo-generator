@@ -228,7 +228,7 @@ class OverlayAndDocsTests(unittest.TestCase):
         from fill_generated_docs import render_template
 
         with self.assertRaises(SystemExit):
-            render_template("Hello {{Missing Field}}\n", {"Repo Name": "x"})
+            render_template("Hello {{Missing Field}}\n", {"Repo Base Name": "x"})
 
     def test_write_lf(self):
         with tempfile.TemporaryDirectory() as tmp:

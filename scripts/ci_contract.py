@@ -87,10 +87,10 @@ def os_label_display(os_label: str) -> str:
 def workload_identity(fields: dict[str, str], contract: dict) -> dict[str, str]:
     """Derive the CI identity of one workload from benchmark_specification.json fields."""
     workload = str(fields.get("Workload Number", "")).strip()
-    repo_name = str(fields.get("Repo Name", "")).strip()
+    repo_name = str(fields.get("Repo Base Name") or fields.get("Repo Name", "")).strip()
     repo_name = re.sub(r"\s*\[[^\]]*\]\s*$", "", repo_name)  # strip " [Remote_SSH]" style tags
     if not workload or not repo_name:
-        raise ContractError("benchmark_specification.json lacks Workload Number or Repo Name")
+        raise ContractError("benchmark_specification.json lacks Workload Number or Repo Base Name")
 
     vendor = str(fields.get("GPU Vendor", "")).strip().lower()
     if vendor not in _choices(contract, "vendor"):
@@ -114,7 +114,7 @@ def workload_identity(fields: dict[str, str], contract: dict) -> dict[str, str]:
             os_label = f"ubu{match.group(1)}{match.group(2)}"
     if os_label not in _choices(contract, "os_label"):
         raise ContractError(
-            f"workload {workload}: cannot derive an OS label from Repo Name {repo_name!r} "
+            f"workload {workload}: cannot derive an OS label from Repo Base Name {repo_name!r} "
             f"or OS Version {fields.get('OS Version')!r}; expected one of {_choices(contract, 'os_label')}"
         )
 

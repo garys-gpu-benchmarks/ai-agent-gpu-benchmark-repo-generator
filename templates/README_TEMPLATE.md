@@ -32,7 +32,7 @@ RULES:
      remove, or reorder top-level sections. The unnumbered sections Quick
      Start, Download as a Bundle and Suite Tools come before section 1.
   E. Repo name in shell commands = the repo slug portion of
-     {{Repo Name}} (strip any trailing " [Remote_SSH]" / bracket tags).
+     {{Repo Base Name}} (strip any trailing " [Remote_SSH]" / bracket tags).
   F. Output raw Markdown only — no commentary, no surrounding prose,
      no code fences wrapping the whole document.
 ====================================================================
@@ -48,7 +48,7 @@ Target: {{OS Version}} · {{GPU Vendor}} · see Hardware Requirements. This is a
 
 ## Quick Start
 
-[[GENERATE: A 4–6 line bash quick-start block — clone the repo using `git clone https://github.com/<org>/{{Workload Number}}-{{Repo Name}}.git` (publication prep replaces `<org>` via `--github-owner`; the GitHub slug keeps the leading workload number). Run `bash setup.sh --assume-yes`, then `bash run_benchmark.sh --profile smoke --validate`. State that this command runs the configured smoke test. Include `bash scripts/build.sh` only when Installation and Execution Summary / Execution Summary (Run) explicitly requires a compile/build step; otherwise omit build.sh entirely from Quick Start. For LLM Serving workloads, state that a bare `bash run_benchmark.sh` is smoke (tiny local server) and that `--baseline` / `--extended` start the real model server, wait for readiness, run the client, and stop the server. Follow with one sentence stating where results are written (results/benchmark.db and results/summary.json).]]
+[[GENERATE: A 4–6 line bash quick-start block — clone the repo using `git clone https://github.com/<org>/{{Workload Number}}-{{Repo Base Name}}.git` (publication prep replaces `<org>` via `--github-owner`; the GitHub slug keeps the leading workload number). Run `bash setup.sh --assume-yes`, then `bash run_benchmark.sh --smoke --validate`. State that this command runs the configured smoke test. Include `bash scripts/build.sh` only when Installation and Execution Summary / Execution Summary (Run) explicitly requires a compile/build step; otherwise omit build.sh entirely from Quick Start. For LLM Serving workloads, state that a bare `bash run_benchmark.sh` is smoke (tiny local server) and that `--baseline` / `--extended` start the real model server, wait for readiness, run the client, and stop the server. Follow with one sentence stating where results are written (results/benchmark.db and results/summary.json).]]
 
 [[GENERATE: Add one sentence that this workload is local-only and does not support remote SSH execution in `setup.sh` or `run_benchmark.sh`.]]
 
@@ -65,7 +65,7 @@ git clone --recurse-submodules https://github.com/{{CI Owner}}/{{CI Bundle Repo}
   && cd {{CI Install Root}} \
   && ./run_benchmark_suite.sh --list \
   && cd {{CI Install Root}}/{{CI GitHub Slug}} \
-  && bash run_benchmark.sh --profile smoke --validate \
+  && bash run_benchmark.sh --smoke --validate \
   && cd {{CI Install Root}} \
   && echo "Done: 32 workloads in {{CI Install Root}}; {{CI GitHub Slug}} smoke run passed. Next: ./run_benchmark_suite.sh --help"
 ```
@@ -186,7 +186,7 @@ The tables below describe the machine used to generate the reference results. Th
 
 ## 7. Running the Benchmark
 
-[[GENERATE: A bash code block showing (a) `bash run_benchmark.sh --help`, (b) the configured smoke invocation `bash run_benchmark.sh --profile smoke --validate` for non-LLM workloads, (c) a customized invocation using flags derived 1:1 from Parameter_01 .. Parameter_16 (skip empty parameter slots) and values from Profile Parameter Values; sweep/list flags are documentary, (d) an environment-variable override example if applicable. State that `run_benchmark.sh --help` prints the `usage()` page and exits without running setup. State that `run_benchmark.sh` automatically invokes `scripts/ensure_setup.sh` when `.setup_state` is absent, and that the operator reruns the command after a reboot-driven setup resumes. Include profile examples for `--smoke`, `--baseline`, and `--extended`. For LLM Serving workloads, state that a bare `bash run_benchmark.sh` is smoke (tiny local server) and that `--baseline` / `--extended` start the real model server, wait for readiness, run the client, and stop the server. `--baseline` targets approximately three to five minutes. Follow with a CLI Options table: Option | Default | Description — one row per non-empty Parameter_xx, plus standard rows for --config, --profile, --smoke (Run smoke profile), --baseline (Run baseline profile), --extended (Run extended profile), --validate, --no-validate, --quiet, --log-level, --save-options-file (PATH), --phase (phaseN or N), --phase1, --phase2, --phase3 (parse only; requires --raw-file), --phase4, --raw-file (existing raw file for phase3), --matrix-definition (print this workload's matrix row), --help. Defaults: take numeric/sweep defaults from Test Procedure (80 words) where stated; otherwise mark "TBD". Then add one sentence stating that a benchmark statistics summary block is printed at the end of a successful run (unless --quiet is used), and that summary includes extended statistics (min, max, mean, median, stddev, p95) where applicable.]]
+[[GENERATE: A bash code block showing (a) `bash run_benchmark.sh --help`, (b) the configured smoke invocation `bash run_benchmark.sh --smoke --validate` for non-LLM workloads, (c) a customized invocation using flags derived 1:1 from Parameter_01 .. Parameter_16 (skip empty parameter slots) and values from Profile Parameter Values; sweep/list flags are documentary, (d) an environment-variable override example if applicable. State that `run_benchmark.sh --help` prints the `usage()` page and exits without running setup. State that `run_benchmark.sh` automatically invokes `scripts/ensure_setup.sh` when `.setup_state` is absent, and that the operator reruns the command after a reboot-driven setup resumes. Include profile examples for `--smoke`, `--baseline`, and `--extended`. For LLM Serving workloads, state that a bare `bash run_benchmark.sh` is smoke (tiny local server) and that `--baseline` / `--extended` start the real model server, wait for readiness, run the client, and stop the server. `--baseline` targets approximately three to five minutes. Follow with a CLI Options table: Option | Default | Description — one row per non-empty Parameter_xx, plus standard rows for --config, --smoke (Run smoke profile), --baseline (Run baseline profile), --extended (Run extended profile), --validate, --no-validate, --quiet, --log-level, --specification (print this workload's specification), --help. Defaults: take numeric/sweep defaults from Test Procedure (80 words) where stated; otherwise mark "TBD". Then add one sentence stating that a benchmark statistics summary block is printed at the end of a successful run (unless --quiet is used), and that summary includes extended statistics (min, max, mean, median, stddev, p95) where applicable.]]
 
 **Validating results separately:**
 

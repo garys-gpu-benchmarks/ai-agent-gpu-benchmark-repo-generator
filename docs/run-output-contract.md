@@ -94,7 +94,7 @@ The ledger call should be nonfatal if ledger storage itself is unavailable; it m
 `bash run_benchmark.sh --help` is operator documentation, not a header dump. Generated `run_benchmark.sh` must:
 
 1. Define a `usage()` function and wire `--help` to it. Do not implement help as `sed -n '1,20p' "$0"` or any other fixed line-range print of the file header.
-2. Handle `--help` and `--matrix-definition` before `scripts/ensure_setup.sh` and before workload option parsing that can start setup, install, or benchmark work. `--matrix-definition` prints this workload's `benchmark_specification.json` fields as a two-column table and exits 0.
+2. Handle `--help` and `--specification` before `scripts/ensure_setup.sh` and before workload option parsing that can start setup, install, or benchmark work. `--specification` prints this workload's `benchmark_specification.json` fields as a two-column table and exits 0.
 3. Copy and customize `scripts/templates/run_benchmark_help_skeleton.sh`. Keep the script-header `Options:` field as a compact comma-separated inventory.
 4. Print this shape, with the first prose line matching the script header `Description` field:
 
@@ -104,19 +104,11 @@ Usage: bash run_benchmark.sh [OPTIONS]
 <Description from the run_benchmark.sh header>
 
 Profiles:
-  --profile <name>              Run profile: smoke|baseline|extended (default: smoke)
   --smoke                       Run smoke profile
   --baseline                    Run baseline profile
   --extended                    Run extended profile
 
 Execution:
-  --device <gpu|cpu>            Execution device (default: gpu)
-  --phase <phaseN|N>            Run one phase (phase1|phase2|phase3|phase4, or 1-4)
-  --phase1                      Collection
-  --phase2                      Collection alias
-  --phase3                      Parse only; requires --raw-file <path>
-  --phase4                      Validation only
-  --raw-file <path>             Existing raw file for --phase3
   --config <file>               Config file (default: config/benchmark_config.yaml)
 
 Validation and logging:
@@ -124,26 +116,22 @@ Validation and logging:
   --no-validate                 Skip result validation
   --quiet                       Suppress nonessential stdout
   --log-level <level>           ERROR|WARN|INFO|DEBUG (default: INFO)
-  --output-format <fmt>         Override config output_format
-  --save-options-file <path>    Write resolved CLI options to PATH
 
 Information:
   --specification               Print this workload's specification and exit
-  --matrix-definition           Same as --specification
   --help                        Show this help and exit
 
 Examples:
-  bash run_benchmark.sh --profile smoke --validate
-  bash run_benchmark.sh --baseline --device gpu
-  bash run_benchmark.sh --phase3 --raw-file results/raw/<run>/raw.txt
-  bash run_benchmark.sh --matrix-definition
+  bash run_benchmark.sh --smoke --validate
+  bash run_benchmark.sh --baseline --validate
+  bash run_benchmark.sh --extended --validate
 ```
 
 5. Use CLI default profile `smoke`. For LLM Serving, yaml `sweep.profile` remains `baseline`; pass `--baseline` to start the real model server.
-6. Include `Expected environment overrides:` only when the runner accepts `--kernel-version`, `--driver-version`, `--rocm-version`, `--required-packages`, or `--permissions-check`. Those flags take values; they do not mean "enable this check."
-7. Include `Workload options:` for every extra parsed flag. Omit the section when there are none.
-8. Do not document `-h` unless the parser accepts it. Do not invent `--output-format` enumerations such as `json, text, csv` unless the workload validates those values.
-9. `--raw-file` is an input for parse-only phase 3. It is not a custom path for writing new raw logs.
+6. Include `Expected environment overrides:` only when the runner accepts `--kernel-version`, `--driver-version`, `--rocm-version`, or `--required-packages`. Those flags take values; they do not mean "enable this check."
+7. Include `Workload options:` for every Parameter_01..Parameter_20 flag this runner parses. Omit the section when there are none. Each line has the flag, a short description, and the smoke, baseline, and extended values used when the flag is omitted. Take the description from `config/workload_parameters.yaml` when the parameter is shared; otherwise take it from `Execution Description With Parameters`. When all three profiles share one value, print `smoke/baseline/extended: <value>`. When they differ, print `smoke <v>, baseline <v>, extended <v>`. Do not print Profile Parameter Values notes.
+8. Do not document `-h` unless the parser accepts it.
+9. The harness creates `results/raw/<timestamp>_<repo>_<hostname>/raw_output.txt` for the run. Operators do not pass a raw-file path.
 
 ## Numbered metric-item requirement
 

@@ -22,7 +22,7 @@ import emit_shared_workflows  # noqa: E402
 
 
 def _fields(number: str, repo: str, vendor: str, os_version: str = "") -> dict[str, str]:
-    return {"Workload Number": number, "Repo Name": repo, "GPU Vendor": vendor, "OS Version": os_version}
+    return {"Workload Number": number, "Repo Base Name": repo, "GPU Vendor": vendor, "OS Version": os_version}
 
 
 class WorkloadIdentityTests(unittest.TestCase):

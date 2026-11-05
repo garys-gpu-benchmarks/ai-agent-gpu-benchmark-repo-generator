@@ -44,7 +44,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--remote-root",
         default=REMOTE_ROOT,
-        help="Directory on the validation VM that holds each <Workload Number>-<Repo Name> (default /opt/benchmarks)",
+        help="Directory on the validation VM that holds each <Workload Number>-<Repo Base Name> (default /opt/benchmarks)",
     )
     parser.add_argument("--skip-remote-refresh", action="store_true", default=True)
     parser.add_argument("--force", action="store_true")
@@ -375,7 +375,7 @@ if ! command -v rg >/dev/null 2>&1; then
   DEBIAN_FRONTEND=noninteractive apt-get update -y
   DEBIAN_FRONTEND=noninteractive apt-get install -y ripgrep
 fi
-bash run_benchmark.sh --profile smoke --validate
+bash run_benchmark.sh --smoke --validate
 bash scripts/self_check_generated_repo.sh
 bash scripts/check_github_publish_ready.sh
 echo {REMOTE_OK}
@@ -620,7 +620,7 @@ def process_one(workload: str, args: argparse.Namespace, template_root: Path, pr
         ensure_gitkeep(repo)
         spec = json.loads((repo / "benchmark_specification.json").read_text(encoding="utf-8"))
         fields = {str(item.get("field_name", "")): str(item.get("value", "") or "") for item in spec}
-        workbook_name = fields.get("Repo Name") or repo.name
+        workbook_name = fields.get("Repo Base Name") or fields.get("Repo Name") or repo.name
         repo_name = workbook_name
         reuse = args.reuse_remote_env and not args.fresh_remote_env
         rc = remote_validate(ssh, repo, reuse=reuse)

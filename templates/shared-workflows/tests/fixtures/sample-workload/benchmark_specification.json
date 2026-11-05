@@ -15,7 +15,7 @@
     "value": "AMD"
   },
   {
-    "field_name": "Repo Name",
+    "field_name": "Repo Base Name",
     "source_file": "sample-workload fixture",
     "value": "sys-bench-amd-sample-workload-ubu2404"
   },

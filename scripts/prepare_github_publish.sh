@@ -45,8 +45,8 @@ Run from a generated workload root. Default is --dry-run.
   --github-owner=X  Replace https://github.com/<org>/ and <OWNER> in README and
                     docs with the real GitHub user or organization.
 
-Does not rename the local <N>_<Repo Name> folder. The GitHub repository name is
-the same <N>_<Repo Name> string (for example 128_gpu-bench-amd-vllm-throughput-latency).
+Does not rename the local <N>_<Repo Base Name> folder. The GitHub repository name is
+the same <N>_<Repo Base Name> string (for example 128_gpu-bench-amd-vllm-throughput-latency).
 EOF
       exit 0
       ;;

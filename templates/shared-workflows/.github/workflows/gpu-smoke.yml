@@ -139,7 +139,7 @@ jobs:
       # only when this runner has no completed .venv for the workload yet.
       - name: Run benchmark
         id: bench
-        run: bash run_benchmark.sh --profile "${PROFILE}" --validate
+        run: bash run_benchmark.sh "--${PROFILE}" --validate
 
       - name: Job summary
         if: always()

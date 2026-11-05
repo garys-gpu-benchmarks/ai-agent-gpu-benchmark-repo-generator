@@ -385,7 +385,7 @@ import json
 from pathlib import Path
 data = json.loads(Path("benchmark_specification.json").read_text(encoding="utf-8"))
 fields = {str(item.get("field_name", "")): str(item.get("value", "")) for item in data if isinstance(item, dict)}
-print(fields.get("Repo Name", "").strip())
+print((fields.get("Repo Base Name") or fields.get("Repo Name", "")).strip())
 PY
 )"
   WORKLOAD_NUMBER="$(python3 - <<'PY'
@@ -406,7 +406,7 @@ PY
   echo "GitHub Publication Readiness"
   echo "============================================================"
   echo "Local folder               ${ROOT##*/}"
-  echo "GitHub repository name     ${GITHUB_SLUG:-"(missing Workload Number / Repo Name)"}"
+  echo "GitHub repository name     ${GITHUB_SLUG:-"(missing Workload Number / Repo Base Name)"}"
   echo "Suggested description      Workload ${WORKLOAD_NUMBER}: ${REPO_NAME}"
   echo "Ready for git commit/push  YES"
   echo "============================================================"

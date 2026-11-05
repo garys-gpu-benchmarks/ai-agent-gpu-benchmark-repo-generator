@@ -2,7 +2,7 @@
 
 This generated workload is designed to be published as its own independent GitHub repository.
 
-GitHub repository name = local folder = `<Workload Number>-<Repo Name>` from `benchmark_specification.json` (for example `128-gpu-bench-amd-vllm-throughput-latency`). Keep that same leading workload number on GitHub. Do not publish the unprefixed `Repo Name` slug.
+GitHub repository name = local folder = `<Workload Number>-<Repo Base Name>` from `benchmark_specification.json` (for example `128-gpu-bench-amd-vllm-throughput-latency`). Keep that same leading workload number on GitHub. Do not publish the unprefixed `Repo Base Name` slug.
 
 ## Pre-publish check
 
@@ -22,7 +22,7 @@ The `--published` readiness check verifies leftover files are gone, README relat
 
 ## Initialize and publish
 
-Create the remote repository on GitHub using `<Workload Number>-<Repo Name>` (same as this folder), then run locally:
+Create the remote repository on GitHub using `<Workload Number>-<Repo Base Name>` (same as this folder), then run locally:
 
 ```bash
 git init
@@ -30,13 +30,13 @@ git branch -M main
 git add .
 git status
 git commit -m "Initial benchmark workload"
-git remote add origin https://github.com/<OWNER>/<Workload Number>-<Repo Name>.git
+git remote add origin https://github.com/<OWNER>/<Workload Number>-<Repo Base Name>.git
 git push -u origin main
 ```
 
 Example: `gh repo create 128-gpu-bench-amd-vllm-throughput-latency --public --source=. --remote=origin --push`
 
-Suggested GitHub description: `Workload <number>: <Repo Name>`. Add topics such as `amd`, `rocm`, `benchmark`, and the workload family (`perf`, `hipmemcpy`, `babelstream`, and so on).
+Suggested GitHub description: `Workload <number>: <Repo Base Name>`. Add topics such as `amd`, `rocm`, `benchmark`, and the workload family (`perf`, `hipmemcpy`, `babelstream`, and so on).
 
 Before committing, review `git status` carefully. The nested `TEMPLATE_*_copy/` generation workspace, runtime results, virtual environments, downloaded weights, logs, and credentials are intentionally excluded by `.gitignore` and must not be published.
 

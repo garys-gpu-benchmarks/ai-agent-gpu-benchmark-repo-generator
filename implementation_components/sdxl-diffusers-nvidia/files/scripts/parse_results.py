@@ -280,7 +280,7 @@ def main() -> int:
             "PyTorch-CUDA / diffusers / Hugging Face Transformer",
             "",
             args.config,
-            f"bash run_benchmark.sh --profile {args.profile} --validate",
+            f"bash run_benchmark.sh --{args.profile} --validate",
             None if status == "ok" else "one or more SDXL inference samples failed",
             aggregates["per_image_latency_sec"],
             aggregates["images_per_sec"],

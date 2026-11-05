@@ -30,9 +30,9 @@ PROFILE_HEADERS = {
     "notes": 7,
 }
 COMMAND_COLUMNS = {
-    "smoke": "run_benchmark Command Plus Options for Smoke Run",
-    "baseline": "run_benchmark Command Plus Options for Baseline Run",
-    "extended": "run_benchmark Command Plus Options for Extended Run",
+    "smoke": "run_benchmark Command Plus Options for Smoke Run (One minute or less)",
+    "baseline": "run_benchmark Command Plus Options for Baseline Run (3 to 5 minutes)",
+    "extended": "run_benchmark Command Plus Options for Extended Run (8 to 15 minutes)",
 }
 
 

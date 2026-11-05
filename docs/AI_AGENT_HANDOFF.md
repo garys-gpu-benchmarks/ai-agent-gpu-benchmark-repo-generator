@@ -80,10 +80,10 @@ Private-key markers are rejected before an artifact is written.
 Generated repositories remain siblings of the template directory:
 
 ```text
-<project-root>/<WORKLOAD_NUMBER>_<Repo Name>/
+<project-root>/<WORKLOAD_NUMBER>_<Repo Base Name>/
 ```
 
-The AI Coding Agent (ie, Cursor) project-root sibling is the created repository only. It is a sibling of `ai-agent-gpu-benchmark-repo-generator`. Develop the code in the local directory, and copy it to the remote VM for testing. After extract, set every directory under `/opt/benchmarks/<Workload Number>-<Repo Name>` to `0755` (`find … -type d -exec chmod 755 {} +`); a Windows `tar` copy is typically `0777` and shows lime green in `ls`. Do not copy anything from the VM back to the local directory, including `.venv/`, `.cache/`, or other setup/smoke runtime state.
+The AI Coding Agent (ie, Cursor) project-root sibling is the created repository only. It is a sibling of `ai-agent-gpu-benchmark-repo-generator`. Develop the code in the local directory, and copy it to the remote VM for testing. After extract, set every directory under `/opt/benchmarks/<Workload Number>-<Repo Base Name>` to `0755` (`find … -type d -exec chmod 755 {} +`); a Windows `tar` copy is typically `0777` and shows lime green in `ls`. Do not copy anything from the VM back to the local directory, including `.venv/`, `.cache/`, or other setup/smoke runtime state.
 
 Each generated repository holds a nested active template copy named `<template-name>_copy` during generation. It is removed once the workload passes (`scripts/create_one_workload.py`, or `scripts/remove_template_copy.py --repo-root <repo>`).
 
@@ -190,7 +190,7 @@ The repository has also been checked with the IDE linter; no linter errors were 
 ## Completed recent changes
 
 - Added `scripts/templates/run_benchmark_help_skeleton.sh` and a `usage()` contract so generated `run_benchmark.sh --help` prints grouped options and exits before setup. Existing workloads 101–132 were left unchanged.
-- Added `scripts/print_benchmark_definition.py` and `bash run_benchmark.sh --matrix-definition` so a generated repository prints its extracted matrix row as a two-column field/value table and exits before setup.
+- Added `scripts/print_benchmark_definition.py` and `bash run_benchmark.sh --specification` so a generated repository prints its extracted specification as a two-column field/value table and exits before setup.
 - Reworked generation from a copy-and-edit prompt workflow to direct prompt submission.
 - Added timestamped project-root prompt artifacts.
 - Centralized workload prompt parsing.

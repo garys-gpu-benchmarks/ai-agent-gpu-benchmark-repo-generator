@@ -4,7 +4,7 @@
 # Maintainer: AI Agent GPU Benchmark Repo Generator
 # Date: 2026-10-18
 # Description: Removes the nested <template>_copy/ generation workspace from a finished generated repository.
-# Execution: python3 scripts/remove_template_copy.py --repo-root <project-root>/<Workload Number>-<Repo Name>
+# Execution: python3 scripts/remove_template_copy.py --repo-root <project-root>/<Workload Number>-<Repo Base Name>
 # Options: --repo-root (required), --dry-run
 # Requirements: Python 3.10+
 # Environment: Run from the SOURCE generator (not from inside the nested copy being removed).
@@ -295,7 +295,7 @@ def main() -> int:
     parser = argparse.ArgumentParser(
         description="Remove the nested <template>_copy/ generation workspace from a finished generated repository"
     )
-    parser.add_argument("--repo-root", required=True, help="Generated repository: <project-root>/<Workload Number>-<Repo Name>")
+    parser.add_argument("--repo-root", required=True, help="Generated repository: <project-root>/<Workload Number>-<Repo Base Name>")
     parser.add_argument("--dry-run", action="store_true", help="Show what would be removed without deleting anything")
     args = parser.parse_args()
     return remove_template_copy(Path(args.repo_root), dry_run=args.dry_run)

@@ -26,7 +26,7 @@ class ReadmeBundleSectionTests(unittest.TestCase):
         template = (ROOT / "templates" / "README_TEMPLATE.md").read_text(encoding="utf-8")
         for number, repo, vendor, os_version, bundle in CASES:
             with self.subTest(workload=number):
-                fields = {"Workload Number": number, "Repo Name": repo, "GPU Vendor": vendor,
+                fields = {"Workload Number": number, "Repo Base Name": repo, "GPU Vendor": vendor,
                           "OS Version": os_version, "Workload Name": "Sample"}
                 fields.update(fill_generated_docs.ci_fields(fields))
                 section = fill_generated_docs.TOKEN_RE.sub(
@@ -44,8 +44,8 @@ class ReadmeBundleSectionTests(unittest.TestCase):
                 example = number[0] + "07"
                 flat = section.replace("\r\n", "\n")
                 self.assertIn("apt-get update && apt-get install -y git\ngit clone --recurse-submodules", flat)
-                self.assertIn("  && bash run_benchmark.sh --profile smoke --validate \\\n  && cd /opt/benchmarks \\\n  && echo \"Done:", flat)
                 self.assertIn(f"{number}-{repo} smoke run passed", flat)
+                self.assertIn("  && bash run_benchmark.sh --smoke --validate \\\n  && cd /opt/benchmarks \\\n  && echo \"Done:", flat)
                 self.assertIn(f"./run_benchmark_suite.sh -w {example} --baseline", flat)
                 self.assertIn(f"workload {example}, baseline profile", flat)
                 for line in flat.splitlines():

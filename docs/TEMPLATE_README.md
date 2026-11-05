@@ -90,31 +90,31 @@ Each generated repository uses its own isolated Python environment at `<repo-roo
 ```bash
 export BENCHMARK_PYTHON=/usr/bin/python3.14
 bash setup.sh
-bash run_benchmark.sh --profile smoke --validate
+bash run_benchmark.sh --smoke --validate
 ```
 
 If `.venv` is missing, setup creates it rather than installing Python packages globally or silently using another environment. The AI coding agent may run `setup.sh` and install packages during generation when useful, but must set the repository-local `.venv` first. The same rule applies to operators provisioning the repository after generation.
 
 ## What Must Be Generated Per Workload
 
-The AI agent should create these files only after Phase 0 produces a schema-validated root-level `benchmark_specification.json`, and only inside a generated repository subdirectory named `<Workload Number>-<Repo Name>` at project root (e.g. `<project-root>/<workload-number>-<repo-name>/`, not `<project-root>/<template-directory>/<repo-name>/`). That same `<Workload Number>-<Repo Name>` string is the GitHub repository name (for example `128-gpu-bench-amd-vllm-throughput-latency`). The workbook `Repo Name` field stays unprefixed:
+The AI agent should create these files only after Phase 0 produces a schema-validated root-level `benchmark_specification.json`, and only inside a generated repository subdirectory named `<Workload Number>-<Repo Base Name>` at project root (e.g. `<project-root>/<workload-number>-<repo-name>/`, not `<project-root>/<template-directory>/<repo-name>/`). That same `<Workload Number>-<Repo Base Name>` string is the GitHub repository name (for example `128-gpu-bench-amd-vllm-throughput-latency`). The workbook `Repo Base Name` field stays unprefixed:
 
-- `<Workload Number>-<Repo Name>/benchmark_specification.json`
-- `<Workload Number>-<Repo Name>/PRD.md`
-- `<Workload Number>-<Repo Name>/SPEC.md`
-- `<Workload Number>-<Repo Name>/README.md`
-- `<Workload Number>-<Repo Name>/config/benchmark_config.yaml`
-- `<Workload Number>-<Repo Name>/setup.sh`
-- `<Workload Number>-<Repo Name>/run_benchmark.sh`
-- `<Workload Number>-<Repo Name>/requirements.txt`
-- workload-specific `<Workload Number>-<Repo Name>/scripts/` files
-- workload-specific `<Workload Number>-<Repo Name>/src/` files, if needed
-- `<Workload Number>-<Repo Name>/results/.gitkeep`, `<Workload Number>-<Repo Name>/results/raw/.gitkeep`, and `<Workload Number>-<Repo Name>/results/parsed/.gitkeep`
-- `<Workload Number>-<Repo Name>/tests/fixtures/.gitkeep`
-- `<Workload Number>-<Repo Name>/docs/CHANGELOG.md`
-- `<Workload Number>-<Repo Name>/GENERATION_REPORT.md`
-- `<Workload Number>-<Repo Name>/results/generation_manifest.json`
-- workload-specific `<Workload Number>-<Repo Name>/docs/` files, if useful
+- `<Workload Number>-<Repo Base Name>/benchmark_specification.json`
+- `<Workload Number>-<Repo Base Name>/PRD.md`
+- `<Workload Number>-<Repo Base Name>/SPEC.md`
+- `<Workload Number>-<Repo Base Name>/README.md`
+- `<Workload Number>-<Repo Base Name>/config/benchmark_config.yaml`
+- `<Workload Number>-<Repo Base Name>/setup.sh`
+- `<Workload Number>-<Repo Base Name>/run_benchmark.sh`
+- `<Workload Number>-<Repo Base Name>/requirements.txt`
+- workload-specific `<Workload Number>-<Repo Base Name>/scripts/` files
+- workload-specific `<Workload Number>-<Repo Base Name>/src/` files, if needed
+- `<Workload Number>-<Repo Base Name>/results/.gitkeep`, `<Workload Number>-<Repo Base Name>/results/raw/.gitkeep`, and `<Workload Number>-<Repo Base Name>/results/parsed/.gitkeep`
+- `<Workload Number>-<Repo Base Name>/tests/fixtures/.gitkeep`
+- `<Workload Number>-<Repo Base Name>/docs/CHANGELOG.md`
+- `<Workload Number>-<Repo Base Name>/GENERATION_REPORT.md`
+- `<Workload Number>-<Repo Base Name>/results/generation_manifest.json`
+- workload-specific `<Workload Number>-<Repo Base Name>/docs/` files, if useful
 
 ## What Should Never Be Pre-Populated
 
@@ -140,12 +140,12 @@ Avoid carrying examples from previous workloads such as FIO, NVMe, GEMM, rocBLAS
 ## Expected Phase 0-4 Flow
 
 1. The agent parses the directly submitted workload prompt, records it as a timestamped project-root `AI_AGENT_PROMPT_SUBMITTED_<WORKLOADS>_<UTC_TIMESTAMP>.md` artifact, and validates requested workloads against `BenchmarkSpecDefinitions.xlsx`.
-2. After validation, the agent reads `Repo Name` from `benchmark_specification.json`, creates `<project-root>/<Workload Number>-<Repo Name>/`, copies required shared template scaffolding into that directory, and treats it as the generated repository root.
+2. After validation, the agent reads `Repo Base Name` from `benchmark_specification.json`, creates `<project-root>/<Workload Number>-<Repo Base Name>/`, copies required shared template scaffolding into that directory, and treats it as the generated repository root.
 3. Phase 1 begins only after Phase 0 validation. The agent reads the source guidance files in the priority order defined by `AGENTS.md` and `docs/AI_AGENT_INSTRUCTIONS.md`.
-4. Phase 2 generates `<Workload Number>-<Repo Name>/PRD.md`, `<Workload Number>-<Repo Name>/SPEC.md`, and `<Workload Number>-<Repo Name>/README.md` from their templates and `benchmark_specification.json`.
-5. Phase 3 generates only the workload-relevant repository files needed to run, parse, validate, document, and operate the benchmark inside `<Workload Number>-<Repo Name>/`.
+4. Phase 2 generates `<Workload Number>-<Repo Base Name>/PRD.md`, `<Workload Number>-<Repo Base Name>/SPEC.md`, and `<Workload Number>-<Repo Base Name>/README.md` from their templates and `benchmark_specification.json`.
+5. Phase 3 generates only the workload-relevant repository files needed to run, parse, validate, document, and operate the benchmark inside `<Workload Number>-<Repo Base Name>/`.
 6. Phase 4 runs `docs/SUBMISSION_CHECKLIST.md` in order and reports exact pass/fail results.
-7. Run `bash scripts/smoke_check_generated_repo.sh ../<Workload Number>-<Repo Name>` from `<template-directory>/` to confirm output location and required generated artifacts.
-8. Run `bash scripts/self_check_generated_repo.sh` from `<Workload Number>-<Repo Name>/` to confirm generated-repo-local contracts.
+7. Run `bash scripts/smoke_check_generated_repo.sh ../<Workload Number>-<Repo Base Name>` from `<template-directory>/` to confirm output location and required generated artifacts.
+8. Run `bash scripts/self_check_generated_repo.sh` from `<Workload Number>-<Repo Base Name>/` to confirm generated-repo-local contracts.
 
 The key guardrail is that no code, docs, configs, workflows, or reports should be generated until `benchmark_specification.json` has been extracted and schema-validated.

@@ -480,7 +480,6 @@ required = (
     "Run smoke profile",
     "Run baseline profile",
     "Run extended profile",
-    "Existing raw file",
 )
 missing = [token for token in required if token not in text]
 if missing:
@@ -491,15 +490,15 @@ if help_idx < 0:
     raise SystemExit("[FAIL] run_benchmark.sh does not handle --help.")
 if setup_idx < 0 or help_idx > setup_idx:
     raise SystemExit("[FAIL] run_benchmark.sh must handle --help before scripts/ensure_setup.sh.")
-def_idx = text.find("--matrix-definition")
+def_idx = text.find("--specification")
 if def_idx < 0:
-    raise SystemExit("[FAIL] run_benchmark.sh must handle --matrix-definition.")
+    raise SystemExit("[FAIL] run_benchmark.sh must handle --specification.")
 if def_idx > setup_idx:
-    raise SystemExit("[FAIL] run_benchmark.sh must handle --matrix-definition before scripts/ensure_setup.sh.")
+    raise SystemExit("[FAIL] run_benchmark.sh must handle --specification before scripts/ensure_setup.sh.")
 if "print_benchmark_definition.py" not in text:
     raise SystemExit("[FAIL] run_benchmark.sh must invoke scripts/print_benchmark_definition.py.")
 print("[PASS] run_benchmark.sh --help uses usage() before setup")
-print("[PASS] run_benchmark.sh --matrix-definition prints the matrix row before setup")
+print("[PASS] run_benchmark.sh --specification prints the specification before setup")
 PY
 "${PYTHON_BIN:-python3}" - <<'PY'
 import json
@@ -547,7 +546,7 @@ fields = {
     for item in json.loads(Path("benchmark_specification.json").read_text(encoding="utf-8"))
 }
 workload = fields.get("Workload Number", "").strip()
-repo = fields.get("Repo Name", "")
+repo = fields.get("Repo Base Name") or fields.get("Repo Name", "")
 stream = Path("src/stream.c")
 if stream.is_file() or workload in {"107", "207"}:
     if not stream.is_file():

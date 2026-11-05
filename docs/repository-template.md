@@ -2,7 +2,7 @@
 
 This file is the **single source of truth for repository layout** across all `gpu-bench-*` / `sys-bench-*` benchmark repositories. Other docs (`AGENTS.md`, `.claude/CLAUDE.md`) must reference this file rather than re-listing the tree themselves.
 
-When used from the template workspace, this layout applies inside the generated repository subdirectory named `<Workload Number>-<Repo Name>` at project root (e.g. `<project-root>/<workload-number>-<repo-name>/`, where `<template-directory>/` is also under `<project-root>/`). Publish that same `<Workload Number>-<Repo Name>` string as the GitHub repository name. The workbook `Repo Name` field stays unprefixed.
+When used from the template workspace, this layout applies inside the generated repository subdirectory named `<Workload Number>-<Repo Base Name>` at project root (e.g. `<project-root>/<workload-number>-<repo-name>/`, where `<template-directory>/` is also under `<project-root>/`). Publish that same `<Workload Number>-<Repo Base Name>` string as the GitHub repository name. The workbook `Repo Base Name` field stays unprefixed.
 
 Each generated repository also contains a complete active copy of the source template at `<source-template-name>_copy/` during generation; all generation utilities and Phase 0–4 actions run from that nested copy. The nested copy is a local generation workspace, is gitignored, is not published, and must not be required by the completed workload at runtime. It is removed once the workload passes (`scripts/create_one_workload.py` does this automatically, or run `scripts/remove_template_copy.py --repo-root <repo>`); `results/generation_manifest.json` keeps `template_copy_path`, `template_copy_sha256`, and `template_copy_removed_at` as the provenance record.
 
@@ -137,7 +137,7 @@ Do not invent new top-level directories unless the change is required by the ben
 │       ├── rocm_install_26_04.sh   # PROTECTED: Ubuntu 26.04 / ROCm 10.1.0 functions
 │   └── templates/
 │       ├── setup_rocm_reboot_skeleton.sh # Reusable setup.sh skeleton for ROCm reboot flows
-│       └── run_benchmark_help_skeleton.sh # Copy-this usage() and early --help / --matrix-definition handler
+│       └── run_benchmark_help_skeleton.sh # Copy-this usage() and early --help / --specification handler
 │
 ├── results/                        # Gitignored benchmark outputs
 │   ├── .gitkeep

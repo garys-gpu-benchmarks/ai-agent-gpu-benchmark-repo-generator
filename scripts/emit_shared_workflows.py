@@ -80,7 +80,7 @@ def build_shared_workflows(template_root: Path, contract: dict, dest: Path) -> N
         fixture / "schemas" / "benchmark_specification.schema.json",
     )
     _write(fixture / "config" / "pyproject.toml", _ruff_only_pyproject(template_root))
-    fields = {"Workload Number": "900", "Repo Name": "sys-bench-amd-sample-workload-ubu2404", "GPU Vendor": "AMD"}
+    fields = {"Workload Number": "900", "Repo Base Name": "sys-bench-amd-sample-workload-ubu2404", "GPU Vendor": "AMD"}
     identity = workload_identity(fields, contract)
     render_tree(
         template_root / WORKLOAD_WORKFLOWS_REL,

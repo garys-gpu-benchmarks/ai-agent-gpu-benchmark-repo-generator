@@ -1,5 +1,16 @@
 # Changelog
 
+## 2026-11-04 — TEMPLATE_00_120: run_benchmark.sh profile flags only
+
+- **`run_benchmark.sh --help` lists each workload parameter with a short description and its smoke, baseline, and extended values.** A value shared by all three profiles is printed once. Profile notes are omitted. `materialize_generated_harness.py` fills the section for a new runner and for an overlay runner.
+- **`run_benchmark.sh` no longer accepts `--permissions-check`, `--matrix-definition`, `--save-options-file`, or `--output-format`.** `--specification` still prints the workload specification and exits before setup. Output format comes from `config/benchmark_config.yaml`. The harness still writes `cli_options.env` and still passes that format to a collector that accepts `--output-format`.
+- **`run_benchmark.sh` no longer accepts `--profile`, `--device`, `--phase`, `--phase1` through `--phase4`, or an operator `--raw-file`.** Profiles are `--smoke`, `--baseline`, and `--extended`. Every run creates its own raw file, runs setup, then collection, parse, and validation. Collectors, parsers, and the runtime ledger still receive the profile name and the raw path the harness created. `show_ledger_runs.sh` and `show_metrics.sh` still filter with `--profile NAME`.
+
+## 2026-11-04 — TEMPLATE_00_120: generator CI lint fixes
+
+- **Removed the truncated `templates/suite-tools/scripts/get_ledger_info.sh`.** It ended mid-line at line 214 and failed the generator's Template CI shell lint (shellcheck SC1072/SC1073). It was already superseded by `user_scripts/get_benchmark_results.sh` and no longer published to `gpu-bench-suite`; nothing referenced it. The now-empty `templates/suite-tools/scripts/` folder is removed too.
+- **Removed the unused `import shlex` from `scripts/remote_host_preflight.py`** (ruff F401), which stopped `publish_benchmarks_to_github.sh` at its preflight lint.
+
 ## 2026-11-03 — TEMPLATE_00_119: 401-432 host robustness; remote preflight and one-time host bootstrap
 
 **Finding.** The same 401-432 bundle took 1h48m on TEMPLATE_00_117 (2026-10-22, 64.247.201.37) and 3h16m on TEMPLATE_00_118 (2026-11-03, 103.207.149.92). The installers were byte-identical. About 15 minutes came from three TEMPLATE_00_118 collector edits (not in that changelog) that failed on the Nov 3 container: the 401 kernel comparison, iperf3 `-l 128K` on UDP, and GUPS under `numactl` with no NUMA policy. The rest was the slower, cold VM: every bucket was slower (light workloads 1.4x, CUDA toolkit 1.9x, vLLM 2.1x, RAG 4.8x). Both hosts ran kernel `6.8.0-147-generic`, so the 401 failure is the code change, not the VM.

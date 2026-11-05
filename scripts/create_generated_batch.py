@@ -140,7 +140,7 @@ def _generated_identity(project_root: Path, workload: str) -> tuple[str, str]:
         except (OSError, json.JSONDecodeError):
             continue
         if fields.get("Workload Number") == workload:
-            repo_name = fields.get("Repo Name", candidate.name)
+            repo_name = fields.get("Repo Base Name") or fields.get("Repo Name") or candidate.name
             return generated_repo_directory_name(workload, repo_name), str(candidate)
     return "", ""
 

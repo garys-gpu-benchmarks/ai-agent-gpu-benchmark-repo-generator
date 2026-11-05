@@ -12,7 +12,7 @@ set -euo pipefail
 
 EXEC_MODE="local"
 echo "[INFO] Mode=${EXEC_MODE}"
-bash run_benchmark.sh --phase phase2
+bash run_benchmark.sh --smoke
 ```
 
 Notes:

@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # File: run_benchmark.sh
 # Description: Every profile loads real SDXL; smoke uses reduced resolution and steps.
-# Execution: bash run_benchmark.sh [--profile smoke|baseline|extended] [--validate]
+# Execution: bash run_benchmark.sh [--smoke|--baseline|--extended] [--validate]
 set -euo pipefail
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_NAME="$(basename "${REPO_ROOT}")"
@@ -19,19 +19,11 @@ Every profile loads stabilityai/stable-diffusion-xl-base-1.0.
 Smoke uses reduced resolution and steps, but never substitutes a tiny model.
 
 Profiles:
-  --profile <name>              Run profile: smoke|baseline|extended (default: smoke)
   --smoke                       Run smoke profile
   --baseline                    Run baseline profile
   --extended                    Run extended profile
 
 Execution:
-  --device <gpu|cpu>            Execution device (default: gpu)
-  --phase <phaseN|N>            Run one phase (phase1|phase2|phase3|phase4, or 1-4)
-  --phase1                      Collection
-  --phase2                      Collection alias
-  --phase3                      Parse only; requires --raw-file <path>
-  --phase4                      Validation only
-  --raw-file <path>             Existing raw file for --phase3
   --config <file>               Config file (default: config/benchmark_config.yaml)
 
 Validation and logging:
@@ -39,8 +31,6 @@ Validation and logging:
   --no-validate                 Skip result validation
   --quiet                       Suppress nonessential stdout
   --log-level <level>           ERROR|WARN|INFO|DEBUG (default: INFO)
-  --output-format <fmt>         Override config output_format
-  --save-options-file <path>    Write resolved CLI options to PATH
 
 Workload options:
   --model-name <name>           SDXL variant token (sdxl-base-1.0)
@@ -57,21 +47,15 @@ Workload options:
 
 Information:
   --specification               Print this workload's specification and exit
-  --matrix-definition           Same as --specification
   --help                        Show this help and exit
 USAGE
 }
 
 PROFILE="smoke"
-DEVICE="gpu"
-PHASE="all"
-RAW_FILE=""
 CONFIG_FILE="config/benchmark_config.yaml"
 VALIDATE=1
 QUIET=0
 LOG_LEVEL_VALUE="INFO"
-OUTPUT_FORMAT=""
-SAVE_OPTIONS_FILE=""
 MODEL_NAME=""
 PRECISION=""
 SCHEDULER=""
@@ -87,7 +71,7 @@ SEED=""
 for _help_arg in "$@"; do
   case "${_help_arg}" in
     --help) usage; exit 0 ;;
-    --specification|--matrix-definition|--benchmark-specification|--benchmark-definition)
+    --specification|--benchmark-specification|--benchmark-definition)
       python3 scripts/print_benchmark_definition.py
       exit 0
       ;;
@@ -96,23 +80,14 @@ done
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
-    --profile) PROFILE="${2:-}"; shift 2 ;;
     --smoke) PROFILE="smoke"; shift ;;
     --baseline) PROFILE="baseline"; shift ;;
     --extended) PROFILE="extended"; shift ;;
-    --device) DEVICE="${2:-}"; shift 2 ;;
-    --phase) PHASE="${2:-}"; shift 2 ;;
-    --phase1|--phase2) PHASE="1"; shift ;;
-    --phase3) PHASE="3"; shift ;;
-    --phase4) PHASE="4"; shift ;;
-    --raw-file) RAW_FILE="${2:-}"; shift 2 ;;
     --config) CONFIG_FILE="${2:-}"; shift 2 ;;
     --validate) VALIDATE=1; shift ;;
     --no-validate) VALIDATE=0; shift ;;
     --quiet) QUIET=1; shift ;;
     --log-level) LOG_LEVEL_VALUE="${2:-}"; shift 2 ;;
-    --output-format) OUTPUT_FORMAT="${2:-}"; shift 2 ;;
-    --save-options-file) SAVE_OPTIONS_FILE="${2:-}"; shift 2 ;;
     --model-name) MODEL_NAME="${2:-}"; shift 2 ;;
     --precision) PRECISION="${2:-}"; shift 2 ;;
     --scheduler) SCHEDULER="${2:-}"; shift 2 ;;
@@ -124,26 +99,15 @@ while [[ $# -gt 0 ]]; do
     --num-inference-steps) NUM_INFERENCE_STEPS="${2:-}"; shift 2 ;;
     --guidance-scale) GUIDANCE_SCALE="${2:-}"; shift 2 ;;
     --seed) SEED="${2:-}"; shift 2 ;;
-    --help|--specification|--matrix-definition|--benchmark-specification|--benchmark-definition) shift ;;
+    --help|--specification|--benchmark-specification|--benchmark-definition) shift ;;
     --remote|--ssh|--host) die "This repository is local-only and does not support remote execution." ;;
     *) die "Unknown option: $1" ;;
   esac
 done
 
-case "${PHASE}" in
-  all|phase1|phase2|phase3|phase4|1|2|3|4) ;;
-  *) die "Unsupported --phase value: ${PHASE}" ;;
-esac
-if [[ "${PHASE}" == phase* ]]; then PHASE="${PHASE#phase}"; fi
-if [[ "${DEVICE}" == "cpu" ]]; then
-  die "This SDXL inference benchmark requires --device gpu."
-fi
-
 set_log_level "${LOG_LEVEL_VALUE}"
 begin_benchmark_run "${PROFILE}"
-if [[ "${PHASE}" != "3" && "${PHASE}" != "4" ]]; then
-  bash scripts/ensure_setup.sh
-fi
+bash scripts/ensure_setup.sh
 mark_benchmark_measure_start
 # /usr/local/cuda first: it is the toolkit setup.sh installed and recorded. A
 # leftover /usr/local/cuda-12.6 ahead of it would run a different nvcc.
@@ -185,7 +149,7 @@ NUM_INFERENCE_STEPS="${NUM_INFERENCE_STEPS:-2}"
 (( NUM_IMAGES < 2 )) && NUM_IMAGES=2
 (( NUM_INFERENCE_STEPS < 2 )) && NUM_INFERENCE_STEPS=2
 
-BENCHMARK_RUN_COMMAND="bash run_benchmark.sh --profile ${PROFILE}"
+BENCHMARK_RUN_COMMAND="bash run_benchmark.sh --${PROFILE}"
 [[ "${VALIDATE}" -eq 1 ]] && BENCHMARK_RUN_COMMAND+=" --validate" || BENCHMARK_RUN_COMMAND+=" --no-validate"
 BENCHMARK_RUN_COMMAND+=" --model-name ${MODEL_NAME} --precision ${PRECISION} --scheduler ${SCHEDULER}"
 BENCHMARK_RUN_COMMAND+=" --prompt-source ${PROMPT_SOURCE} --prompt-len ${PROMPT_LEN}"
@@ -196,7 +160,7 @@ set_benchmark_run_command "${BENCHMARK_RUN_COMMAND}"
 
 HOSTNAME_VALUE="$(hostname -s 2>/dev/null || hostname)"
 STAMP="$(date -u +"%Y%m%d_%H%M%S")"
-if [[ -z "${RAW_FILE}" ]]; then
+if [[ -z "${RAW_FILE:-}" ]]; then
   RUN_DIR="${REPO_ROOT}/results/raw/${STAMP}_${REPO_NAME}_${HOSTNAME_VALUE}"
   mkdir -p "${RUN_DIR}"
   RAW_FILE="${RUN_DIR}/sdxl_infer_raw.txt"
@@ -207,10 +171,8 @@ set_benchmark_run_dir "${RUN_DIR}"
 COMMAND_LOG="${RUN_DIR}/commands_executed.sh"
 { echo "#!/usr/bin/env bash"; echo "set -euo pipefail"; } > "${COMMAND_LOG}"
 chmod +x "${COMMAND_LOG}"
-[[ -n "${SAVE_OPTIONS_FILE}" ]] && printf 'profile=%s\noutput_format=%s\n' "${PROFILE}" "${OUTPUT_FORMAT}" > "${SAVE_OPTIONS_FILE}"
 {
   echo "profile=${PROFILE}"
-  echo "device=${DEVICE}"
   echo "backend=${BACKEND}"
   echo "model_name=${MODEL_NAME}"
   echo "precision=${PRECISION}"
@@ -275,11 +237,9 @@ run_validate() {
   "${PYTHON_BIN}" scripts/validate_results.py --db "${REPO_ROOT}/results/benchmark.db" --config "${CONFIG_FILE}" || die "validation failed"
 }
 
-case "${PHASE}" in
-  all|1|2) run_collection; run_parse; [[ "${VALIDATE}" -eq 1 ]] && run_validate ;;
-  3) [[ -n "${RAW_FILE}" && -f "${RAW_FILE}" ]] || die "--phase3 requires --raw-file <existing file>"; run_parse ;;
-  4) run_validate ;;
-esac
+run_collection
+run_parse
+[[ "${VALIDATE}" -eq 1 ]] && run_validate
 
 if [[ -f "${RAW_FILE}" ]]; then
   cp "${RAW_FILE}" "${RUN_DIR}/run.log"

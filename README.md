@@ -134,7 +134,7 @@ Steps to generate your first benchmark repository:
     ```bash
     bash setup.sh
     bash run_benchmark.sh --help
-    bash run_benchmark.sh --profile smoke --validate
+    bash run_benchmark.sh --smoke --validate
     ```
 
 See [`docs/AI_AGENT_INSTRUCTIONS.md`](docs/AI_AGENT_INSTRUCTIONS.md) for the authoritative agent instructions and [`docs/generation-workflow.md`](docs/generation-workflow.md) for what the agent does at each phase.

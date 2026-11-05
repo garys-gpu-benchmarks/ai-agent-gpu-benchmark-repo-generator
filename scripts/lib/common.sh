@@ -212,8 +212,7 @@ print_benchmark_summary_commands() {
 
 display_device() {
   # Device shown in the run summary: "cpu" for CPU / System workloads (STREAM,
-  # FIO, iPerf, lmbench, GUPS, ...), otherwise the --device value (default gpu).
-  # Collectors still receive DEVICE unchanged.
+  # FIO, iPerf, lmbench, GUPS, ...), otherwise gpu.
   local spec="${REPO_ROOT:-.}/benchmark_specification.json"
   local domain=""
   if [[ -f "${spec}" ]]; then

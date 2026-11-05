@@ -9,7 +9,7 @@ When the user attaches `docs/AI_AGENT_INSTRUCTIONS.md` and asks to generate work
 
 This generator tree is the only template. Do not read or copy any other `TEMPLATE_*` directory. No `Legacy:` line means legacy mode is off. Do not refresh the VM unless the prompt explicitly confirms a refresh.
 
-`through`, `to`, and `-` are inclusive. Repositories are created in the parent of this generator, even when Cursor's open folder is this generator. On the VM they install only under `/opt/benchmarks/<Workload Number>-<Repo Name>`. Do not use `/root` or `/opt/workloads`. Every `run_benchmark.sh` run appends to `/var/opt/benchmarks/runtime_ledger.csv`.
+`through`, `to`, and `-` are inclusive. Repositories are created in the parent of this generator, even when Cursor's open folder is this generator. On the VM they install only under `/opt/benchmarks/<Workload Number>-<Repo Base Name>`. Do not use `/root` or `/opt/workloads`. Every `run_benchmark.sh` run appends to `/var/opt/benchmarks/runtime_ledger.csv`.
 
 The only generation action is to save the chat text as the submitted-prompt artifact, then run from this generator directory:
 

@@ -5,7 +5,7 @@
 # Date: 2026-07-07
 # Description: Template-mode smoke checks for generated repository completeness and phase markers.
 # Execution: bash scripts/smoke_check_generated_repo.sh [repo_root]
-# Options: repo_root (optional) — defaults to <workload>-<Repo Name>
+# Options: repo_root (optional) — defaults to <workload>-<Repo Base Name>
 # Requirements: bash, python3
 # Environment: Run from template root after generation.
 # Dependencies: python3, test, rg
@@ -29,10 +29,10 @@ repo_name = None
 for item in data:
     if item.get("field_name") == "Workload Number":
         workload = str(item.get("value", "")).strip()
-    elif item.get("field_name") == "Repo Name":
+    elif item.get("field_name") in ("Repo Base Name", "Repo Name"):
         repo_name = str(item.get("value", "")).strip()
 if not workload or not repo_name:
-    raise SystemExit("Workload Number or Repo Name missing in benchmark_specification.json")
+    raise SystemExit("Workload Number or Repo Base Name missing in benchmark_specification.json")
 print(f"{workload}|{repo_name}")
 PY
 }

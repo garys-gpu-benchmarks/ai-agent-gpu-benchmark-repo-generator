@@ -5,7 +5,7 @@
 
 # Scope note:
 # In template mode, run this checklist from the generated repository subdirectory
-# named `<Workload Number>-<Repo Name>` from `benchmark_specification.json` at project root
+# named `<Workload Number>-<Repo Base Name>` from `benchmark_specification.json` at project root
 # (for example: `<project-root>/101_sys-bench-rocm-stack-validation/`, not
 # `<project-root>/<template-directory>/<repo-name>/`). All relative paths below are scoped to that
 # generated repository root.
@@ -94,9 +94,9 @@
 - [ ] 3.11a `GENERATION_REPORT.md` contains `generation_started_at`, `generation_finished_at`, and `generation_duration_seconds` matching the final values in `results/generation_manifest.json`.
 - [ ] 3.11b For a multi-workload prompt, the project root contains `batch_generation_manifest.json`; it lists every requested workload, records each repository result as `passed`, `failed`, `abandoned`, or `timed_out`, records one remote refresh status, records `create_start_time`, `create_end_time`, and the human-readable `create_total_time` for each repository, and passes the batch manifest schema validation.
 - [ ] 3.11c Multi-workload generation was strictly sequential: only `create_generated_repo.py --workload <N>` was used per workload; no later workload directory was created until the current workload finished, failed with user notification, was abandoned, or timed out after 60 minutes of calendar time; `create_generated_batch.py` was not used on the AI Coding Agent chatbox path; status questions were answered without stopping the current unfinished workload; after a workload was recorded the next remaining requested workload started in the same turn.
-- [ ] 3.11d After every requested workload directory was recorded, generation-time scratch was removed from the local project root and from the remote validation host home (`*_create_start_time.txt`, `workload_identities.txt`, `rocm_pip_constraints.txt`, `_fill_generated_docs.py`, `patch_generated_repo.py`, `finish_one_workload.sh`, `process_range.sh`, `_generation_helpers/`, `batch_process*.log`, `batch_process*.stdout`, `retry*.stdout`, root `*_setup.log`). The local project root still has the template directory, each `<Workload Number>-<Repo Name>/` directory, `AI_AGENT_PROMPT_SUBMITTED_*.md`, and `batch_generation_manifest.json`. The VM home no longer has leftover helpers or a duplicate batch manifest once the local copy is authoritative. Generated repositories and `/var/opt/benchmarks/runtime_ledger.csv` were not deleted.
-- [ ] 3.11e The AI Coding Agent (ie, Cursor) project-root sibling is the created repository only. Every requested `<Workload Number>-<Repo Name>` exists as a sibling of `ai-agent-gpu-benchmark-repo-generator` and contains `setup.sh`, `run_benchmark.sh`, and `config/benchmark_config.yaml`. Remote smoke without that sibling is a fail. A results-only stub (for example under `DIRECTORIES/`) is a fail. `--project-root /root` was not used to relocate output. Nothing was copied from the VM back into that sibling.
-- [ ] 3.11e1 After each remote copy, `/opt/benchmarks/<Workload Number>-<Repo Name>` and its subdirectories are `0755` (`drwxr-xr-x`), not world-writable `0777` (`drwxrwxrwx` / lime-green in `ls`). `stat -c '%a' /opt/benchmarks/<Workload Number>-<Repo Name>` prints `755`. `scripts/create_one_workload.py` applies `find … -type d -exec chmod 755 {} +` after extract; a manual copy must do the same before `setup.sh`.
+- [ ] 3.11d After every requested workload directory was recorded, generation-time scratch was removed from the local project root and from the remote validation host home (`*_create_start_time.txt`, `workload_identities.txt`, `rocm_pip_constraints.txt`, `_fill_generated_docs.py`, `patch_generated_repo.py`, `finish_one_workload.sh`, `process_range.sh`, `_generation_helpers/`, `batch_process*.log`, `batch_process*.stdout`, `retry*.stdout`, root `*_setup.log`). The local project root still has the template directory, each `<Workload Number>-<Repo Base Name>/` directory, `AI_AGENT_PROMPT_SUBMITTED_*.md`, and `batch_generation_manifest.json`. The VM home no longer has leftover helpers or a duplicate batch manifest once the local copy is authoritative. Generated repositories and `/var/opt/benchmarks/runtime_ledger.csv` were not deleted.
+- [ ] 3.11e The AI Coding Agent (ie, Cursor) project-root sibling is the created repository only. Every requested `<Workload Number>-<Repo Base Name>` exists as a sibling of `ai-agent-gpu-benchmark-repo-generator` and contains `setup.sh`, `run_benchmark.sh`, and `config/benchmark_config.yaml`. Remote smoke without that sibling is a fail. A results-only stub (for example under `DIRECTORIES/`) is a fail. `--project-root /root` was not used to relocate output. Nothing was copied from the VM back into that sibling.
+- [ ] 3.11e1 After each remote copy, `/opt/benchmarks/<Workload Number>-<Repo Base Name>` and its subdirectories are `0755` (`drwxr-xr-x`), not world-writable `0777` (`drwxrwxrwx` / lime-green in `ls`). `stat -c '%a' /opt/benchmarks/<Workload Number>-<Repo Base Name>` prints `755`. `scripts/create_one_workload.py` applies `find … -type d -exec chmod 755 {} +` after extract; a manual copy must do the same before `setup.sh`.
 - [ ] 3.11f The local sibling has no validation-host runtime state: `test ! -d .venv`, `test ! -d .cache`, and no `.venvs/`, `venv/`, `.setup_state`, `.setup.lock`, `.rocm_runtime_stage.env`, `results/raw/` run trees, `build/` products, fio `data/`, cloned `third_party/` builds that the overlay did not ship, `*.deb`, `*.safetensors`, or `__pycache__/`. Those paths may exist on the validation VM only. Do not copy them to the local created repository.
 - [ ] 3.12 `tests/fixtures/` directory exists with `.gitkeep` sentinel. No binary `benchmark.db` is committed — the fixture is generated on-the-fly by `--seed-fixture`.
 - [ ] 3.13 There is no `tests/fixtures/create_fixture_db.py` — `scripts/validate_results.py --seed-fixture` is the replacement.
@@ -135,8 +135,8 @@
            visible GPU before writing the setup completion marker.
 - [ ] 3.28 All scripts are idempotent — repeated execution does not cause errors, duplication, or corruption.
 - [ ] 3.29 `run_benchmark.sh` supports `--log-level` with `ERROR|WARN|INFO|DEBUG`.
-- [ ] 3.29a `run_benchmark.sh` supports `--profile <smoke|baseline|extended>` and aliases
-           `--smoke`, `--baseline`, `--extended`; LLM Serving CLI default is
+- [ ] 3.29a `run_benchmark.sh` supports `--smoke`, `--baseline`, and `--extended`
+           and does not accept `--profile <name>`; LLM Serving CLI default is
            `smoke` (tiny local server). `--baseline` has an approximately 3–5
            minute target. Smoke, baseline,
            and extended yaml must match the workbook `Parameters_SmokeBaselineExtend` sheet, not
@@ -174,10 +174,9 @@
            `docs/run-output-contract.md` and exits 0 before `scripts/ensure_setup.sh`.
            Help is not a header dump (`sed -n '1,20p'`). Profile aliases read
            `Run smoke profile`, `Run baseline profile`, and `Run extended profile`.
-           `--raw-file` is documented as an existing file for `--phase3`.
            Value-taking flags are documented as taking values. `-h` is omitted
            unless the parser accepts it.
-- [ ] 3.29c `bash run_benchmark.sh --specification` (alias: `--matrix-definition`)
+- [ ] 3.29c `bash run_benchmark.sh --specification`
            prints every `benchmark_specification.json` field/value as a two-column
            table and exits 0 before `scripts/ensure_setup.sh`. The runtime source
            is the extracted JSON row, not the Excel workbook.
@@ -196,8 +195,8 @@
 - [ ] 3.34 Run artifact directory naming follows `YYYYMMDD_HHMMSS_<repo_name>_<hostname>` under `results/raw/`.
 - [ ] 3.35 `run_benchmark.sh` persists per-run sample exports in both CSV and JSON.
 - [ ] 3.36 `run_benchmark.sh` reports total run duration at completion.
-- [ ] 3.37 `run_benchmark.sh` supports resumable phase execution (`--phase` and `--phase1..--phase4`) with clear completion logs.
-- [ ] 3.38 `--phase phase3` requires and honors `--raw-file` for parse-only recovery workflows.
+- [ ] 3.37 `run_benchmark.sh` runs collection, parse, and validation in one invocation and logs each stage.
+- [ ] 3.38 `run_benchmark.sh` rejects `--profile`, `--device`, `--phase`, `--phase1` through `--phase4`, and `--raw-file`.
 - [ ] 3.39 Per-run raw benchmark rows are exported in dual formats (`raw_results.csv` and `raw_results.jsonl`).
 - [ ] 3.40 End-of-run summary includes extended descriptive statistics (min/max/mean/median/stddev/p95) where applicable.
 - [ ] 3.40c End-of-run summary emits exactly one `[INFO]` metric line per numbered
@@ -334,7 +333,7 @@
 - [ ] 3.68 `gpu-smoke.yml` triggers on `workflow_dispatch` only (never `pull_request`), has
            `permissions: contents: read`, and its only job calls
            `<owner>/shared-workflows/.github/workflows/gpu-smoke.yml@<ref>`, which runs
-           `run_benchmark.sh --profile <profile> --validate` on `[self-hosted, gpu, <vendor>, <os_label>]`
+           `run_benchmark.sh --<profile> --validate` on `[self-hosted, gpu, <vendor>, <os_label>]`
            and uploads `results/summary.json`, `results/environment.json` and `results/parsed/`.
 - [ ] 3.69 No workflow uses `continue-on-error: true` or `|| true` on a lint or validation step.
            `python3 scripts/ci_contract.py --check-callers <repo>` passes.

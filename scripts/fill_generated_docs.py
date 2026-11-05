@@ -127,7 +127,7 @@ def expand_generate(instruction: str, fields: dict[str, str]) -> str:
     text = instruction.lower()
     parameters = _parameters(fields)
     profiles = _profile_values(fields)
-    repo_name = fields.get("Repo Name", "")
+    repo_name = fields.get("Repo Base Name") or fields.get("Repo Name", "")
     workload = fields.get("Workload Number", "")
     slug = generated_repo_directory_name(workload, repo_name)
     exec_desc = fields.get("Execution Description With Parameters", "")
@@ -172,7 +172,7 @@ def expand_generate(instruction: str, fields: dict[str, str]) -> str:
         return f"{body} Sweep dimensions: {sweep}."
 
     if "command line" in text or "invocation" in text:
-        command = cmdline or "bash run_benchmark.sh --profile smoke --validate"
+        command = cmdline or "bash run_benchmark.sh --smoke --validate"
         return f"```bash\n{command}\n```"
 
     if (
@@ -239,7 +239,7 @@ def expand_generate(instruction: str, fields: dict[str, str]) -> str:
             f"git clone https://github.com/{org}/{slug}.git\n"
             f"cd {slug}\n"
             f"sudo bash setup.sh --assume-yes\n"
-            f"bash run_benchmark.sh --profile smoke --validate\n"
+            f"bash run_benchmark.sh --smoke --validate\n"
             f"```\n"
             f"Results are written to `results/benchmark.db` and `results/summary.json`."
         )
@@ -280,9 +280,9 @@ def expand_generate(instruction: str, fields: dict[str, str]) -> str:
         return (
             "```bash\n"
             "bash run_benchmark.sh --help\n"
-            "bash run_benchmark.sh --profile smoke --validate\n"
-            "bash run_benchmark.sh --profile baseline --validate\n"
-            "bash run_benchmark.sh --profile extended --validate\n"
+            "bash run_benchmark.sh --smoke --validate\n"
+            "bash run_benchmark.sh --baseline --validate\n"
+            "bash run_benchmark.sh --extended --validate\n"
             "```\n"
             "`run_benchmark.sh --help` prints usage and exits. "
             "The harness calls `scripts/ensure_setup.sh` when `.setup_state` is absent."
@@ -427,7 +427,7 @@ def render_template(template_text: str, fields: dict[str, str]) -> str:
 
 def write_generation_report(repo_root: Path, fields: dict[str, str], template_root: Path) -> str:
     workload = fields.get("Workload Number", "")
-    repo_name = fields.get("Repo Name", "")
+    repo_name = fields.get("Repo Base Name") or fields.get("Repo Name", "")
     directory = generated_repo_directory_name(workload, repo_name)
     now = datetime.now(timezone.utc).replace(microsecond=0).strftime("%Y-%m-%dT%H:%M:%SZ")
     resolution = repo_root / "results" / "component_resolution.json"
@@ -438,7 +438,7 @@ def write_generation_report(repo_root: Path, fields: dict[str, str], template_ro
     return (
         f"# GENERATION_REPORT.md\n\n"
         f"- Workload Number: {workload}\n"
-        f"- Workbook Repo Name: {repo_name}\n"
+        f"- Workbook Repo Base Name: {repo_name}\n"
         f"- Local directory / GitHub slug: `{directory}`\n"
         f"- generation_started_at: pending\n"
         f"- generation_finished_at: pending\n"

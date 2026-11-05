@@ -230,7 +230,7 @@ test ! -f /etc/systemd/system/<repo-name>-setup-resume.service
 source ~/.bashrc
 which rvs
 rvs --version
-bash run_benchmark.sh --profile smoke --validate
+bash run_benchmark.sh --smoke --validate
 ```
 
 Expected setup markers:

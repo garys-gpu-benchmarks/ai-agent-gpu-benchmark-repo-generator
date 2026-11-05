@@ -367,13 +367,13 @@ def main() -> int:
         )
 
         fields = _definition_fields(discovery_root / "benchmark_specification.json")
-        repo_name = fields.get("Repo Name", "")
+        repo_name = fields.get("Repo Base Name") or fields.get("Repo Name", "")
         workload_name = fields.get("Workload Name", "")
         if not repo_name or not workload_name:
-            raise SystemExit("[FAIL] Extracted definition lacks Workload Name or Repo Name.")
+            raise SystemExit("[FAIL] Extracted definition lacks Workload Name or Repo Base Name.")
         if args.repo_name and args.repo_name != repo_name:
             raise SystemExit(
-                f"[FAIL] --repo-name {args.repo_name!r} does not match extracted Repo Name {repo_name!r}."
+                f"[FAIL] --repo-name {args.repo_name!r} does not match extracted Repo Base Name {repo_name!r}."
             )
 
         repo_root = (project_root / generated_repo_directory_name(workload, repo_name)).resolve()

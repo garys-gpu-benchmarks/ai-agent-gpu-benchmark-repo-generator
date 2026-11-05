@@ -4,7 +4,7 @@ Template release: `Project37_TEMPLATE_0_02_20260706a`
 
 This template uses schema-backed contracts to reduce ambiguity and prevent creative reinterpretation by AI agents.
 
-In template mode, validate the extracted Phase 0 `benchmark_specification.json` at `<template-directory>/`, then validate the generation manifest inside the generated repository subdirectory named `<Workload Number>-<Repo Name>` at project root (`../<WORKLOAD_NUMBER>-<REPO_NAME>/` when invoked from `<template-directory>/`).
+In template mode, validate the extracted Phase 0 `benchmark_specification.json` at `<template-directory>/`, then validate the generation manifest inside the generated repository subdirectory named `<Workload Number>-<Repo Base Name>` at project root (`../<WORKLOAD_NUMBER>-<REPO_NAME>/` when invoked from `<template-directory>/`).
 
 ## Contract Files
 

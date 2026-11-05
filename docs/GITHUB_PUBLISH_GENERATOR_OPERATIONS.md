@@ -15,12 +15,12 @@ Keep the existing local-directory convention and use that **same** name on GitHu
 
 | What | Rule | Example |
 |---|---|---|
-| Local generation directory | `<Workload Number>-<Repo Name>` | `315-gpu-bench-amd-babelstream-hbm-bandwidth-ubu2604` |
+| Local generation directory | `<Workload Number>-<Repo Base Name>` | `315-gpu-bench-amd-babelstream-hbm-bandwidth-ubu2604` |
 | GitHub repository name | same as the local directory | `315-gpu-bench-amd-babelstream-hbm-bandwidth-ubu2604` |
 | 101–132 / 201–232 | no `-ubu2604` suffix | `128_gpu-bench-amd-vllm-throughput-latency` |
-| 301–332 / 401–432 | `Repo Name` ends with `-ubu2604` | `315_…-ubu2604`, `415_…-ubu2604` |
+| 301–332 / 401–432 | `Repo Base Name` ends with `-ubu2604` | `315_…-ubu2604`, `415_…-ubu2604` |
 
-The workbook `Repo Name` field stays unprefixed (`gpu-bench-amd-vllm-throughput-latency`). The published GitHub name always adds the leading workload number.
+The workbook `Repo Base Name` field stays unprefixed (`gpu-bench-amd-vllm-throughput-latency`). The published GitHub name always adds the leading workload number.
 
 ## Four flavors
 
@@ -70,16 +70,16 @@ Do not `--apply` on the only generation tree (it deletes `*_copy/`).
 
 ```bash
 # Preview one workload (safe)
-cd <Workload Number>-<Repo Name>
+cd <Workload Number>-<Repo Base Name>
 bash scripts/prepare_github_publish.sh --dry-run
 
 # Publish tree
 mkdir -p /tmp/publish
-cp -a <Workload Number>-<Repo Name> /tmp/publish/
-cd /tmp/publish/<Workload Number>-<Repo Name>
+cp -a <Workload Number>-<Repo Base Name> /tmp/publish/
+cd /tmp/publish/<Workload Number>-<Repo Base Name>
 bash scripts/prepare_github_publish.sh --apply --github-owner=YOUR_GITHUB_USER
 bash scripts/check_github_publish_ready.sh --published
-# then git init / add / status / commit / push to github.com/<owner>/<Workload Number>-<Repo Name>
+# then git init / add / status / commit / push to github.com/<owner>/<Workload Number>-<Repo Base Name>
 # example: gh repo create 128_gpu-bench-amd-vllm-throughput-latency --public --source=. --remote=origin --push
 ```
 
