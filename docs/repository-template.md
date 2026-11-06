@@ -27,11 +27,11 @@ Anything below marked `*` or `**` may legitimately be **absent** in a given repo
 ## File placement guidance
 
 - User-facing documentation → `README.md` or `docs/`
-- Benchmark requirements (the "why") → `PRD.md`
+- Benchmark requirements (the "why") → `docs/PRD.md`
 - Technical implementation requirements (the "how") → `SPEC.md`
 - Shared AI-agent rules → `AGENTS.md`
 - Claude-specific instructions → `.claude/CLAUDE.md`
-- Generation templates for `PRD.md` / `SPEC.md` / `README.md` → `PRD_TEMPLATE.md` / `SPEC_TEMPLATE.md` / `README_TEMPLATE.md` (repo root; shared and generic across all benchmarks — see `.claude/CLAUDE.md`, do not edit per-benchmark)
+- Generation templates for `docs/PRD.md` / `SPEC.md` / `README.md` → `PRD_TEMPLATE.md` / `SPEC_TEMPLATE.md` / `README_TEMPLATE.md` (repo root; shared and generic across all benchmarks — see `.claude/CLAUDE.md`, do not edit per-benchmark)
 - Source code → `src/`
 - Orchestration scripts → `scripts/`
 - Validation fixture sentinels → `tests/fixtures/`
@@ -51,10 +51,9 @@ Do not invent new top-level directories unless the change is required by the ben
 ├── AGENTS.md                       # Cross-agent coding guidance
 ├── .claude/
 │   └── CLAUDE.md                   # Claude-specific coding guidance (not at repo root)
-├── PRD_TEMPLATE.md                 # Generation template + agent instructions for PRD.md (shared, generic — do not edit per-repo)
+├── PRD_TEMPLATE.md                 # Generation template + agent instructions for docs/PRD.md (shared, generic — do not edit per-repo)
 ├── SPEC_TEMPLATE.md                # Generation template + agent instructions for SPEC.md (shared, generic — do not edit per-repo)
 ├── README_TEMPLATE.md              # Generation template + agent instructions for README.md (shared, generic — do not edit per-repo)
-├── PRD.md                          # Product requirements (generated from PRD_TEMPLATE.md + benchmark_specification.json)
 ├── SPEC.md                         # Engineering specification (generated from SPEC_TEMPLATE.md + benchmark_specification.json)
 ├── README.md                       # Human-facing overview (generated from README_TEMPLATE.md + benchmark_specification.json)
 ├── LICENSE                         # Repository license terms (root)
@@ -94,6 +93,8 @@ Do not invent new top-level directories unless the change is required by the ben
 │   └── hw_sw_info_commands.xlsx    # Excel source for post-run HW/SW inventory commands
 │
 ├── docs/
+│   ├── PRD.md                      # Product requirements (generated from PRD_TEMPLATE.md + benchmark_specification.json)
+│   ├── GENERATION_REPORT.md        # Generation timing record; prepare_github_publish.sh removes it
 │   ├── CHANGELOG.md                # Chronological record of updates
 │   ├── GITHUB_PUBLISH_WORKLOAD_REPO.md # Independent workload publication instructions
 │   ├── architecture.md             # Data-flow diagram, schema, config-to-code map
@@ -156,7 +157,7 @@ Do not invent new top-level directories unless the change is required by the ben
 
 `tests/` holds only the fixture directory sentinel. There are no unit-test harness files (`conftest.py`, `test_integrity.py`, etc.) in this architecture. All validation is performed by `scripts/validate_results.py` — see `AGENTS.md`'s "Execution-Loop Validation Contract" section for the full specification.
 
-**On `*_TEMPLATE.md` vs. their generated counterparts:** `PRD_TEMPLATE.md`, `SPEC_TEMPLATE.md`, and `README_TEMPLATE.md` are shared, generic files — identical across every `gpu-bench-*` / `sys-bench-*` repo, same category as `AGENTS.md` and `.claude/CLAUDE.md`. `PRD.md`, `SPEC.md`, and `README.md` are the per-benchmark outputs an agent generates from those templates plus `benchmark_specification.json` (see the root `README.md` prompt forms and `docs/AI_AGENT_INSTRUCTIONS.md`). Both the template and its generated output must be present; do not treat one as a substitute for the other, and do not hand-edit a generated file in a way that diverges from what its template would produce.
+**On `*_TEMPLATE.md` vs. their generated counterparts:** `PRD_TEMPLATE.md`, `SPEC_TEMPLATE.md`, and `README_TEMPLATE.md` are shared, generic files — identical across every `gpu-bench-*` / `sys-bench-*` repo, same category as `AGENTS.md` and `.claude/CLAUDE.md`. `docs/PRD.md`, `SPEC.md`, and `README.md` are the per-benchmark outputs an agent generates from those templates plus `benchmark_specification.json` (see the root `README.md` prompt forms and `docs/AI_AGENT_INSTRUCTIONS.md`). Both the template and its generated output must be present; do not treat one as a substitute for the other, and do not hand-edit a generated file in a way that diverges from what its template would produce.
 
 **On `BenchmarkSpecDefinitions.xlsx`:** This file belongs to the template — it is the upstream human-maintained matrix for all workloads and is retained only inside the complete nested active template copy. The generated workload repository root contains only the extracted `benchmark_specification.json`; the nested active copy retains the matrix for reproducibility.
 

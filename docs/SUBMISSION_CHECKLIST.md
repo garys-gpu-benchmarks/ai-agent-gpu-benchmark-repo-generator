@@ -39,7 +39,7 @@
 *Complete before deriving the SQLite schema or writing any implementation code.*
 
 ### PRD.md
-- [ ] 2.1  `PRD.md` has been written to disk.
+- [ ] 2.1  `docs/PRD.md` has been written to disk. `PRD.md` is not at the repository root.
 - [ ] 2.2  Zero unresolved `{{...}}` tokens remain.
 - [ ] 2.3  Zero unresolved `[[GENERATE...]]` blocks remain.
 - [ ] 2.4  The `AGENT INSTRUCTIONS` HTML comment block has been stripped from the output.
@@ -60,7 +60,7 @@
 - [ ] 2.15 Zero unresolved `[[GENERATE...]]` blocks remain.
 - [ ] 2.16 The `AGENT INSTRUCTIONS` HTML comment block has been stripped from the output.
 - [ ] 2.17 Every substituted `{{Field Name}}` value matches the verbatim field value in `benchmark_specification.json` — spot-check at least three fields.
-- [ ] 2.18 Quick Start/Installation command blocks include `bash scripts/build.sh` only when the workload explicitly requires a compile/build step.
+- [ ] 2.18 `README.md` has `## Quick Start`, `## Profiles and Parameters`, `## Metrics`, `## Output`, `## Requirements`, and `## Troubleshooting`, and its Parameters table matches `run_benchmark.sh --help`.
 
 ---
 
@@ -91,7 +91,7 @@
 - [ ] 3.10 `scripts/validate_results.py` exists and accepts `--db`, `--config`, `--seed-fixture`, and `--quiet` flags.
 - [ ] 3.10a `scripts/self_check_generated_repo.sh` exists and passes when run from generated repo root.
 - [ ] 3.11 `results/generation_manifest.json` exists and passes: `python3 scripts/validate_template_inputs.py --generation-manifest results/generation_manifest.json --generation-schema schemas/generation_report.schema.json`.
-- [ ] 3.11a `GENERATION_REPORT.md` contains `generation_started_at`, `generation_finished_at`, and `generation_duration_seconds` matching the final values in `results/generation_manifest.json`.
+- [ ] 3.11a `docs/GENERATION_REPORT.md` contains `generation_started_at`, `generation_finished_at`, and `generation_duration_seconds` matching the final values in `results/generation_manifest.json`. The same file is not at the repository root.
 - [ ] 3.11b For a multi-workload prompt, the project root contains `batch_generation_manifest.json`; it lists every requested workload, records each repository result as `passed`, `failed`, `abandoned`, or `timed_out`, records one remote refresh status, records `create_start_time`, `create_end_time`, and the human-readable `create_total_time` for each repository, and passes the batch manifest schema validation.
 - [ ] 3.11c Multi-workload generation was strictly sequential: only `create_generated_repo.py --workload <N>` was used per workload; no later workload directory was created until the current workload finished, failed with user notification, was abandoned, or timed out after 60 minutes of calendar time; `create_generated_batch.py` was not used on the AI Coding Agent chatbox path; status questions were answered without stopping the current unfinished workload; after a workload was recorded the next remaining requested workload started in the same turn.
 - [ ] 3.11d After every requested workload directory was recorded, generation-time scratch was removed from the local project root and from the remote validation host home (`*_create_start_time.txt`, `workload_identities.txt`, `rocm_pip_constraints.txt`, `_fill_generated_docs.py`, `patch_generated_repo.py`, `finish_one_workload.sh`, `process_range.sh`, `_generation_helpers/`, `batch_process*.log`, `batch_process*.stdout`, `retry*.stdout`, root `*_setup.log`). The local project root still has the template directory, each `<Workload Number>-<Repo Base Name>/` directory, `AI_AGENT_PROMPT_SUBMITTED_*.md`, and `batch_generation_manifest.json`. The VM home no longer has leftover helpers or a duplicate batch manifest once the local copy is authoritative. Generated repositories and `/var/opt/benchmarks/runtime_ledger.csv` were not deleted.

@@ -405,7 +405,7 @@ _TEMPLATE_TAG_RE = re.compile(r"TEMPLATE_00_\d+(?:\s+\d{4}-\d{2}-\d{2})?:?\s*", 
 def _strip_template_notes(value: str) -> str:
     """Remove dated authoring-note clauses like "TEMPLATE_00_79 2026-09-07:
     repetitions aligned to match 112/312" from an extracted cell value.
-    self_check_generated_repo.sh fails README.md/SPEC.md/PRD.md/
+    self_check_generated_repo.sh fails README.md/SPEC.md/docs/PRD.md/
     benchmark_specification.json outright if any of them still contain
     "TEMPLATE_00_"; leftover workbook authoring notes used to flow straight
     through into the generated docs and trip that check (212). Only text

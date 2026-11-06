@@ -250,7 +250,8 @@ class GenerationTimes(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             repo = Path(tmp)
             (repo / "results").mkdir()
-            (repo / "GENERATION_REPORT.md").write_text(
+            (repo / "docs").mkdir()
+            (repo / "docs" / "GENERATION_REPORT.md").write_text(
                 "x\n- generation_started_at: a\n- generation_finished_at: a\n- generation_duration_seconds: 0\n",
                 encoding="utf-8",
             )
@@ -262,7 +263,7 @@ class GenerationTimes(unittest.TestCase):
             self.assertEqual(data["generation_duration_seconds"], 42)
             self.assertEqual(data["generation_finished_at"], "2026-10-20T09:00:42Z")
             self.assertEqual(data["keep"], 1)
-            self.assertIn("- generation_duration_seconds: 42", (repo / "GENERATION_REPORT.md").read_text(encoding="utf-8"))
+            self.assertIn("- generation_duration_seconds: 42", (repo / "docs" / "GENERATION_REPORT.md").read_text(encoding="utf-8"))
 
 
 class SelfCheckOnTheVm(unittest.TestCase):

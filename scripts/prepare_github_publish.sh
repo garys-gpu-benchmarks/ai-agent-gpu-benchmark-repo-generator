@@ -97,6 +97,7 @@ ROOT_LEFTOVERS=(
 )
 
 DOC_LEFTOVERS=(
+  docs/GENERATION_REPORT.md
   docs/AI_AGENT_INSTRUCTIONS.md
   docs/AI_AGENT_HANDOFF.md
   docs/SUBMISSION_CHECKLIST.md
@@ -262,12 +263,12 @@ if [[ ! -s README.md ]]; then
   err "README.md is missing or empty"
 else
   readme_lines="$(wc -l < README.md | tr -d ' ')"
-  if [[ "${readme_lines}" -lt 80 ]]; then
-    err "README.md is a stub (${readme_lines} lines). Generate all template sections (Overview through License) before publish."
+  if [[ "${readme_lines}" -lt 60 ]]; then
+    err "README.md is a stub (${readme_lines} lines). Regenerate it from templates/README_TEMPLATE.md before publish."
   else
     pass "README.md has ${readme_lines} lines"
   fi
-  for heading in '## 1. Overview' '## 4. Hardware Requirements' '## 6. Installation' '## 7. Running the Benchmark'; do
+  for heading in '## Quick Start' '## Profiles and Parameters' '## Metrics' '## Output' '## Requirements' '## Troubleshooting'; do
     if grep -Fq "${heading}" README.md; then
       pass "README has ${heading}"
     else

@@ -161,7 +161,8 @@ my_project_root/
 ├── AI_AGENT_PROMPT_SUBMITTED_101_20260805_080015.md
 └── 101_sys-bench-rocm-stack-validation/
     ├── benchmark_specification.json
-    ├── PRD.md
+    ├── docs/PRD.md
+    ├── docs/GENERATION_REPORT.md
     ├── SPEC.md
     ├── README.md
     ├── setup.sh

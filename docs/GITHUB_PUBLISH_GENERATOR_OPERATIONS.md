@@ -28,7 +28,7 @@ Each task exists as AMD/NVIDIA × Ubuntu 24.04/26.04. One generator (`init_gener
 
 | Upgrade | AMD 24.04 (101–132) | NVIDIA 24.04 (201–232) | AMD 26.04 (301–332) | NVIDIA 26.04 (401–432) |
 |---|---|---|---|---|
-| 1. Complete README + Prerequisites + mermaid | yes | yes | yes | yes |
+| 1. Complete README (Quick Start, Profiles and Parameters, Metrics, Output, Requirements, Troubleshooting) | yes | yes | yes | yes |
 | 2. Do not copy `AGENTS.md` / `*TEMPLATE.md` onto the workload root | yes | yes | yes | yes |
 | 3. Clone-safe GitHub Actions (no generation-time `self_check`) | yes | yes | yes | yes |
 | 4a. `scripts/lib/hipcc_host_gcc.sh` sourced from `common.sh` | yes (GCC 13 pin if `hipcc` is used) | harmless (no `hipcc`; flags unused) | **required** for HIP `build.sh` (Clang 24 still uses the GCC 15 host pin) | harmless |
@@ -44,11 +44,11 @@ Ubuntu 26.04 and Ubuntu 24.04 README Prerequisites must name ROCm 10.1.0 for AMD
 
 ### 1. Complete README
 
-Every generated `README.md` must include Overview, Hardware Requirements, Installation, Running, and License — not a 26-line Quick Start stub. Include OS/GPU/runtime Prerequisites and a mermaid setup → run → parse diagram. `scripts/check_github_publish_ready.sh` fails stubs.
+Every generated `README.md` is rendered from `templates/README_TEMPLATE.md` by `scripts/fill_generated_docs.py` and `scripts/readme_sections.py`. It must include Quick Start, Profiles and Parameters, Metrics, Output, Requirements, and Troubleshooting. `scripts/check_github_publish_ready.sh` fails a README missing any of them or shorter than 60 lines.
 
 ### 2. Strip generator leftovers
 
-Do not publish `AGENTS.md`, `README_TEMPLATE.md`, `PRD_TEMPLATE.md`, `SPEC_TEMPLATE.md`, `.claude/`, `docs/GITHUB_PUBLISH_GENERATOR_OPERATIONS.md`, `scripts/self_check_generated_repo.sh`, `benchmark_actual.csv`, `benchmark_actual_excel.csv`, nested `*_copy/`, generator `docs/`, generation schemas, or generator scripts (`create_generated_repo.py`, and so on). `init_generated_repo.py` no longer copies the templates onto the root. `prepare_github_publish.sh --apply` deletes leftovers that are still present and warns if a surviving file still names a deleted path. Public README/SPEC kernel defaults and `PRD.md` Workload Number must match `config/benchmark_config.yaml` and `benchmark_specification.json`.
+Do not publish `AGENTS.md`, `README_TEMPLATE.md`, `PRD_TEMPLATE.md`, `SPEC_TEMPLATE.md`, `.claude/`, `docs/GITHUB_PUBLISH_GENERATOR_OPERATIONS.md`, `scripts/self_check_generated_repo.sh`, `benchmark_actual.csv`, `benchmark_actual_excel.csv`, nested `*_copy/`, generator `docs/`, generation schemas, or generator scripts (`create_generated_repo.py`, and so on). `init_generated_repo.py` no longer copies the templates onto the root. `prepare_github_publish.sh --apply` deletes leftovers that are still present and warns if a surviving file still names a deleted path. Public README/SPEC kernel defaults and `docs/PRD.md` Workload Number must match `config/benchmark_config.yaml` and `benchmark_specification.json`. `prepare_github_publish.sh --apply` deletes `GENERATION_REPORT.md` from the repository root and from `docs/`. `docs/PRD.md` stays. `SPEC.md` stays at the repository root.
 
 ### 3. Clone-safe CI
 

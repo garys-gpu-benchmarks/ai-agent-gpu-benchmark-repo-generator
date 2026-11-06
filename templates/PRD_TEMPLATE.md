@@ -2,7 +2,7 @@
 ====================================================================
 AGENT INSTRUCTIONS — DELETE THIS BLOCK FROM THE FINAL OUTPUT
 ====================================================================
-You are generating PRD.md from this template.
+You are generating docs/PRD.md from this template. The output file is docs/PRD.md, not the repository root.
 
 INPUTS:
   1. This file (PRD_TEMPLATE.md)

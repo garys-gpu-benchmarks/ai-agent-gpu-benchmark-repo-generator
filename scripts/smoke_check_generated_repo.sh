@@ -73,7 +73,8 @@ if resolved:
 PY_COMPONENT_CHECK
 
 required_paths=(
-  "PRD.md"
+  "docs/PRD.md"
+  "docs/GENERATION_REPORT.md"
   "SPEC.md"
   "README.md"
   "setup.sh"
@@ -95,6 +96,12 @@ required_paths=(
 for rel in "${required_paths[@]}"; do
     if [[ ! -e "${TARGET_REPO}/${rel}" ]]; then
         echo "[FAIL] Missing required path: ${TARGET_REPO}/${rel}" >&2
+        exit 1
+    fi
+done
+for stale_root in PRD.md GENERATION_REPORT.md; do
+    if [[ -e "${TARGET_REPO}/${stale_root}" ]]; then
+        echo "[FAIL] ${stale_root} belongs under docs/, not the repository root." >&2
         exit 1
     fi
 done
@@ -225,7 +232,7 @@ python3 scripts/validate_template_inputs.py \
   --generation-manifest "${TARGET_REPO}/results/generation_manifest.json" \
   --generation-schema schemas/generation_report.schema.json
 
-if rg -n "\{\{.+\}\}|\[\[GENERATE:" "${TARGET_REPO}/PRD.md" "${TARGET_REPO}/SPEC.md" "${TARGET_REPO}/README.md" > /dev/null; then
+if rg -n "\{\{.+\}\}|\[\[GENERATE:" "${TARGET_REPO}/docs/PRD.md" "${TARGET_REPO}/SPEC.md" "${TARGET_REPO}/README.md" > /dev/null; then
     echo "[FAIL] Unresolved template tokens found in generated docs." >&2
     exit 1
 fi

@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # File: scripts/fill_generated_docs.py
-# Description: Official PRD.md / SPEC.md / README.md / GENERATION_REPORT.md filler.
+# Description: Official docs/PRD.md / SPEC.md / README.md / docs/GENERATION_REPORT.md filler.
 # Substitutes {{Field Name}} and expands [[GENERATE]] from benchmark_specification.json.
 from __future__ import annotations
 
@@ -11,6 +11,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from generated_repo_directory import generated_repo_directory_name
+import readme_sections
 from text_io import write_lf
 
 TOKEN_RE = re.compile(r"\{\{([^}]+)\}\}")
@@ -123,7 +124,12 @@ def _hardware_table(fields: dict[str, str], keys: list[str]) -> str:
     return "\n".join(rows)
 
 
-def expand_generate(instruction: str, fields: dict[str, str]) -> str:
+def expand_generate(instruction: str, fields: dict[str, str], repo: Path | None = None) -> str:
+    # README sections are named explicitly ([[GENERATE: readme.<section>]]) and
+    # rendered by scripts/readme_sections.py. PRD/SPEC keep the keyword branches below.
+    marker = readme_sections.MARKER_RE.match(instruction.strip())
+    if marker:
+        return readme_sections.render_section(marker.group(1), fields, repo)
     text = instruction.lower()
     parameters = _parameters(fields)
     profiles = _profile_values(fields)
@@ -399,7 +405,7 @@ def ci_fields(fields: dict[str, str]) -> dict[str, str]:
     }
 
 
-def render_template(template_text: str, fields: dict[str, str]) -> str:
+def render_template(template_text: str, fields: dict[str, str], repo: Path | None = None) -> str:
     text = HTML_COMMENT_RE.sub("", template_text)
 
     def replace_token(match: re.Match[str]) -> str:
@@ -413,7 +419,7 @@ def render_template(template_text: str, fields: dict[str, str]) -> str:
         return fields[name]
 
     text = TOKEN_RE.sub(replace_token, text)
-    text = GENERATE_RE.sub(lambda match: expand_generate(match.group(0), fields), text)
+    text = GENERATE_RE.sub(lambda match: expand_generate(match.group(0), fields, repo), text)
     text = re.sub(r"\n{3,}", "\n\n", text).strip() + "\n"
     leftovers = []
     if "{{" in text:
@@ -468,7 +474,7 @@ def fill_generated_docs(repo_root: Path, template_root: Path | None = None) -> i
     if template_dir is None:
         raise SystemExit("[FAIL] templates/PRD_TEMPLATE.md not found")
     mapping = {
-        "PRD.md": "PRD_TEMPLATE.md",
+        "docs/PRD.md": "PRD_TEMPLATE.md",
         "SPEC.md": "SPEC_TEMPLATE.md",
         "README.md": "README_TEMPLATE.md",
     }
@@ -476,11 +482,11 @@ def fill_generated_docs(repo_root: Path, template_root: Path | None = None) -> i
         source = template_dir / source_name
         if not source.is_file():
             raise SystemExit(f"[FAIL] missing template {source}")
-        write_lf(repo / dest_name, render_template(source.read_text(encoding="utf-8"), fields))
+        write_lf(repo / dest_name, render_template(source.read_text(encoding="utf-8"), fields, repo))
         print(f"[PASS] wrote {dest_name}")
     report = write_generation_report(repo, fields, template_dir)
-    write_lf(repo / "GENERATION_REPORT.md", report)
-    print("[PASS] wrote GENERATION_REPORT.md")
+    write_lf(repo / "docs" / "GENERATION_REPORT.md", report)
+    print("[PASS] wrote docs/GENERATION_REPORT.md")
     return 0
 
 

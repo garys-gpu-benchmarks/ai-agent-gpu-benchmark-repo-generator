@@ -26,7 +26,8 @@ if [[ ! -f "benchmark_specification.json" ]]; then
 fi
 
 required_paths=(
-  "PRD.md"
+  "docs/PRD.md"
+  "docs/GENERATION_REPORT.md"
   "SPEC.md"
   "README.md"
   "setup.sh"
@@ -75,6 +76,12 @@ required_paths=(
 for rel in "${required_paths[@]}"; do
     if [[ ! -e "${rel}" ]]; then
         echo "[FAIL] Missing required generated-repo path: ${rel}" >&2
+        exit 1
+    fi
+done
+for stale_root in PRD.md GENERATION_REPORT.md; do
+    if [[ -e "${stale_root}" ]]; then
+        echo "[FAIL] ${stale_root} belongs under docs/, not the repository root." >&2
         exit 1
     fi
 done
@@ -131,19 +138,11 @@ if grep -q 'align_nvidia_userspace' setup.sh; then
 fi
 
 readme_lines="$(wc -l < README.md | tr -d ' ')"
-if [[ "${readme_lines}" -lt 80 ]]; then
-    echo "[FAIL] README.md is a stub (${readme_lines} lines). Generate all template sections through License, a Prerequisites block, and a mermaid setup→run→parse diagram." >&2
+if [[ "${readme_lines}" -lt 60 ]]; then
+    echo "[FAIL] README.md is a stub (${readme_lines} lines). Regenerate it from templates/README_TEMPLATE.md with scripts/fill_generated_docs.py." >&2
     exit 1
 fi
-if ! grep -Fq 'Prerequisites' README.md; then
-    echo "[FAIL] README.md must include a Prerequisites block." >&2
-    exit 1
-fi
-if ! grep -Eq '```[[:space:]]*mermaid' README.md; then
-    echo "[FAIL] README.md must include a mermaid setup→run→parse diagram." >&2
-    exit 1
-fi
-for heading in '## 1. Overview' '## 4. Hardware Requirements' '## 6. Installation' '## 7. Running the Benchmark'; do
+for heading in '## Quick Start' '## Profiles and Parameters' '## Metrics' '## Output' '## Requirements' '## Troubleshooting'; do
     if ! grep -Fq "${heading}" README.md; then
         echo "[FAIL] README.md is missing ${heading}." >&2
         exit 1
@@ -168,7 +167,7 @@ if cfg.is_file():
     match = re.search(r"(?m)^  kernel_version:\s*(\S+)", cfg.read_text(encoding="utf-8"))
     if match:
         yaml_kv = match.group(1).strip().strip("'\"")
-if yaml_kv:
+if yaml_kv and re.fullmatch(r"[0-9]+(?:\.[0-9]+)*", yaml_kv):
     for name in ("README.md", "SPEC.md"):
         path = Path(name)
         if not path.is_file():
@@ -192,13 +191,21 @@ if yaml_kv:
                     f"[FAIL] {name} Parameters kernel_version {found} but "
                     f"yaml kernel_version is {yaml_kv}"
                 )
-prd = Path("PRD.md")
+        # README Profiles and Parameters row: | `kernel_version` | `--kernel-version` | smoke | baseline | extended |
+        for row in re.findall(r"\|\s*`kernel_version`\s*\|\s*`--kernel-version`\s*\|([^\n]*)", text):
+            for value in re.findall(r"[0-9]+(?:\.[0-9]+)+", row):
+                if value != yaml_kv:
+                    raise SystemExit(
+                        f"[FAIL] {name} Profiles and Parameters kernel_version {value} but "
+                        f"yaml kernel_version is {yaml_kv}"
+                    )
+prd = Path("docs/PRD.md")
 if prd.is_file() and workload:
     match = re.search(r"(?m)^## Workload Number\s*\n+(\S+)", prd.read_text(encoding="utf-8"))
     if not match or match.group(1).strip() != workload:
         shown = match.group(1).strip() if match else "(missing)"
-        raise SystemExit(f"[FAIL] PRD.md Workload Number is {shown}, expected {workload}")
-for name in ("README.md", "SPEC.md", "PRD.md", "benchmark_specification.json"):
+        raise SystemExit(f"[FAIL] docs/PRD.md Workload Number is {shown}, expected {workload}")
+for name in ("README.md", "SPEC.md", "docs/PRD.md", "benchmark_specification.json"):
     path = Path(name)
     if path.is_file() and "TEMPLATE_00_" in path.read_text(encoding="utf-8"):
         raise SystemExit(f"[FAIL] {name} still contains a TEMPLATE_00_* authoring note")

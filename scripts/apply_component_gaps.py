@@ -160,12 +160,12 @@ def _write_resolution_report(repo: Path, resolved: list[dict], fields: dict[str,
     locked = []
     materialize_filled = []
     agent_may_edit = [
-        "PRD.md",
+        "docs/PRD.md",
         "SPEC.md",
         "README.md",
         "requirements.txt",
         "config/benchmark_config.yaml",
-        "GENERATION_REPORT.md",
+        "docs/GENERATION_REPORT.md",
     ]
     for item in resolved:
         cid = str(item["component_id"])

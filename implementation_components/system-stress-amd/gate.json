@@ -22,7 +22,7 @@
     "scripts/collect_workload.py"
   ],
   "agent_may_edit": [
-    "PRD.md",
+    "docs/PRD.md",
     "SPEC.md",
     "README.md",
     "requirements.txt",

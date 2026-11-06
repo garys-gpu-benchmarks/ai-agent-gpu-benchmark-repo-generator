@@ -1,5 +1,23 @@
 # Changelog
 
+## 2026-11-05 — README.md uses the short workload format
+
+- **`templates/README_TEMPLATE.md`** is rewritten to the short format: title, one-line description, Quick Start, Profiles and Parameters, Metrics with Notes, Output, Requirements, Run the Whole Bundle, Troubleshooting, Repository Layout, Continuous Integration. The numbered sections 1–11, the Download as a Bundle and Suite Tools blocks, the placeholder Installation/Running code blocks, the fixture CSV samples, the generator-only troubleshooting entries, the empty NVIDIA section, and the mermaid diagram are gone.
+- **`scripts/readme_sections.py` (new)** renders every data-driven section from `benchmark_specification.json` and the generated tree. It is called from `scripts/fill_generated_docs.py` for `[[GENERATE: readme.<section>]]` markers; PRD and SPEC rendering is unchanged.
+  - Description from Main Goal ("Measure …" → "Measures …"), plus the bundle, and a CPU-only note for the CPU / System domain.
+  - Profiles and Parameters table from Parameter_01..20 and Profile Parameter Values through `workload_option_help.py`, the same source as `run_benchmark.sh --help`. Values longer than 40 characters are shown as item counts. Override example is the `--help` example.
+  - Metrics table from Metrics, including keys written in the middle of a label. Notes from Known Runtime Constraints, one bullet per sentence.
+  - Requirements from OS Version, GPU Vendor, GPU Model, GPU Runtime Version, Python Version, and Framework (Bash, SQLite, Python, and PyYAML are not listed).
+  - Troubleshooting by rule: the ROCm reboot/resume entry for workloads on the ROCm setup skeleton, the Hugging Face token entry when Framework names Mistral, an SSH-drop entry, and an `na` entry for every workload.
+  - Repository Layout from the files present when docs are filled (SPEC.md at the root, PRD under docs/, single-file src/ shown by name).
+- **Checks.** `self_check_generated_repo.sh`, `check_github_publish_ready.sh`, and `prepare_github_publish.sh` require the six new headings and at least 60 lines, and no longer require Prerequisites or mermaid. The kernel_version cross-check also reads the new Parameters row and is skipped when the yaml value is per-profile.
+- **`create_generated_repo.py`** requires `scripts/readme_sections.py`, `scripts/workload_option_help.py`, `scripts/generate_workload_parameters.py`, and `config/workload_parameters.yaml` in the template.
+- **Tests.** `tests/test_readme_bundle_sections.py` covers the new layout for one workload in each bundle, the no-parameter case, and an unknown section marker.
+
+## 2026-11-05 — generated PRD and generation report leave the repository root
+
+- **`docs/PRD.md` and `docs/GENERATION_REPORT.md`.** `scripts/fill_generated_docs.py` writes both under `docs/`. `scripts/create_one_workload.py` stamps timing into `docs/GENERATION_REPORT.md`. `SPEC.md` stays at the repository root. Self-check, smoke check, and the publish-ready check fail if either moved file is still at the root. `prepare_github_publish.sh` still deletes the generation report, from `docs/` and from the root if a copy is left there. `docs/PRD.md` is published.
+
 ## 2026-11-05 — run_benchmark.sh --help uses Profiles, Parameters, and General options
 
 - **`run_benchmark.sh --help` uses one layout for every workload.** `Profiles (default: --smoke)`, then `Parameters (override the profile's value)` when the workload has parameters, then `General options` (`--config`, `--quiet`, `--log-level`, `--specification`, `--help`). The fourth example is `bash run_benchmark.sh --baseline` plus one simple parameter override, such as `--num-threads 8`. Workloads with no parameters omit that line.

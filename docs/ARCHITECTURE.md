@@ -15,7 +15,7 @@ benchmark_specification.json  ──────► single source of truth
         │  (Phase 1-4: docs/generation-workflow.md)
         ▼
 generated workload repository
-  ├── PRD.md / SPEC.md / README.md   (from *_TEMPLATE.md + benchmark_specification.json)
+  ├── docs/PRD.md / SPEC.md / README.md   (from *_TEMPLATE.md + benchmark_specification.json)
   ├── setup.sh / run_benchmark.sh    (ROCm install, reboot-resume, benchmark harness)
   ├── src/, tests/, config/
   └── results/                       (validated against schemas/generation_report.schema.json)
@@ -43,7 +43,7 @@ An agent (and a human maintainer) should read these in order and treat a lower n
 | 3 | `AGENTS.md` | Cross-agent coding rules, schema, CI contract, MCP configuration. |
 | 4 | `.claude/CLAUDE.md` | Claude-specific integration notes. |
 | 5-7 | `templates/PRD_TEMPLATE.md`, `templates/SPEC_TEMPLATE.md`, `templates/README_TEMPLATE.md` | Source templates copied to the generated repo root. |
-| 8 | Generated `PRD.md` / `SPEC.md` / `README.md` | Context once they exist; never authoritative over their templates. |
+| 8 | Generated `docs/PRD.md` / `SPEC.md` / `README.md` | Context once they exist; never authoritative over their templates. |
 | 9 | `docs/repository-template.md` | Canonical directory layout. |
 | 10 | `docs/generation-workflow.md` | Authoritative Phase 0-4 workflow. |
 | 11 | `docs/machine-checkable-contracts.md` | Schema contracts and validator usage. |

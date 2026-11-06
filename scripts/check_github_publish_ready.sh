@@ -51,6 +51,7 @@ PUBLISH_LEFTOVERS=(
   SPEC_TEMPLATE.md
   AGENTS.md
   GENERATION_REPORT.md
+  docs/GENERATION_REPORT.md
   CLAUDE.md
   docs/GITHUB_PUBLISH.md
   docs/GITHUB_WORKLOAD_PUBLISH.md
@@ -99,6 +100,7 @@ required=(
   .gitignore
   .gitattributes
   benchmark_specification.json
+  docs/PRD.md
   setup.sh
   run_benchmark.sh
   show_metrics.sh
@@ -165,12 +167,12 @@ if [[ -f README.md ]]; then
     pass "README.md contains no known generation/template markers"
   fi
   readme_lines="$(wc -l < README.md | tr -d ' ')"
-  if [[ "${readme_lines}" -lt 80 ]]; then
+  if [[ "${readme_lines}" -lt 60 ]]; then
     err "README.md is a stub (${readme_lines} lines); generate all template sections before publish"
   else
     pass "README.md has ${readme_lines} lines"
   fi
-  for heading in '## 1. Overview' '## 4. Hardware Requirements' '## 6. Installation' '## 7. Running the Benchmark'; do
+  for heading in '## Quick Start' '## Profiles and Parameters' '## Metrics' '## Output' '## Requirements' '## Troubleshooting'; do
     if grep -Fq "${heading}" README.md; then
       pass "README has ${heading}"
     else
@@ -200,7 +202,7 @@ if cfg.is_file():
     match = re.search(r"(?m)^  kernel_version:\s*(\S+)", cfg.read_text(encoding="utf-8"))
     if match:
         yaml_kv = match.group(1).strip().strip("'\"")
-if yaml_kv:
+if yaml_kv and re.fullmatch(r"[0-9]+(?:\.[0-9]+)*", yaml_kv):
     for name in ("README.md", "SPEC.md"):
         path = Path(name)
         if not path.is_file():
@@ -215,13 +217,20 @@ if yaml_kv:
         for found in re.findall(r"\|\s*kernel_version\s*\|[^|\n]*\|\s*([0-9][0-9.]+)\s+\(", text):
             if found != yaml_kv:
                 fail(f"{name} Parameters kernel_version {found} but yaml kernel_version is {yaml_kv}")
-prd = Path("PRD.md")
+        # README Profiles and Parameters row: | `kernel_version` | `--kernel-version` | smoke | baseline | extended |
+        for row in re.findall(r"\|\s*`kernel_version`\s*\|\s*`--kernel-version`\s*\|([^\n]*)", text):
+            for value in re.findall(r"[0-9]+(?:\.[0-9]+)+", row):
+                if value != yaml_kv:
+                    fail(f"{name} Profiles and Parameters kernel_version {value} but yaml kernel_version is {yaml_kv}")
+if Path("PRD.md").is_file():
+    fail("PRD.md belongs at docs/PRD.md, not the repository root")
+prd = Path("docs/PRD.md")
 if prd.is_file() and workload:
     match = re.search(r"(?m)^## Workload Number\s*\n+(\S+)", prd.read_text(encoding="utf-8"))
     if not match or match.group(1).strip() != workload:
         shown = match.group(1).strip() if match else "(missing)"
-        fail(f"PRD.md Workload Number is {shown}, expected {workload}")
-for name in ("README.md", "SPEC.md", "PRD.md", "benchmark_specification.json"):
+        fail(f"docs/PRD.md Workload Number is {shown}, expected {workload}")
+for name in ("README.md", "SPEC.md", "docs/PRD.md", "benchmark_specification.json"):
     path = Path(name)
     if path.is_file() and "TEMPLATE_00_" in path.read_text(encoding="utf-8"):
         fail(f"{name} still contains a TEMPLATE_00_* authoring note")

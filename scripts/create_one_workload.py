@@ -649,7 +649,7 @@ def _stamp_generation_report(repo: Path, started: str, finished: str) -> None:
     start_dt = datetime.fromisoformat(started.replace("Z", "+00:00"))
     end_dt = datetime.fromisoformat(finished.replace("Z", "+00:00"))
     duration = max(0, int((end_dt - start_dt).total_seconds()))
-    path = repo / "GENERATION_REPORT.md"
+    path = repo / "docs" / "GENERATION_REPORT.md"
     if path.is_file():
         text = path.read_text(encoding="utf-8")
         block = (

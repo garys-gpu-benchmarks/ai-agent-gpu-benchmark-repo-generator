@@ -100,7 +100,7 @@ If `.venv` is missing, setup creates it rather than installing Python packages g
 The AI agent should create these files only after Phase 0 produces a schema-validated root-level `benchmark_specification.json`, and only inside a generated repository subdirectory named `<Workload Number>-<Repo Base Name>` at project root (e.g. `<project-root>/<workload-number>-<repo-name>/`, not `<project-root>/<template-directory>/<repo-name>/`). That same `<Workload Number>-<Repo Base Name>` string is the GitHub repository name (for example `128-gpu-bench-amd-vllm-throughput-latency`). The workbook `Repo Base Name` field stays unprefixed:
 
 - `<Workload Number>-<Repo Base Name>/benchmark_specification.json`
-- `<Workload Number>-<Repo Base Name>/PRD.md`
+- `<Workload Number>-<Repo Base Name>/docs/PRD.md`
 - `<Workload Number>-<Repo Base Name>/SPEC.md`
 - `<Workload Number>-<Repo Base Name>/README.md`
 - `<Workload Number>-<Repo Base Name>/config/benchmark_config.yaml`
@@ -112,7 +112,7 @@ The AI agent should create these files only after Phase 0 produces a schema-vali
 - `<Workload Number>-<Repo Base Name>/results/.gitkeep`, `<Workload Number>-<Repo Base Name>/results/raw/.gitkeep`, and `<Workload Number>-<Repo Base Name>/results/parsed/.gitkeep`
 - `<Workload Number>-<Repo Base Name>/tests/fixtures/.gitkeep`
 - `<Workload Number>-<Repo Base Name>/docs/CHANGELOG.md`
-- `<Workload Number>-<Repo Base Name>/GENERATION_REPORT.md`
+- `<Workload Number>-<Repo Base Name>/docs/GENERATION_REPORT.md`
 - `<Workload Number>-<Repo Base Name>/results/generation_manifest.json`
 - workload-specific `<Workload Number>-<Repo Base Name>/docs/` files, if useful
 
@@ -124,9 +124,9 @@ Do not pre-populate:
 
 - `benchmark_specification.json`
 - `config/benchmark_config.yaml`
-- generated `PRD.md`, `SPEC.md`, or `README.md`
+- generated `docs/PRD.md`, `SPEC.md`, or `README.md`
 - `docs/CHANGELOG.md`
-- `GENERATION_REPORT.md`
+- `docs/GENERATION_REPORT.md`
 - `run_benchmark.sh`, `setup.sh`, or workload-specific `scripts/` at template root
 - a generated workload subdirectory (for example `sys-bench-stream-ddr5-bandwidth/`)
 - deployment checklists from prior workloads
@@ -142,7 +142,7 @@ Avoid carrying examples from previous workloads such as FIO, NVMe, GEMM, rocBLAS
 1. The agent parses the directly submitted workload prompt, records it as a timestamped project-root `AI_AGENT_PROMPT_SUBMITTED_<WORKLOADS>_<UTC_TIMESTAMP>.md` artifact, and validates requested workloads against `BenchmarkSpecDefinitions.xlsx`.
 2. After validation, the agent reads `Repo Base Name` from `benchmark_specification.json`, creates `<project-root>/<Workload Number>-<Repo Base Name>/`, copies required shared template scaffolding into that directory, and treats it as the generated repository root.
 3. Phase 1 begins only after Phase 0 validation. The agent reads the source guidance files in the priority order defined by `AGENTS.md` and `docs/AI_AGENT_INSTRUCTIONS.md`.
-4. Phase 2 generates `<Workload Number>-<Repo Base Name>/PRD.md`, `<Workload Number>-<Repo Base Name>/SPEC.md`, and `<Workload Number>-<Repo Base Name>/README.md` from their templates and `benchmark_specification.json`.
+4. Phase 2 generates `<Workload Number>-<Repo Base Name>/docs/PRD.md`, `<Workload Number>-<Repo Base Name>/SPEC.md`, and `<Workload Number>-<Repo Base Name>/README.md` from their templates and `benchmark_specification.json`.
 5. Phase 3 generates only the workload-relevant repository files needed to run, parse, validate, document, and operate the benchmark inside `<Workload Number>-<Repo Base Name>/`.
 6. Phase 4 runs `docs/SUBMISSION_CHECKLIST.md` in order and reports exact pass/fail results.
 7. Run `bash scripts/smoke_check_generated_repo.sh ../<Workload Number>-<Repo Base Name>` from `<template-directory>/` to confirm output location and required generated artifacts.

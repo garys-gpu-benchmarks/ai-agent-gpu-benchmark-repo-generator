@@ -127,13 +127,13 @@ Read and internalize:
 
 Generate:
 
-- `<REPO_NAME>/PRD.md` from `templates/PRD_TEMPLATE.md`
+- `<REPO_NAME>/docs/PRD.md` from `templates/PRD_TEMPLATE.md`
 - `<REPO_NAME>/SPEC.md` from `templates/SPEC_TEMPLATE.md`
 - `<REPO_NAME>/README.md` from `templates/README_TEMPLATE.md`
 
 Use exact-match field substitutions from `benchmark_specification.json`.
 
-README generation rule: Quick Start must include `bash scripts/build.sh` only when `benchmark_specification.json` indicates an actual compile/build step. If no build is required, omit `scripts/build.sh` from Quick Start and Installation command blocks.
+README generation rule: `scripts/fill_generated_docs.py` renders `README.md` from `templates/README_TEMPLATE.md`. Shared wording lives in the template; the `[[GENERATE: readme.<section>]]` sections (intro, parameters table, metrics table, notes, requirements, troubleshooting, layout) are built by `scripts/readme_sections.py` from `benchmark_specification.json`. Quick Start never calls `scripts/build.sh`; `setup.sh` builds what the workload needs.
 
 ## Phase 3 - Generate Only Required Workload Files
 
@@ -193,7 +193,7 @@ README generation rule: Quick Start must include `bash scripts/build.sh` only wh
 
 Before completion, generate:
 
-- `<REPO_NAME>/GENERATION_REPORT.md`
+- `<REPO_NAME>/docs/GENERATION_REPORT.md`
 - `<REPO_NAME>/results/generation_manifest.json`
 
 Record `generation_finished_at` only after all implementation, validation, and checklist gates pass. Calculate the non-negative wall-clock `generation_duration_seconds` from the two timestamps, write all three timing fields to both generated artifacts, and print the timing summary before reporting completion.

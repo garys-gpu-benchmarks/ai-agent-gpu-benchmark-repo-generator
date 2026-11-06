@@ -18,7 +18,7 @@ Claude-specific notes that supplement (but do not override) the shared order:
 
 - **`.claude/CLAUDE.md` is priority 4**, immediately after `AGENTS.md`. It contains only Claude Code integration notes and does not override the shared operating contract.
 - **`README.md` contains the supported workload prompt forms**, while **`docs/AI_AGENT_INSTRUCTIONS.md`** contains the full agent operating instructions. The five-phase generation workflow and contract gates are in **`docs/generation-workflow.md`** and **`docs/machine-checkable-contracts.md`**.
-- **`PRD.md` / `SPEC.md` / `README.md` (priority 8)** — when these generated outputs exist from a prior run, Claude may read them for already-populated benchmark context, but must never hand-edit around a template/JSON mismatch. Fix the mismatch at the template or `benchmark_specification.json` level instead.
+- **`docs/PRD.md` / `SPEC.md` / `README.md` (priority 8)** — when these generated outputs exist from a prior run, Claude may read them for already-populated benchmark context, but must never hand-edit around a template/JSON mismatch. Fix the mismatch at the template or `benchmark_specification.json` level instead. `PRD.md` is `docs/PRD.md`. `SPEC.md` stays at the repository root.
 - If any document not listed in the AGENTS.md priority table appears in the repository (e.g., a one-off notes file), treat it as informational only — it cannot override any document in the priority table.
 
 ---
