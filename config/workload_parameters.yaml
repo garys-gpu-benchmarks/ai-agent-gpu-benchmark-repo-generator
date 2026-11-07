@@ -93,7 +93,7 @@ parameters:
         meaning: verify loops
       '105':
         workload_name: PyTorch Tensor Op Correctness Suite
-        meaning: 'randomized inputs per case. seed and device_id: RNG and cuda:N. This is not pytest test_ops.py'
+        meaning: 'randomized inputs per case. seed and device_id: RNG and cuda:N'
       '107':
         workload_name: STREAM - CPU (Copy/Scale/Add/Triad)
         meaning: NTIMES
@@ -180,7 +180,7 @@ parameters:
         workload_name: cuDNN Convolution Microbenchmark
         meaning: Defined by the workload description.
       '219':
-        workload_name: TorchBench Microkernels
+        workload_name: PyTorch Microkernel Suite
         meaning: Defined by the workload description.
       '220':
         workload_name: NVIDIA HPL FP64 (High Performance Linpack)
@@ -205,10 +205,10 @@ parameters:
         meaning: verify loops
       '305':
         workload_name: PyTorch Tensor Op Correctness Suite
-        meaning: 'randomized inputs per case. seed and device_id: RNG and cuda:N. This is not pytest test_ops.py'
+        meaning: 'randomized inputs per case. seed and device_id: RNG and cuda:N'
       '307':
         workload_name: STREAM - CPU (Copy/Scale/Add/Triad)
-        meaning: NTIMES. numactl is not used
+        meaning: NTIMES. numactl binds to numa_node when the host accepts it
       '309':
         workload_name: multichase Pointer-Chase
         meaning: Defined by the workload description.
@@ -292,7 +292,7 @@ parameters:
         workload_name: cuDNN Convolution Microbenchmark
         meaning: Defined by the workload description.
       '419':
-        workload_name: TorchBench Microkernels
+        workload_name: PyTorch Microkernel Suite
         meaning: Defined by the workload description.
       '420':
         workload_name: NVIDIA HPL FP64 (High Performance Linpack)
@@ -436,7 +436,7 @@ parameters:
         workload_name: cuDNN Convolution Microbenchmark
         meaning: Defined by the workload description.
       '219':
-        workload_name: TorchBench Microkernels
+        workload_name: PyTorch Microkernel Suite
         meaning: Defined by the workload description.
       '220':
         workload_name: NVIDIA HPL FP64 (High Performance Linpack)
@@ -515,7 +515,7 @@ parameters:
         workload_name: cuDNN Convolution Microbenchmark
         meaning: Defined by the workload description.
       '419':
-        workload_name: TorchBench Microkernels
+        workload_name: PyTorch Microkernel Suite
         meaning: Defined by the workload description.
       '420':
         workload_name: NVIDIA HPL FP64 (High Performance Linpack)
@@ -642,7 +642,7 @@ parameters:
         workload_name: cuDNN Convolution Microbenchmark
         meaning: Defined by the workload description.
       '219':
-        workload_name: TorchBench Microkernels
+        workload_name: PyTorch Microkernel Suite
         meaning: Defined by the workload description.
       '222':
         workload_name: ResNet-50 BF16 Inference Throughput Sweep
@@ -714,7 +714,7 @@ parameters:
         workload_name: cuDNN Convolution Microbenchmark
         meaning: Defined by the workload description.
       '419':
-        workload_name: TorchBench Microkernels
+        workload_name: PyTorch Microkernel Suite
         meaning: Defined by the workload description.
       '422':
         workload_name: ResNet-50 BF16 Inference Throughput Sweep
@@ -799,7 +799,7 @@ parameters:
         meaning: Defined by the workload description.
       '124':
         workload_name: Stable Diffusion XL Inference Baseline
-        meaning: images per pipeline call. This is not TorchBench run.py
+        meaning: images per pipeline call
       '125':
         workload_name: DistilBERT NLP Training Baseline
         meaning: Defined by the workload description.
@@ -818,7 +818,7 @@ parameters:
       '222':
         workload_name: ResNet-50 BF16 Inference Throughput Sweep
         meaning: comma-separated sweep. image_size, dtype/precision bf16, warmup_iters, and num_iterations come from yaml.
-          This is a local inference sweep, not a five-minute server and not TorchBench
+          This is a local inference sweep
       '223':
         workload_name: BERT Inference Sweep
         meaning: Defined by the workload description.
@@ -848,7 +848,7 @@ parameters:
         meaning: Defined by the workload description.
       '324':
         workload_name: Stable Diffusion XL Inference Baseline
-        meaning: images per pipeline call. This is not TorchBench run.py
+        meaning: images per pipeline call
       '325':
         workload_name: DistilBERT NLP Training Baseline
         meaning: Defined by the workload description.
@@ -867,7 +867,7 @@ parameters:
       '422':
         workload_name: ResNet-50 BF16 Inference Throughput Sweep
         meaning: comma-separated sweep. image_size, dtype/precision bf16, warmup_iters, and num_iterations come from yaml.
-          This is a local inference sweep, not a five-minute server and not TorchBench
+          This is a local inference sweep
       '423':
         workload_name: BERT Inference Sweep
         meaning: Defined by the workload description.
@@ -1070,7 +1070,7 @@ parameters:
         meaning: Defined by the workload description.
       '105':
         workload_name: PyTorch Tensor Op Correctness Suite
-        meaning: RNG and cuda:N. This is not pytest test_ops.py
+        meaning: RNG and cuda:N
       '114':
         workload_name: hipMemcpy Bandwidth Test (H2D, D2H, D2D)
         meaning: Defined by the workload description.
@@ -1100,7 +1100,7 @@ parameters:
         workload_name: BabelStream HBM Bandwidth
         meaning: Defined by the workload description.
       '219':
-        workload_name: TorchBench Microkernels
+        workload_name: PyTorch Microkernel Suite
         meaning: Defined by the workload description.
       '222':
         workload_name: ResNet-50 BF16 Inference Throughput Sweep
@@ -1113,7 +1113,7 @@ parameters:
         meaning: Defined by the workload description.
       '305':
         workload_name: PyTorch Tensor Op Correctness Suite
-        meaning: RNG and cuda:N. This is not pytest test_ops.py
+        meaning: RNG and cuda:N
       '314':
         workload_name: hipMemcpy Bandwidth Test (H2D, D2H, D2D)
         meaning: Defined by the workload description.
@@ -1143,7 +1143,7 @@ parameters:
         workload_name: BabelStream HBM Bandwidth
         meaning: Defined by the workload description.
       '419':
-        workload_name: TorchBench Microkernels
+        workload_name: PyTorch Microkernel Suite
         meaning: Defined by the workload description.
       '422':
         workload_name: ResNet-50 BF16 Inference Throughput Sweep
@@ -1215,12 +1215,12 @@ parameters:
         meaning: Defined by the workload description.
       '205':
         workload_name: PyTorch Tensor Op Correctness Suite
-        meaning: RNG seed. This is not pytest test_ops.py
+        meaning: RNG seed
       '213':
         workload_name: GUPS Random Memory
         meaning: Defined by the workload description.
       '219':
-        workload_name: TorchBench Microkernels
+        workload_name: PyTorch Microkernel Suite
         meaning: Defined by the workload description.
       '224':
         workload_name: Stable Diffusion XL Inference Baseline
@@ -1257,12 +1257,12 @@ parameters:
         meaning: Defined by the workload description.
       '405':
         workload_name: PyTorch Tensor Op Correctness Suite
-        meaning: RNG seed. This is not pytest test_ops.py
+        meaning: RNG seed
       '413':
         workload_name: GUPS Random Memory
         meaning: Defined by the workload description.
       '419':
-        workload_name: TorchBench Microkernels
+        workload_name: PyTorch Microkernel Suite
         meaning: Defined by the workload description.
       '424':
         workload_name: Stable Diffusion XL Inference Baseline
@@ -1422,9 +1422,9 @@ parameters:
         meaning: stress-ng --cpu workers (default 16)
       '207':
         workload_name: STREAM - CPU (Copy/Scale/Add/Triad)
-        meaning: OMP_NUM_THREADS. The collector does not launch with numactl. dtype is FP64 from the official source. thread_affinity,
-          page_size, and kernel_types yaml fields are not applied as CLI knobs. The overlay scripts/build.sh is not used by
-          the collector
+        meaning: OMP_NUM_THREADS. The collector adds numactl --cpunodebind/--membind for numa_node when the host accepts the
+          bind. dtype is FP64 from the official source. thread_affinity core sets OMP_PROC_BIND=close. page_size and kernel_types
+          yaml fields are not applied as CLI knobs. The overlay scripts/build.sh is not used by the collector
       '209':
         workload_name: multichase Pointer-Chase
         meaning: concurrent chase threads
@@ -1454,9 +1454,9 @@ parameters:
         meaning: stress-ng --cpu workers (default 16)
       '407':
         workload_name: STREAM - CPU (Copy/Scale/Add/Triad)
-        meaning: OMP_NUM_THREADS. The collector does not launch with numactl. dtype is FP64 from the official source. thread_affinity,
-          page_size, and kernel_types yaml fields are not applied as CLI knobs. The overlay scripts/build.sh is not used by
-          the collector
+        meaning: OMP_NUM_THREADS. The collector adds numactl --cpunodebind/--membind for numa_node when the host accepts the
+          bind. dtype is FP64 from the official source. thread_affinity core sets OMP_PROC_BIND=close. page_size and kernel_types
+          yaml fields are not applied as CLI knobs. The overlay scripts/build.sh is not used by the collector
       '409':
         workload_name: multichase Pointer-Chase
         meaning: concurrent chase threads
@@ -1976,7 +1976,7 @@ parameters:
         workload_name: GEMM / cuBLAS Microbenchmark
         meaning: Defined by the workload description.
       '219':
-        workload_name: TorchBench Microkernels
+        workload_name: PyTorch Microkernel Suite
         meaning: Defined by the workload description.
       '317':
         workload_name: GEMM / rocBLAS Microbenchmark
@@ -1988,7 +1988,7 @@ parameters:
         workload_name: GEMM / cuBLAS Microbenchmark
         meaning: Defined by the workload description.
       '419':
-        workload_name: TorchBench Microkernels
+        workload_name: PyTorch Microkernel Suite
         meaning: Defined by the workload description.
     cli_config_key: workload-specific
     interaction_precedence: M, N, and K jointly determine memory and compute cost
@@ -2021,7 +2021,7 @@ parameters:
         workload_name: GEMM / cuBLAS Microbenchmark
         meaning: Defined by the workload description.
       '219':
-        workload_name: TorchBench Microkernels
+        workload_name: PyTorch Microkernel Suite
         meaning: Defined by the workload description.
       '317':
         workload_name: GEMM / rocBLAS Microbenchmark
@@ -2033,7 +2033,7 @@ parameters:
         workload_name: GEMM / cuBLAS Microbenchmark
         meaning: Defined by the workload description.
       '419':
-        workload_name: TorchBench Microkernels
+        workload_name: PyTorch Microkernel Suite
         meaning: Defined by the workload description.
     cli_config_key: workload-specific
     interaction_precedence: M, N, and K jointly determine memory and compute cost
@@ -2066,7 +2066,7 @@ parameters:
         workload_name: GEMM / cuBLAS Microbenchmark
         meaning: Defined by the workload description.
       '219':
-        workload_name: TorchBench Microkernels
+        workload_name: PyTorch Microkernel Suite
         meaning: Defined by the workload description.
       '317':
         workload_name: GEMM / rocBLAS Microbenchmark
@@ -2078,7 +2078,7 @@ parameters:
         workload_name: GEMM / cuBLAS Microbenchmark
         meaning: Defined by the workload description.
       '419':
-        workload_name: TorchBench Microkernels
+        workload_name: PyTorch Microkernel Suite
         meaning: Defined by the workload description.
     cli_config_key: workload-specific
     interaction_precedence: M, N, and K jointly determine memory and compute cost
@@ -3401,15 +3401,13 @@ parameters:
     workload_specific_overrides:
       '125':
         workload_name: DistilBERT NLP Training Baseline
-        meaning: backward passes per optimizer step. dataset_name and optimizer are ignored. loss is hardcoded 1.0. This is
-          not pytest test_bench.py
+        meaning: backward passes per optimizer step. dataset_name and optimizer are ignored. loss is hardcoded 1.0
       '225':
         workload_name: DistilBERT NLP Training Baseline
         meaning: Defined by the workload description.
       '325':
         workload_name: DistilBERT NLP Training Baseline
-        meaning: backward passes per optimizer step. dataset_name and optimizer are ignored. loss is hardcoded 1.0. This is
-          not pytest test_bench.py
+        meaning: backward passes per optimizer step. dataset_name and optimizer are ignored. loss is hardcoded 1.0
       '425':
         workload_name: DistilBERT NLP Training Baseline
         meaning: Defined by the workload description.
@@ -3608,13 +3606,13 @@ parameters:
         workload_name: PyTorch Microkernel Suite
         meaning: Defined by the workload description.
       '219':
-        workload_name: TorchBench Microkernels
+        workload_name: PyTorch Microkernel Suite
         meaning: Defined by the workload description.
       '319':
         workload_name: PyTorch Microkernel Suite
         meaning: Defined by the workload description.
       '419':
-        workload_name: TorchBench Microkernels
+        workload_name: PyTorch Microkernel Suite
         meaning: Defined by the workload description.
     cli_config_key: workload-specific
     interaction_precedence: workload-specific interaction rules
@@ -5366,15 +5364,13 @@ parameters:
     workload_specific_overrides:
       '122':
         workload_name: ResNet-50 BF16 Inference Throughput Sweep
-        meaning: channels-last memory format for the model and input. weights, image_source, and num_workers are ignored.
-          p50/p95/p99 equal the mean step time
+        meaning: channels-last memory format for the model and input. weights, image_source, and num_workers are ignored
       '222':
         workload_name: ResNet-50 BF16 Inference Throughput Sweep
         meaning: Defined by the workload description.
       '322':
         workload_name: ResNet-50 BF16 Inference Throughput Sweep
-        meaning: channels-last memory format for the model and input. weights, image_source, and num_workers are ignored.
-          p50/p95/p99 equal the mean step time
+        meaning: channels-last memory format for the model and input. weights, image_source, and num_workers are ignored
       '422':
         workload_name: ResNet-50 BF16 Inference Throughput Sweep
         meaning: Defined by the workload description.
@@ -5456,23 +5452,19 @@ parameters:
       '112':
         workload_name: lmbench Microbench Suite
         meaning: lmbench -W, microseconds each test runs untimed before it is timed (lat_mem_rd warms up once per array size).
-          Every tool runs single-threaded (no -P). Per-test enable flags are not used. Does not run lat_pipe, lat_unix, or
-          lat_proc
+          Every tool runs single-threaded (no -P). Per-test enable flags are not used
       '212':
         workload_name: lmbench Microbench Suite
         meaning: lmbench -W, microseconds each test runs untimed before it is timed (lat_mem_rd warms up once per array size).
-          Every tool runs single-threaded (no -P). Yaml lat_pipe, lat_unix, lat_proc, and extra lat_syscall variants are documented
-          but not executed
+          Every tool runs single-threaded (no -P)
       '312':
         workload_name: lmbench Microbench Suite
         meaning: lmbench -W, microseconds each test runs untimed before it is timed (lat_mem_rd warms up once per array size).
-          Every tool runs single-threaded (no -P). Per-test enable flags are not used. Does not run lat_pipe, lat_unix, or
-          lat_proc
+          Every tool runs single-threaded (no -P). Per-test enable flags are not used
       '412':
         workload_name: lmbench Microbench Suite
         meaning: lmbench -W, microseconds each test runs untimed before it is timed (lat_mem_rd warms up once per array size).
-          Every tool runs single-threaded (no -P). Yaml lat_pipe, lat_unix, lat_proc, and extra lat_syscall variants are documented
-          but not executed
+          Every tool runs single-threaded (no -P)
     cli_config_key: workload-specific
     interaction_precedence: workload-specific interaction rules
     notes_constraints: Do not assume this shared name has identical units or semantics across all workloads.

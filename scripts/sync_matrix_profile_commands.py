@@ -57,7 +57,7 @@ def ensure_profile_sheet(workbook) -> Worksheet:
         cell = sheet.cell(1, column, name)
         cell.font = bold
     sheet.freeze_panes = "A2"
-    widths = {1: 16, 2: 36, 3: 24, 4: 48, 5: 48, 6: 48, 7: 56}
+    widths = {1: 16, 2: 36, 3: 24, 4: 48, 5: 48, 6: 48}
     for column, width in widths.items():
         sheet.column_dimensions[get_column_letter(column)].width = width
     return sheet

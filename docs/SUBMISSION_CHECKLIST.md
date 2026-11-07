@@ -171,6 +171,8 @@
            Do not emit comma-joined `--rw` / `--working-set-size` overrides.
 - [ ] 3.29b `bash run_benchmark.sh --help` prints a `usage()` page matching
            `docs/run-output-contract.md` and exits 0 before `scripts/ensure_setup.sh`.
+           It opens with a blank line, then Usage, then the workbook Workload Name,
+           Main Goal, and Command Tools Executed lines.
            Help is not a header dump (`sed -n '1,20p'`). Profile aliases read
            `Run smoke profile`, `Run baseline profile`, and `Run extended profile`.
            Value-taking flags are documented as taking values. `-h` is omitted
@@ -179,7 +181,7 @@
            prints every `benchmark_specification.json` field/value as a two-column
            table and exits 0 before `scripts/ensure_setup.sh`. The runtime source
            is the extracted JSON row, not the Excel workbook.
-- [ ] 3.30 `run_benchmark.sh` writes `[RUN]`-prefixed command logs and persists `commands_executed.sh`.
+- [ ] 3.30 `run_benchmark.sh` records `[RUN]`-prefixed commands with `log_run` (in `run.log` always; on the terminal only at `--log-level DEBUG`) and persists `commands_executed.sh`.
 - [ ] 3.30a `run_benchmark.sh` satisfies `docs/run-output-contract.md`,
            including credential-free replay commands, raw artifacts, parsing,
            validation, summary output, and correct exit codes.
@@ -191,7 +193,7 @@
            when start/stop times are available; otherwise current boot only).
 - [ ] 3.32a Metadata commands execute on the local host and save local run artifacts.
 - [ ] 3.33 `run_benchmark.sh` stores `cli_options.env` (and optional user-specified options file, if requested).
-- [ ] 3.34 Run artifact directory naming follows `YYYYMMDD_HHMMSS_<repo_name>_<hostname>` under `results/raw/`.
+- [ ] 3.34 Run artifact directory naming follows `YYYYMMDD_HHMMSSZ_WORKLOAD-<NNN>_SYSTEM-<hostname>` under `results/raw/` (UTC, built by `benchmark_raw_run_dir_name` in `scripts/lib/common.sh`).
 - [ ] 3.35 `run_benchmark.sh` persists per-run sample exports in both CSV and JSON.
 - [ ] 3.36 `run_benchmark.sh` reports total run duration at completion.
 - [ ] 3.37 `run_benchmark.sh` runs collection, parse, and validation in one invocation and logs each stage.

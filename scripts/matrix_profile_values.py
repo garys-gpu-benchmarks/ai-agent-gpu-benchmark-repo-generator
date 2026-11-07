@@ -27,7 +27,6 @@ PROFILE_HEADERS = {
     "smoke": 4,
     "baseline": 5,
     "extended": 6,
-    "notes": 7,
 }
 COMMAND_COLUMNS = {
     "smoke": "run_benchmark Command Plus Options for Smoke Run (One minute or less)",
@@ -93,7 +92,6 @@ def load_profile_values(values_sheet) -> dict[int, dict[str, dict[str, str]]]:
     missing = [name for name in required if name not in headers]
     if missing:
         raise SystemExit(f"[FAIL] {PROFILE_SHEET} missing columns: {', '.join(missing)}")
-    notes_col = headers.get("notes")
     out: dict[int, dict[str, dict[str, str]]] = {}
     for row in range(2, values_sheet.max_row + 1):
         raw = values_sheet.cell(row, headers["Workload Number"]).value
@@ -105,7 +103,6 @@ def load_profile_values(values_sheet) -> dict[int, dict[str, dict[str, str]]]:
             "smoke": _cell_text(values_sheet.cell(row, headers["smoke"]).value),
             "baseline": _cell_text(values_sheet.cell(row, headers["baseline"]).value),
             "extended": _cell_text(values_sheet.cell(row, headers["extended"]).value),
-            "notes": _cell_text(values_sheet.cell(row, notes_col).value) if notes_col else "",
         }
         out.setdefault(workload, {})[str(param).strip()] = item
     return out
@@ -132,7 +129,7 @@ def is_sweep_value(text: str) -> bool:
 def build_command(profile: str, parameters: list[str], values: dict[str, dict[str, str]]) -> str:
     if profile not in PROFILES:
         raise ValueError(profile)
-    parts = ["bash run_benchmark.sh", f"--{profile}"]
+    parts = ["bash run_benchmark.sh", f"--{profile}", "--validate"]
     missing: list[str] = []
     for parameter in parameters:
         value = (values.get(parameter) or {}).get(profile, "")
@@ -196,6 +193,5 @@ def profile_values_json(parameters: list[str], values: dict[str, dict[str, str]]
             "smoke": item.get("smoke", ""),
             "baseline": item.get("baseline", ""),
             "extended": item.get("extended", ""),
-            "notes": item.get("notes", ""),
         }
     return payload

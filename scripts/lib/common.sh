@@ -79,13 +79,83 @@ log() {
   esac
 }
 
+# When more than one of --smoke, --baseline, --extended is given, run the
+# script once per profile, in the order given, with the other options
+# unchanged, then exit with the first non-zero status. (Before 2026-11-06 the
+# last profile flag silently replaced the others.) Each profile is a normal
+# run: its own results/raw folder and its own ledger row.
+run_profiles_in_order() {
+  local script="$1"
+  shift
+  local -a profiles=() rest=()
+  local arg profile seen
+  for arg in "$@"; do
+    case "${arg}" in
+      --smoke|--baseline|--extended)
+        seen=0
+        for profile in "${profiles[@]+"${profiles[@]}"}"; do
+          [[ "${profile}" == "${arg}" ]] && seen=1
+        done
+        [[ "${seen}" -eq 1 ]] || profiles+=("${arg}")
+        ;;
+      *) rest+=("${arg}") ;;
+    esac
+  done
+  [[ "${#profiles[@]}" -gt 1 ]] || return 0
+  local index=0 code status=0 summary=""
+  for profile in "${profiles[@]}"; do
+    index=$((index + 1))
+    echo "[INFO] ===== Profile ${profile#--} (${index} of ${#profiles[@]}) ====="
+    code=0
+    bash "${script}" "${profile}" "${rest[@]+"${rest[@]}"}" || code=$?
+    if [[ "${code}" -eq 0 ]]; then
+      summary+="${summary:+, }${profile#--} ok"
+    else
+      summary+="${summary:+, }${profile#--} FAILED (exit ${code})"
+      [[ "${status}" -ne 0 ]] || status="${code}"
+    fi
+  done
+  echo "[INFO] Profiles: ${summary}"
+  exit "${status}"
+}
+
+debug_enabled() {
+  [[ "${LOG_LEVEL:-INFO}" == "DEBUG" ]]
+}
+
+# Record "[RUN] <command>". The line always goes to run.log in the run
+# directory (once set_benchmark_run_dir has been called) and reaches the
+# terminal only at --log-level DEBUG.
+log_run() {
+  local line="[RUN] $*"
+  local run_dir="${BENCHMARK_RUN_DIR:-${RUN_DIR:-}}"
+  if [[ -n "${run_dir}" && -d "${run_dir}" ]]; then
+    printf '%s\n' "${line}" >> "${run_dir}/run.log"
+  fi
+  if debug_enabled; then
+    printf '%s\n' "${line}"
+  fi
+  return 0
+}
+
+# Pipe filter for step output that is already tee'd into run.log: drop lines
+# that start with [RUN] from the terminal unless --log-level DEBUG.
+hide_run_lines() {
+  if debug_enabled; then
+    cat
+  else
+    grep --line-buffered -v '^[[:space:]]*\[RUN\]' || true
+  fi
+}
+
 run_cmd() {
+  local command_text
   if [[ "$#" -eq 1 ]]; then
-    printf '[RUN] %s\n' "$1"
+    log_run "$1"
     bash -lc "$1"
   else
-    printf '[RUN] %q ' "$@"
-    printf '\n'
+    printf -v command_text '%q ' "$@"
+    log_run "${command_text% }"
     "$@"
   fi
 }
@@ -168,6 +238,30 @@ set_benchmark_run_dir() {
     source "${REPO_ROOT}/scripts/lib/nvcc_glibc_throw.sh"
     load_nvcc_toolkit_env
   fi
+}
+
+benchmark_raw_run_dir_name() {
+  # Usage: benchmark_raw_run_dir_name <repo_name> <hostname>
+  # Prints the per-run results/raw directory name (UTC timestamp):
+  #   YYYYMMDD_HHMMSSZ_WORKLOAD-NNN_SYSTEM-<hostname>
+  # e.g. 20261106_100212Z_WORKLOAD-101_SYSTEM-ubuntu-gpu-mi300x1-192gb-devcloud-atl1
+  # NNN is the leading number of <repo_name> (<Workload Number>-<Repo Name>),
+  # zero-padded to 3 digits. "_" separates fields only, so any "_" in the
+  # values is replaced with "-".
+  local repo_name="${1:-}"
+  local host_value="${2:-}"
+  local stamp workload_raw workload
+  stamp="$(date -u +"%Y%m%d_%H%M%S")Z"
+  workload_raw="${repo_name%%[-_]*}"
+  if [[ "${workload_raw}" =~ ^[0-9]+$ ]]; then
+    printf -v workload '%03d' "$((10#${workload_raw}))"
+  else
+    workload="${repo_name:-unknown}"
+  fi
+  [[ -n "${host_value}" ]] || host_value="$(hostname -s 2>/dev/null || hostname)"
+  workload="${workload//_/-}"
+  host_value="${host_value//_/-}"
+  printf '%s_WORKLOAD-%s_SYSTEM-%s\n' "${stamp}" "${workload}" "${host_value}"
 }
 
 capture_benchmark_run_command_submitted() {
@@ -391,7 +485,7 @@ wait_for_server() {
 
 run_logged() {
   local command_text="$*"
-  echo "[RUN] ${command_text}"
+  log_run "${command_text}"
   if [[ -n "${COMMAND_LOG:-}" ]]; then
     printf '%s\n' "${command_text}" >> "${COMMAND_LOG}"
   fi

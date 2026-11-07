@@ -10,7 +10,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "scripts"))
 
-from workload_option_help import option_help_lines, override_example, replace_override_example, replace_workload_options  # noqa: E402
+from workload_option_help import help_header_lines, option_help_lines, override_example, replace_help_header, replace_override_example, replace_workload_options  # noqa: E402
 
 
 STREAM = {
@@ -32,6 +32,37 @@ STREAM = {
 
 
 class WorkloadOptionHelpTests(unittest.TestCase):
+    HEADER = {
+        "Workload Name": "System Config Verification",
+        "Main Goal": "Analyze ROCm software stack consistency against yaml expectations",
+        "Validation Objective": "Validates ROCm tools, kernel match, amdgpu driver, packages, and GPU device-node permissions",
+        "Command Tools Executed": "Run rvs --version, rocminfo, amd-smi version, amd-smi static, uname -a, modinfo amdgpu, hipcc --version, and dpkg-query.",
+    }
+
+    def test_help_header_labels_periods_and_wrapping(self) -> None:
+        lines = help_header_lines(self.HEADER)
+        self.assertEqual(lines[0], "Workload Name:          System Config Verification.")
+        self.assertEqual(lines[1], "Main Goal:              Analyze ROCm software stack consistency against yaml expectations.")
+        self.assertTrue(lines[2].startswith("Command Tools Executed: Run rvs --version"))
+        self.assertFalse(any(line.startswith("Validation Objective:") for line in lines))  # removed 2026-11-06
+        self.assertTrue(all(len(line) <= 100 for line in lines))
+        self.assertTrue(lines[3].startswith(" " * 24))  # wrapped continuation sits under the value
+        self.assertTrue("".join(lines).count("dpkg-query.") == 1)  # existing period is not doubled
+        self.assertNotIn("amd-smi\n", "\n".join(lines))  # no break inside a hyphenated word
+
+    def test_help_header_replaces_overlay_description(self) -> None:
+        text = (
+            "usage() {\n  cat <<'USAGE'\nUsage: bash run_benchmark.sh [OPTIONS]\n\n"
+            "Every profile starts a server.\nSecond prose line.\n\nProfiles (default: --smoke):\n"
+            "  --smoke                       Run smoke profile\nUSAGE\n}\n"
+        )
+        updated = replace_help_header(text, self.HEADER)
+        self.assertNotIn("Every profile starts a server.", updated)
+        self.assertIn("cat <<'USAGE'\n\nUsage: bash run_benchmark.sh [OPTIONS]\n\nWorkload Name:          System Config Verification.\n", updated)
+        self.assertNotIn("Validation Objective:", updated)
+        self.assertIn("dpkg-query.\n\nProfiles (default: --smoke):", updated)
+        self.assertEqual(replace_help_header(updated, self.HEADER), updated)  # idempotent
+
     def test_shared_value_is_printed_once_and_notes_are_omitted(self) -> None:
         lines = option_help_lines(STREAM)
         numa = next(line for line in lines if line.startswith("  --numa-node "))

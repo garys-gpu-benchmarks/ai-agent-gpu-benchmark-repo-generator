@@ -302,8 +302,11 @@ def expand_generate(instruction: str, fields: dict[str, str], repo: Path | None 
         )
 
     if "per-run artifact" in text:
+        workload_prefix = re.split(r"[-_]", repo_name, maxsplit=1)[0]
+        workload_label = f"{int(workload_prefix):03d}" if workload_prefix.isdigit() else "<NNN>"
         return (
-            f"Each execution writes `results/raw/YYYYMMDD_HHMMSS_{repo_name}_<hostname>/` "
+            f"Each execution writes `results/raw/YYYYMMDD_HHMMSSZ_WORKLOAD-{workload_label}_SYSTEM-<hostname>/` "
+            "(UTC timestamp) "
             "containing `run.log`, `commands_executed.sh`, `env_variables.txt`, "
             "`journal_warnings.txt`, `script.sh`, `raw_results.csv`, `raw_results.jsonl`, "
             "`hardware_info.txt`, `software_info.txt`, and `errors_info.txt`."

@@ -76,11 +76,6 @@ class TemplateNoteStripTest(unittest.TestCase):
                     for column, cell in row.items():
                         self.assertNotIn("TEMPLATE_00_", cell.upper(), f"{workload} {name} {column}")
 
-    def test_workbook_still_has_tagged_notes_so_the_strip_is_exercised(self) -> None:
-        workbook = load_workbook(MATRIX, read_only=True)
-        notes = [row[6] for row in workbook["Parameters_SmokeBaselineExtend"].iter_rows(min_row=2, values_only=True)]
-        self.assertTrue(any(isinstance(n, str) and "TEMPLATE_00_" in n for n in notes))
-
 
 class SmokeDramTierTest(unittest.TestCase):
     def test_x09_smoke_dram_tiers_exceed_llc(self) -> None:

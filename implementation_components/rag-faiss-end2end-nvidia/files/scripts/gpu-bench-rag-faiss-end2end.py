@@ -295,6 +295,8 @@ def main() -> int:
     if "faiss" not in vector_db.lower() and vector_db.lower() not in PLACEHOLDERS:
         print(f"[WARN] vector_db={vector_db} requested; using FAISS IndexFlatIP", flush=True)
     index = faiss.IndexFlatIP(int(doc_vectors.shape[1]))
+    # The index stays on the CPU on every platform; metric #3 is labelled CPU.
+    print("[INFO] FAISS retrieval runs on the CPU (IndexFlatIP)", flush=True)
     index.add(doc_vectors)
     index_ntotal = int(index.ntotal)
 

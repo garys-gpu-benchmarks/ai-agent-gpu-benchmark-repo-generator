@@ -132,7 +132,6 @@ def main() -> int:
     tests = [
         (["lat_syscall", "null"], "lat_syscall_null_us"),
         (["lat_syscall", "read"], "lat_syscall_read"),
-        (["lat_syscall", "write"], "lat_syscall_write"),
         (["lat_ctx", "-s", "0", "2"], "context_switch_latency_us"),
         (["lat_mem_rd", "16", "128"], "lat_mem_rd_16mb_stride128_ns"),
         # 512 MB exceeds typical server LLC capacity; 8 MB measured cache.

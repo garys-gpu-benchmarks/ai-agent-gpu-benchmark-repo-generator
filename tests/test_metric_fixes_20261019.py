@@ -190,9 +190,12 @@ class NcclSingleGpu(unittest.TestCase):
                 timeout=60, check=False,
             )
             self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
-            self.assertIn("[INFO] one GPU: stopped after round 1 of 24", result.stdout)
+            # 2026-11-06: one GPU runs one smallest-message call to show NCCL
+            # initializes, not the 1024..4096 sweep (was 3 calls, before that 72).
+            self.assertIn("[INFO] one GPU requested: one quick NCCL check, no size sweep", result.stdout)
             calls = (root / "calls.txt").read_text(encoding="utf-8").splitlines()
-            self.assertEqual(len(calls), 3)  # 1024, 2048, 4096 once, not 24 times
+            self.assertEqual(len(calls), 1)
+            self.assertIn("1024", calls[0])
             self.assertIn("na (requires at least two GPUs)", (root / "raw.csv").read_text(encoding="utf-8"))
 
 

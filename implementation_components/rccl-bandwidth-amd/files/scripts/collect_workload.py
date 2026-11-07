@@ -113,6 +113,13 @@ def main() -> int:
         if value:
             extras.extend([flag, str(value)])
     requested_gpus = int(float(pv(params, "num_gpus", args.profile, 2) or 2))
+    if requested_gpus < 2:
+        # One GPU cannot cross a link, so every metric is na. Run one
+        # smallest-message call to show RCCL initializes, not the sweep.
+        min_bytes = str(pv(params, "min_bytes", args.profile, "") or "8")
+        extras = ["-b", min_bytes, "-e", min_bytes, "-n", "1", "-w", "0"]
+        print("[INFO] one GPU requested: one quick RCCL check, no size sweep; "
+              "every metric is na (requires at least two GPUs)", flush=True)
     extras.extend(["-g", str(requested_gpus)])
     timeout = 3600
     rows = []

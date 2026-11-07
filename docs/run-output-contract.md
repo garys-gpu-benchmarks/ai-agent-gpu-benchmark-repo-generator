@@ -2,19 +2,21 @@
 
 After `bash run_benchmark.sh` completes, it must print a concise end-of-run summary after benchmark execution and optional validation. The summary must include one output line for every required item in the `Metrics` field of `benchmark_specification.json`. Additional output is allowed, but omitting or replacing a required Metrics item is not allowed.
 
-During execution, generated harnesses must print each executed command with exactly one `[RUN]` prefix per command line. Do not emit one `[RUN]` token per argv element. For Bash array commands, format the full command into one string first, then print:
+During execution, generated harnesses record each executed command with exactly one `[RUN]` prefix per command line, through `log_run` in `scripts/lib/common.sh`. Do not emit one `[RUN]` token per argv element. For Bash array commands, format the full command into one string first:
 
 ```bash
 printf -v command_text '%q ' "${cmd[@]}"
-echo "[RUN] ${command_text}"
+log_run "${command_text}"
 ```
+
+`log_run` always appends the line to `run.log` in the run directory. It prints the line on the terminal only at `--log-level DEBUG`; the default `INFO` keeps `[RUN]` lines off the screen. Step output that is tee'd into `run.log` is piped through `hide_run_lines`, so `[RUN]` lines printed by collectors follow the same rule. `run.log` and `commands_executed.sh` keep every command at any log level.
 
 Python-backed workloads must execute the workload process with unbuffered output (for example `PYTHONUNBUFFERED=1`) and print progress before each long-running sample or sweep point so operators can identify where a VM-side run is spending time.
 
 The wrapper format is fixed. Line order is mandatory for every generated workload (all 32 benchmarks). Emit empty `[INFO]` spacer lines exactly where shown (prefix only; no other text on those lines):
 
 ```text
-[RUN] <benchmark command>
+[RUN] <benchmark command>                                           (--log-level DEBUG only)
 [INFO] Repository:                    <repository path>
 [INFO] Ubuntu Version:                <Ubuntu release>
 [INFO] Python Version:                <Python version>
@@ -62,7 +64,7 @@ Generated `run_benchmark.sh` must:
 1. Begin with `set -euo pipefail`, resolve the repository root, handle `--help` through a `usage()` function, and invoke `bash scripts/ensure_setup.sh` before any benchmark execution. `--help` must print the help page and exit 0 before `ensure_setup.sh` or any install/benchmark work. The guard runs `bash setup.sh --assume-yes` when supported if `.setup_state` is absent, then refuses to run unless setup completes. Reboot-driven setup is not continued by the benchmark process; after reboot/resume completes, the operator reruns `bash run_benchmark.sh`.
 2. Load workload settings from `config/benchmark_config.yaml` and supported CLI options; do not hardcode workload-specific sweep or threshold values.
 3. Use `.venv/bin/python` when Python is required and add ROCm, compiler, or library paths only when required by the workload.
-4. Create a unique `results/raw/<timestamp>_<repo>_<hostname>/` artifact directory and capture masked environment data, end-of-run `journal_warnings.txt` (`journalctl -p warning`, run-window scoped via `capture_journal_warnings`), stdout, stderr, exit status, and elapsed time. Do not write `system_info.txt`. After the end-of-run summary is assembled, write `metrics_summary.txt` in that same per-run directory via `write_metrics_summary_txt` from `scripts/lib/common.sh`. The file is the Benchmark Summary block without `[INFO]` prefixes: header, Run ID / Status / Samples / Profile / Device, both commands, start/stop/elapsed, Artifacts, SQLite DB, a blank line, one `#N:` metric line per `Metrics` item, and a trailing blank line.
+4. Create a unique `results/raw/YYYYMMDD_HHMMSSZ_WORKLOAD-<NNN>_SYSTEM-<hostname>/` artifact directory and capture masked environment data, end-of-run `journal_warnings.txt` (`journalctl -p warning`, run-window scoped via `capture_journal_warnings`), stdout, stderr, exit status, and elapsed time. Do not write `system_info.txt`. After the end-of-run summary is assembled, write `metrics_summary.txt` in that same per-run directory via `write_metrics_summary_txt` from `scripts/lib/common.sh`. The file is the Benchmark Summary block without `[INFO]` prefixes: header, Run ID / Status / Samples / Profile / Device, both commands, start/stop/elapsed, Artifacts, SQLite DB, a blank line, one `#N:` metric line per `Metrics` item, and a trailing blank line.
 5. After workload execution and validation, invoke `scripts/collect_hw_sw_info.sh "${RUN_DIR}"` so the Excel-defined, vendor-filtered inventory is written to `hardware_info.txt`, `software_info.txt`, and `errors_info.txt` in that per-run directory. The collector must run on the local benchmark host, preserve the `DESCRIPTION : Commands To Be Run` sections, record each command's status, and continue collecting when an individual probe is unavailable. A nonzero probe is documented in `errors_info.txt`; it must not hide the benchmark's own exit status.
 6. Append exactly one row to `/var/opt/benchmarks/runtime_ledger.csv` for every invocation, including failed invocations, using `scripts/update_runtime_ledger.py`. Immediately after sourcing `scripts/lib/common.sh`, call `capture_benchmark_run_command_submitted "$@"` so the ledger records argv as entered. After argument parsing, call `begin_benchmark_run "${profile}"` so `die()` writes that row when the runner exits early. After `ensure_setup.sh` returns, call `mark_benchmark_measure_start` so the stored elapsed time starts at the benchmark. A setup failure still uses the `begin_benchmark_run` timestamp. After yaml defaults are applied, call `set_benchmark_run_command` with the fully resolved `bash run_benchmark.sh ...` string (submitted flags plus yaml-filled parameters that were not on the command line). Call `finish_benchmark_run` after a successful ledger write so the error path does not append a second row. Pass the workload profile, UTC start time, total runtime (seconds or `mm:ss`), overall `exit_code`, `failure_stage`, `failure_detail`, `raw_run_dir`, `run_benchmark_command_submitted`, `run_benchmark_command_fully_resolved`, effective parameter string, and notes. Do not write `runtime_exit_code`. The helper stores elapsed time in `total_runtime_mm_ss` as `mm:ss`, derives workload metadata, GPU/CPU/OS information, metric definitions/results, and the required `<workload_number>_YYYYMMDD_HHMMSS` `run_id`, and writes columns in the order defined by `LEDGER_COLUMNS` in `scripts/update_runtime_ledger.py`. Host/GPU/OS/CPU fields are `hostname`, `gpu_name`, `gpu_vram`, `gpu_count`, `os_version`, `cpu_model`, then `workload_name` and the metric pairs. After `metric_5_result` the columns are `run_benchmark_command_submitted`, `run_benchmark_command_fully_resolved`, `Parameter_01_Name`/`Parameter_01_Value` through `Parameter_20_Name`/`Parameter_20_Value`, `parameters_set`, `notes`. The helper fills those 40 slots from workbook `Parameter_01`–`Parameter_20` and the effective values after CLI overrides (submitted flags, then the fully resolved command, then `--parameters-set`, then yaml). Unused slots stay blank, not em-dash. `parameters_set` is rebuilt from those slots as `profile=<name>;key=value;...`. `gpu_name` is Card Series / MARKET_NAME, never the ROCm SMI banner; `gpu_vram` is the VRAM total-memory value only. On failure, `failure_stage` must be one of `setup|collection|parse|validation|timeout|integrity|other` and `failure_detail` must be the one-line reason (for example `STREAM did not print Solution Validates`). On success, `failure_stage` is `ok`, `failure_detail` is empty, and `notes` is `validated run`. When `--run-benchmark-command-fully-resolved` is omitted and submitted argv is present, the helper appends yaml defaults that were not already on the command line. When both are omitted, it reconstructs the profile command from `Profile Parameter Values`.
 7. Persist an executable `commands_executed.sh` containing replayable, credential-free commands for the run.
@@ -96,12 +98,15 @@ The ledger call should be nonfatal if ledger storage itself is unavailable; it m
 1. Define a `usage()` function and wire `--help` to it. Do not implement help as `sed -n '1,20p' "$0"` or any other fixed line-range print of the file header.
 2. Handle `--help` and `--specification` before `scripts/ensure_setup.sh` and before workload option parsing that can start setup, install, or benchmark work. `--specification` prints this workload's `benchmark_specification.json` fields as a two-column table and exits 0.
 3. Copy and customize `scripts/templates/run_benchmark_help_skeleton.sh`. Keep the script-header `Options:` field as a compact comma-separated inventory.
-4. Print this shape, with the first prose line matching the script header `Description` field:
+4. Print this shape. The page starts with one blank line. The three header lines come from the workbook row (`Workload Name`, `Main Goal`, `Command Tools Executed`); each value ends with a period, labels fill a 24-column field, and long values wrap at 100 columns with continuation lines under the value. `scripts/workload_option_help.py` (`help_header_lines`, `replace_help_header`) writes them at generation time, in template runners and in overlay runners:
 
 ```text
+
 Usage: bash run_benchmark.sh [OPTIONS]
 
-<Description from the run_benchmark.sh header>
+Workload Name:          <Workload Name>.
+Main Goal:              <Main Goal>.
+Command Tools Executed: <Command Tools Executed>.
 
 Profiles (default: --smoke):
   --smoke                       Run smoke profile
@@ -114,7 +119,7 @@ Parameters (override the profile's value):
 General options:
   --config <file>               Config file (default: config/benchmark_config.yaml)
   --quiet                       Suppress nonessential stdout
-  --log-level <level>           ERROR|WARN|INFO|DEBUG (default: INFO)
+  --log-level <level>           ERROR|WARN|INFO|DEBUG (default: INFO; DEBUG also prints [RUN] commands)
   --specification               Print this workload's specification and exit
   --help                        Show this help and exit
 
@@ -129,7 +134,7 @@ Examples:
 6. Put `--config`, `--quiet`, `--log-level`, `--specification`, and `--help` under `General options:`. If the runner also parses `--kernel-version`, `--driver-version`, `--rocm-version`, or `--required-packages`, list those there too. Those flags take values.
 7. Include `Parameters (override the profile's value):` for every Parameter_01..Parameter_20 flag this runner parses. Omit the section when there are none. Each line has the flag, a short description, and the smoke, baseline, and extended values used when the flag is omitted. Take the description from `config/workload_parameters.yaml` when the parameter is shared; otherwise take it from `Execution Description With Parameters`. When all three profiles share one value, print `smoke/baseline/extended: <value>`. When they differ, print `smoke <v>, baseline <v>, extended <v>`. Do not print Profile Parameter Values notes. The fourth example is `bash run_benchmark.sh --baseline` plus one parameter override. Omit that line when the workload has no parameters.
 8. Do not document `-h` unless the parser accepts it.
-9. The harness creates `results/raw/<timestamp>_<repo>_<hostname>/raw_output.txt` for the run. Operators do not pass a raw-file path.
+9. The harness creates `results/raw/YYYYMMDD_HHMMSSZ_WORKLOAD-<NNN>_SYSTEM-<hostname>/raw_output.txt` for the run. Operators do not pass a raw-file path.
 
 ## Numbered metric-item requirement
 

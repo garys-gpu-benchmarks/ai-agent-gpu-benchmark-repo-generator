@@ -89,51 +89,71 @@ class BundleReadmeToolsTests(unittest.TestCase):
                     self.assertIsNone(re.search(r"@[A-Z]+@", readme), "unfilled placeholder")
                     self.assertNotIn("./run.sh", readme)
 
-    def test_results_section_order(self) -> None:
-        readme = self.render(PUBLISH[0], "3")
-        self.assertLess(readme.index("## Getting started"), readme.index("## See your results"))
-        self.assertLess(readme.index("## See your results"), readme.index("## Run everything"))
-        self.assertIn("./show_metrics.sh 307 --baseline", readme)  # 2026-10-19: Getting started uses x07
-        self.assertIn("| One benchmark's runs and per-profile means | `./show_metrics.sh <benchmark>` |", readme)
-
-    def test_getting_started_shows_success_and_restart(self) -> None:
-        """2026-10-19 technician review: show what success looks like, a watched and a
-        quiet command for the long install, and the 26.04 ROCm restart."""
+    def test_section_order(self) -> None:
         for digit in "1234":
             readme = self.render(PUBLISH[0], digit)
-            section = readme[readme.index("## Getting started"):readme.index("## See your results")]
             with self.subTest(platform=digit):
-                # Every sample summary sits in a fenced block; bare "=====" lines under
-                # text render as Markdown headings on GitHub.
-                fenced = re.findall(r"```text\n(.*?)```", section, re.S)
-                self.assertEqual(sum("SUMMARY: " in block for block in fenced), 2)
-                outside = re.sub(r"```.*?```", "", section, flags=re.S)
-                self.assertNotIn("=====", outside)
-                self.assertIn("SUMMARY: 1 of 1 runs finished: 1 passed, 0 failed", section)
-                self.assertIn("SUMMARY: 3 of 3 runs finished: 3 passed, 0 failed", section)
+                headings = ["## Requirements", "## Install", "## Quick check", "## Run benchmarks",
+                            "## Results", "## Reading the results", "## Update", "## Benchmarks"]
+                positions = [readme.index(h + "\n") for h in headings]
+                self.assertEqual(positions, sorted(positions))
+                self.assertIn(f"./show_metrics.sh {digit}07 [--baseline]", readme)
+                self.assertIn("| Runtime ledger (one line per run) | `/var/opt/benchmarks/runtime_ledger.csv` |", readme)
+
+    def test_quick_check_and_restart(self) -> None:
+        """2026-11-06 short README: two quick-check commands, what success looks like,
+        smoke is not a number to quote, and the ROCm restart only where it happens."""
+        for digit in "1234":
+            readme = self.render(PUBLISH[0], digit)
+            section = readme[readme.index("## Quick check"):readme.index("## Run benchmarks")]
+            with self.subTest(platform=digit):
+                self.assertIn(f"-w {digit}07 --smoke --show-output", section)
                 self.assertIn(f"-w {digit}01,{digit}02,{digit}14 --smoke --show-output", section)
-                self.assertIn(f"-w {digit}01,{digit}02,{digit}14 --smoke                 # quiet", section)
-                self.assertNotIn("quiet for 5-20 minutes", section)
-                self.assertIn("what matters is `0 failed`", section)
-                self.assertIn("### 3. Smoke is a wiring check, not a measurement", section)
-                self.assertNotIn("under one minute", section)
+                self.assertIn("What matters is `0 failed`", section)
+                self.assertIn("Quote `baseline` or `extended` numbers.", section)
+                self.assertNotIn("\n\n\n", readme)
                 self.assertNotRegex(section, r"\bWith ,")
+                self.assertNotIn("HPL", readme)  # x20 is a cuSOLVER/rocSOLVER LU solve
+                self.assertNotIn("v1.0.5", readme)
                 if digit == "3":
+                    self.assertIn("The machine restarts once.", section)
                     self.assertIn("With `--show-output`, the output ends like this", section)
                     self.assertIn("Connection to <your-machine-address> closed by remote host.", section)
-                    self.assertIn("The machine restarts once.", section)
                     self.assertIn("cannot start the MI300X", section)
+                    self.assertIn("Log in again as root", section)
                 elif digit == "1":
                     self.assertIn("If the machine restarts.", section)
+                    self.assertIn("Log in again as root", section)
                     self.assertNotIn("closed by remote host", section)
                 else:
-                    self.assertIn("does not restart the machine", section)
-                    self.assertNotIn("Log in again as root", section)
                     self.assertIn("`nvidia-smi` lists the GPUs", readme)
-                # The restart steps come before the step-2 success sample.
-                if digit in "13":
-                    self.assertLess(section.index("Log in again as root"), section.index("SUMMARY: 3 of 3"))
+                    self.assertIn("never installs the driver or restarts the machine", readme)
+                    self.assertNotIn("Log in again as root", readme)
 
+    def test_links_to_the_other_three_bundles_only(self) -> None:
+        slugs = {"1": "bundle-amd-ubuntu-2404", "2": "bundle-nvidia-ubuntu-2404",
+                 "3": "bundle-amd-ubuntu-2604", "4": "bundle-nvidia-ubuntu-2604"}
+        for digit, own in slugs.items():
+            readme = self.render(PUBLISH[0], digit)
+            header = readme[:readme.index("## Requirements")]
+            with self.subTest(platform=digit):
+                self.assertNotIn(own, header)
+                for other, slug in slugs.items():
+                    if other != digit:
+                        self.assertIn(f"https://github.com/example-org/{slug})", header)
+
+    def test_benchmark_rows_use_short_names(self) -> None:
+        text = PUBLISH[0].read_text(encoding="utf-8")
+        program = "\n".join([
+            "set -u", "ORG=example-org",
+            'rows=""; for dir in 207-sys-bench-nvidia-stream-ddr5-bandwidth-ubu2404 132-gpu-bench-amd-rag-faiss-end2end-ubu2604; do',
+            next(line for line in text.splitlines() if line.strip().startswith("short=${dir:4}")),
+            next(line for line in text.splitlines() if line.strip().startswith('rows="${rows}| ${dir:0:3}')),
+            "done", 'printf "%s" "${rows}"',
+        ])
+        out = subprocess.run([BASH, "-c", program], capture_output=True, text=True, timeout=30, check=True).stdout
+        self.assertIn("| 207 | [stream-ddr5-bandwidth](https://github.com/example-org/207-sys-bench-nvidia-stream-ddr5-bandwidth-ubu2404) |", out)
+        self.assertIn("| 132 | [rag-faiss-end2end](https://github.com/example-org/132-gpu-bench-amd-rag-faiss-end2end-ubu2604) |", out)
 
 if __name__ == "__main__":
     unittest.main()

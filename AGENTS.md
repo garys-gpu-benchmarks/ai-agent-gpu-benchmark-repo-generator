@@ -458,14 +458,14 @@ This line must be present in the first 20 lines of the script.
 
 ### 23. Structured Run Artifact Directory
 
-- Every benchmark run must create a unique run directory under `results/raw/` named: `YYYYMMDD_HHMMSS_<repo_name>_<hostname>`.
+- Every benchmark run must create a unique run directory under `results/raw/` named: `YYYYMMDD_HHMMSSZ_WORKLOAD-<NNN>_SYSTEM-<hostname>` (UTC timestamp with a `Z` suffix; `<NNN>` is the workload number zero-padded to 3 digits; example `20261106_100212Z_WORKLOAD-101_SYSTEM-ubuntu-gpu-mi300x1-192gb-devcloud-atl1`). `_` separates fields only. Build the name with `benchmark_raw_run_dir_name` from `scripts/lib/common.sh`; do not hand-assemble it.
 - Raw tool output, run transcript, and run-side artifacts for that execution must be stored in that run directory.
 - Do not mix artifacts from different runs into a single flat filename namespace.
 
 ### 24. Full Transcript + Replayable Commands
 
 - `run_benchmark.sh` must capture a full stdout/stderr transcript as `run.log` in the run directory.
-- Every executed external command must be emitted with `[RUN]` prefix and saved to `commands_executed.sh` as a replayable script.
+- Every executed external command must be recorded with a `[RUN]` prefix through `log_run` (always written to `run.log`; on the terminal only at `--log-level DEBUG`) and saved to `commands_executed.sh` as a replayable script.
 - Keep terminal color output for operators, but strip ANSI color codes from persisted log files.
 
 ### 25. System and Software Metadata Artifacts

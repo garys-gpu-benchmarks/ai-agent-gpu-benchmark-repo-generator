@@ -1,5 +1,74 @@
 # Changelog
 
+## 2026-11-06 — `--help` header: blank first line, no Validation Objective
+
+- `run_benchmark.sh --help` starts with a blank line before `Usage:`, and the header lists Workload Name, Main Goal, and Command Tools Executed (Validation Objective is no longer shown; `--specification` still prints it). `help_header_lines` and `replace_help_header` in `scripts/workload_option_help.py` apply this to the runner template and the 12 overlay runners. Docs (`run-output-contract.md`, help skeleton, checklist 3.29b) and `tests/test_workload_option_help.py` updated.
+- TEMPLATE_00_124 workbook: Command Tools Executed now follows Main Goal, and Validation Objective follows the three run-command columns. Column order only; no values changed, and every script reads these columns by name.
+
+## 2026-11-06 — NVIDIA SDXL and SGLang runners start with `RAW_FILE` unset
+
+- `implementation_components/sdxl-diffusers-nvidia` and `sglang-prompt-response-nvidia` `run_benchmark.sh` test `"${RAW_FILE:-}"`. With `set -u`, the bare `"${RAW_FILE}"` stopped every smoke run of 224/424 and 230/430 before the run folder was created. This is the repair the 201-232 and 401-432 batches made in their generator copies (`results/generator_repairs.md`); the published workloads already carry it. New test: no runner reads an unset `RAW_FILE`.
+
+## 2026-11-06 — Fixes from the 96-run VM review
+
+- **Several profiles in one command.** `bash run_benchmark.sh --smoke --baseline --extended` used to run extended only (each profile flag replaced the last). `run_profiles_in_order` (new, `scripts/lib/common.sh`) now runs the script once per profile, in the order given, with the other options unchanged, keeps going after a failed profile, prints `[INFO] Profiles: smoke ok, baseline ok, extended ok`, and exits with the first non-zero status. Each profile is a normal run with its own `results/raw` folder and ledger row. Called right after `--help` handling in the runner template and the 12 overlay runners.
+- **AMD banner.** `scripts/print_run_metadata.sh` read the pre-10.x `rocm-core` and `rocblas` packages, so ROCm 10.1 machines printed `NOT FOUND`. It now reads `/opt/rocm[/core-*]/.info/version`, then the `amdrocm-base*` packages, then the `/opt/rocm/core-<ver>` folder; rocBLAS comes from the `rocblas` package, then the `librocblas.so.<ver>` file, then the named `amdrocm-blas*` package (whose version is the ROCm release).
+- **First venv message.** `setup_rocm_reboot_skeleton.sh` printed `[WARN] Existing Python venv is incomplete; recreating it` on every fresh install. With no `.venv` yet it now prints `[INFO] Creating Python venv`; the warning stays for a real broken venv.
+- **JAX x26 iterations.** 126/326 baseline and extended asked for 2,630,000 and 7,180,000 iterations and stopped at the 120 s / 330 s limits after about 210,000 and 420,000. `Parameters_SmokeBaselineExtend` now asks for 190,000 and 390,000 (commands re-synced). `update_runtime_ledger.py` adds `completed N of M requested iterations (stopped at the profile time limit)` to `notes` whenever `raw_results.csv` shows fewer completed than requested iterations.
+- **RAG x32 retrieval is labelled CPU.** Both RAG scripts build a CPU `faiss.IndexFlatIP` on every platform. Metric #3 is now "CPU FAISS retrieval latency, ms" (Metrics and `Metric_Short_Labels`, short label `CPURtms`), and the script prints `[INFO] FAISS retrieval runs on the CPU (IndexFlatIP)`.
+- **vLLM AMD and amd-aiter (127–129, 327–329).** Setup installs the pinned `amd-aiter` with `--no-deps` after vLLM's extra dependencies (which skip it so pip cannot replace the ROCm torch). If it still does not import, setup logs a warning and an `install_status.txt` step, and each run prints `[WARN] amd-aiter is not installed; vLLM runs without its AITER kernels...`. Neither fails the run.
+- **One GPU, x16 collectives.** With `num_gpus` 1, the RCCL and NCCL collectors run one smallest-message call (to show the library initializes) instead of the full size sweep, then publish the documented `na (requires at least two GPUs)` row. Previously 116 spent up to 2 min 19 s and 216 up to 49 s on that sweep.
+- Tests: `tests/test_vm_review_20261106.py` (new); `tests/test_metric_fixes_20261019.py` NCCL one-GPU test now expects one call.
+
+## 2026-11-06 — Parameter notes removed; sync script emits `--validate`
+
+- **`BenchmarkSpecDefinitions.xlsx` `Parameters_SmokeBaselineExtend`:** column G `notes` is deleted (286 internal tuning notes). The sheet is now Workload Number, Workload Name, Parameter, smoke, baseline, extended.
+- **Not published any more.** `extract_benchmark_definition.py` and `matrix_profile_values.py` no longer read a `notes` column or write a `notes` key into Profile Parameter Values, so `benchmark_specification.json` and `--specification` carry only the smoke, baseline, and extended values. Nothing else in any workload's specification changes; `config/workload_parameters.yaml` and `user_scripts/show_metrics.sh` regenerate unchanged.
+- **`scripts/sync_matrix_profile_commands.py`** builds `bash run_benchmark.sh --<profile> --validate ...`, matching the workbook command columns. Before this, `--check` reported every workload as stale and a write would have removed `--validate` from all 384 commands; `--check` now passes for all 128 workloads.
+- Removed `test_workbook_still_has_tagged_notes_so_the_strip_is_exercised` (it required the notes column). The TEMPLATE_00_ tag strip on smoke, baseline, and extended cells is unchanged and still tested.
+
+## 2026-11-06 — Shorter bundle README
+
+- **`bundle_readme()` in `user_scripts/publish_benchmarks_to_github.sh`** writes a README about half as long for all four bundles: Requirements, Install, Quick check, Run benchmarks, Results, Reading the results, Update, Benchmarks. Same commands and warnings; the three sample summary blocks, the quiet-mode install variant, the separate "Smoke is a wiring check" section, and the duplicate results table are gone (smoke is now two sentences under Quick check).
+- **Corrections.** x20 is no longer called HPL (it is a cuSOLVER/rocSOLVER LU solve). x06 and x08 sit under "Reading the results" with the `na` notes instead of a table titled "expected to be na". The pre-v1.0.5 migration note is gone. Each bundle links to the other three bundles, not to itself.
+- **AMD.** The ROCm restart instructions (24.04 may restart, 26.04 restarts once, with the expected last lines) stay under Quick check. NVIDIA says the first run installs CUDA and never installs the driver or restarts.
+- **Benchmarks list** is a table of workload numbers with short repository names (for example 207 links as `stream-ddr5-bandwidth`).
+- `tests/test_bundle_readme_tools.py` checks the new section order, quick check, restart text per platform, other-bundle links, and short names.
+
+## 2026-11-06 — `[RUN]` lines appear only at `--log-level DEBUG`
+
+- **Quieter default output.** `[RUN] <command>` lines no longer print on the terminal at the default `--log-level INFO`. `--log-level DEBUG` prints them again. Section headers, collector CSV rows, `[PASS]`/`[WARN]`/`[FAIL]` lines, and the end-of-run summary and metrics are unchanged.
+- **Nothing is lost.** `log_run` (new, `scripts/lib/common.sh`) always appends the `[RUN]` line to `run.log` in the run directory, which the runner-level lines never reached before; `commands_executed.sh` is unchanged. `hide_run_lines` (new) filters `[RUN]` lines from collector output on the terminal while `tee` still writes them to `run.log`, so `update_runtime_ledger.py` still finds the last command for `failure_detail`. `run_cmd` and `run_logged` use `log_run`.
+- **Where.** The runner template in `scripts/materialize_generated_harness.py` and the 12 overlay runners (SDXL, SGLang, vLLM; AMD and NVIDIA) call `log_run` instead of `echo "[RUN] ..."` and pipe collector output through `hide_run_lines`. A failing collector still fails the run.
+- **Help and docs.** `--help` reads `--log-level <level> ERROR|WARN|INFO|DEBUG (default: INFO; DEBUG also prints [RUN] commands)`. Updated `docs/run-output-contract.md`, `AGENTS.md`, checklist 3.30, and the help skeleton. New `tests/test_run_line_log_level.py`.
+- **Not covered.** Setup-time scripts (`setup.sh`, `ensure_setup.sh`, `build.sh`, and `probe_setup.sh` run during setup) still print their own `[RUN]` lines. Existing generated repositories change after they are regenerated.
+
+## 2026-11-06 — Workbook column order
+
+- **`BenchmarkSpecDefinitions.xlsx` `Workload_Definitions`:** `Validation Objective` and `Command Tools Executed` now sit right after `Parameter_20`, before the three `run_benchmark Command Plus Options` columns (were after them). Values, formatting, and column widths move with them, including the repeated header rows. Scripts look columns up by name, so nothing else changes; `--specification` and `benchmark_specification.json` list the fields in the new order.
+
+## 2026-11-06 — `run_benchmark.sh --help` opens with the workbook description
+
+- **Help header.** Between `Usage:` and `Profiles`, `--help` now prints four labeled lines from the workbook row: `Workload Name`, `Main Goal`, `Validation Objective`, and `Command Tools Executed`. Labels fill a 24-column field, long values wrap at 100 columns with continuation lines under the value, and each value ends with a period. This replaces the single prose line (the first sentence of Execution Description, or the hand-written text in overlay runners).
+- **Where.** `scripts/workload_option_help.py` adds `help_header_lines` and `replace_help_header`. `write_runner` in `scripts/materialize_generated_harness.py` writes the header, and `_refresh_workload_option_help` puts it into the 12 overlay runners (SDXL, SGLang, vLLM; AMD and NVIDIA), so all 128 workloads share one layout.
+- **Docs and tests.** `docs/run-output-contract.md`, `scripts/templates/run_benchmark_help_skeleton.sh`, and checklist 3.29b describe the header. `tests/test_workload_option_help.py` covers labels, periods, wrapping, and the overlay replacement.
+- Existing generated repositories show the new help after they are regenerated.
+
+## 2026-11-06 — Workbook objectives say what runs; runner leftovers removed
+
+- **`BenchmarkSpecDefinitions.xlsx` Main Goal, Validation Objective, Command Tools Executed.** All 128 rows take the reviewed text (merged from four review passes plus Gary's choices). Every cell is within its limit (72 / 120 / 120), and Ubuntu 24.04 and 26.04 rows match for each vendor. Objectives state what is validated; "does not run X" sentences are gone. Notable corrections: 103/303 name the rocblas-bench GEMM load; 106 says latency (the metric is clat p50); 107 STREAM uses one line on all four rows; 116/316 say AllReduce only; 119/219/319/419 share one Main Goal; 120/220/320/420 name rocSOLVER LU / cuSOLVER LU and TFLOPS (the metric unit); 102/302 list the five health metrics.
+- **Other columns.** Removed leftover disclaimers (not pytest/test_ops.py, not TorchBench, not TensorFlow, not test_bench.py, not a five-minute server loop, lmbench not-run lists, sibling *_perf, HPL.dat). STREAM 107/207/307/407 description and Known Runtime Constraints now say numactl binds to numa_node when the host accepts it, and thread_affinity core sets OMP_PROC_BIND=close. 122/322 Output Fields list metric #3 `batch_latency_max_msec`; 122/322 no longer claim p50/p95/p99 equal the mean. 120/320 Raw Output Format no longer says "not mpirun".
+- **219/419 rename.** Workload Name is `PyTorch Microkernel Suite` (was `TorchBench Microkernels`) on every sheet, and the short name is `Torch Kernel`, matching 119/319. `torch-micro-nvidia/component.json` selects the new name. Repo names were already `torch-micro-suite`.
+- **Components.** `rccl-bandwidth-amd/files/scripts/build.sh` builds only `bin/all_reduce_perf` (the four copies under other collective names could only exit). `linpack-rochpl-amd` no longer ships or rewrites `HPL.dat`, which `bin/rochpl` never read. `lmbench-amd` no longer runs `lat_syscall write`, so AMD and NVIDIA run the same lmbench subset; 112/312 text matches.
+- **Regenerated** `config/workload_parameters.yaml` and `user_scripts/show_metrics.sh` from the workbook.
+
+## 2026-11-06 — results/raw run directories use WORKLOAD/SYSTEM labels
+
+- **New name.** Each run directory under `results/raw/` is `YYYYMMDD_HHMMSSZ_WORKLOAD-<NNN>_SYSTEM-<hostname>`, for example `20261106_100212Z_WORKLOAD-101_SYSTEM-ubuntu-gpu-mi300x1-192gb-devcloud-atl1`. It replaces `YYYYMMDD_HHMMSS_<repo_name>_<hostname>`. The timestamp is UTC and now says so with a `Z`. `<NNN>` is the leading workload number of the repository directory (`<Workload Number>-<Repo Name>`), zero-padded to 3 digits. `_` separates fields only; any `_` in the workload or hostname value becomes `-`.
+- **One builder.** `benchmark_raw_run_dir_name <repo_name> <hostname>` in `scripts/lib/common.sh` prints the name. The harness template in `scripts/materialize_generated_harness.py` and all 12 `implementation_components/*/files/run_benchmark.sh` runners call it instead of assembling `${STAMP}_${REPO_NAME}_${HOSTNAME_VALUE}`.
+- **Docs.** `AGENTS.md`, `docs/run-output-contract.md`, `docs/repository-template.md`, `docs/SUBMISSION_CHECKLIST.md` (3.34), `templates/README_TEMPLATE.md`, `templates/SPEC_TEMPLATE.md`, the `fill_generated_docs.py` per-run artifact text, and the `update_runtime_ledger.py --raw-run-dir` help describe the new name.
+- **Compatibility.** Existing run directories keep their old names. The self-check's latest-run lookup sorts by name, and both formats start with the date and time, so it still picks the newest run. Ledger rows written before this change keep the old `raw_run_dir` values.
+
 ## 2026-11-05 — README.md uses the short workload format
 
 - **`templates/README_TEMPLATE.md`** is rewritten to the short format: title, one-line description, Quick Start, Profiles and Parameters, Metrics with Notes, Output, Requirements, Run the Whole Bundle, Troubleshooting, Repository Layout, Continuous Integration. The numbered sections 1–11, the Download as a Bundle and Suite Tools blocks, the placeholder Installation/Running code blocks, the fixture CSV samples, the generator-only troubleshooting entries, the empty NVIDIA section, and the mermaid diagram are gone.

@@ -7,7 +7,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from workload_option_help import option_help_lines, override_example, replace_override_example, replace_workload_options
+from workload_option_help import help_header_lines, option_help_lines, override_example, replace_help_header, replace_override_example, replace_workload_options
 
 
 def _is_empty(path: Path) -> bool:
@@ -938,6 +938,7 @@ def write_runner(repo: Path, fields: dict[str, str]) -> None:
     params = _parameters(fields)
     description = (fields.get("Execution Description With Parameters") or "Run the configured benchmark.").split(".")[0] + "."
     option_lines = option_help_lines(fields)
+    help_header = "\n".join(help_header_lines(fields)) or description
     parameters_section = ""
     if option_lines:
         parameters_section = "Parameters (override the profile's value):\n" + "\n".join(option_lines) + "\n\n"
@@ -982,9 +983,10 @@ capture_benchmark_run_command_submitted "$@"
 
 usage() {{
   cat <<'USAGE'
+
 Usage: bash run_benchmark.sh [OPTIONS]
 
-{description}
+{help_header}
 
 Profiles (default: --smoke):
   --smoke                       Run smoke profile
@@ -994,7 +996,7 @@ Profiles (default: --smoke):
 {parameters_section}General options:
   --config <file>               Config file (default: config/benchmark_config.yaml)
   --quiet                       Suppress nonessential stdout
-  --log-level <level>           ERROR|WARN|INFO|DEBUG (default: INFO)
+  --log-level <level>           ERROR|WARN|INFO|DEBUG (default: INFO; DEBUG also prints [RUN] commands)
   --specification               Print this workload's specification and exit
   --help                        Show this help and exit
 
@@ -1012,6 +1014,8 @@ for _help_arg in "$@"; do
       ;;
   esac
 done
+
+run_profiles_in_order "${{REPO_ROOT}}/run_benchmark.sh" "$@"
 
 PROFILE="smoke"
 CONFIG_FILE="config/benchmark_config.yaml"
@@ -1069,8 +1073,7 @@ BENCHMARK_RUN_COMMAND="bash run_benchmark.sh --${{PROFILE}}"
 set_benchmark_run_command "${{BENCHMARK_RUN_COMMAND}}"
 
 HOSTNAME_VALUE="$(hostname -s 2>/dev/null || hostname)"
-STAMP="$(date -u +"%Y%m%d_%H%M%S")"
-RUN_DIR="${{REPO_ROOT}}/results/raw/${{STAMP}}_${{REPO_NAME}}_${{HOSTNAME_VALUE}}"
+RUN_DIR="${{REPO_ROOT}}/results/raw/$(benchmark_raw_run_dir_name "${{REPO_NAME}}" "${{HOSTNAME_VALUE}}")"
 mkdir -p "${{RUN_DIR}}"
 RAW_FILE="${{RUN_DIR}}/raw_output.txt"
 set_benchmark_run_dir "${{RUN_DIR}}"
@@ -1094,10 +1097,10 @@ run_collection() {{
   grep -q -- '--output-format' <<<"${{help}}" && collect_args+=(--output-format "${{OUTPUT_FORMAT}}")
 {help_flags}
   printf -v collect_cmd '%q ' "${{PYTHON_BIN}}" scripts/collect_workload.py "${{collect_args[@]}}"
-  echo "[RUN] ${{collect_cmd}}"
+  log_run "${{collect_cmd}}"
   echo "${{collect_cmd}}" >> "${{COMMAND_LOG}}"
   set +e
-  "${{PYTHON_BIN}}" scripts/collect_workload.py "${{collect_args[@]}}" 2>&1 | tee -a "${{RUN_DIR}}/run.log"
+  "${{PYTHON_BIN}}" scripts/collect_workload.py "${{collect_args[@]}}" 2>&1 | tee -a "${{RUN_DIR}}/run.log" | hide_run_lines
   command_status="${{PIPESTATUS[0]}}"
   set -e
   if [[ "${{command_status}}" -ne 0 ]]; then
@@ -1109,7 +1112,7 @@ run_parse() {{
   log_section "Parse"
   local parse_cmd
   printf -v parse_cmd '%q ' "${{PYTHON_BIN}}" scripts/parse_results.py --raw-file "${{RAW_FILE}}" --db "${{REPO_ROOT}}/results/benchmark.db" --summary "${{REPO_ROOT}}/results/summary.json" --definition "${{REPO_ROOT}}/benchmark_specification.json" --run-dir "${{RUN_DIR}}"
-  echo "[RUN] ${{parse_cmd}}"
+  log_run "${{parse_cmd}}"
   echo "${{parse_cmd}}" >> "${{COMMAND_LOG}}"
   "${{PYTHON_BIN}}" scripts/parse_results.py --raw-file "${{RAW_FILE}}" --db "${{REPO_ROOT}}/results/benchmark.db" --summary "${{REPO_ROOT}}/results/summary.json" --definition "${{REPO_ROOT}}/benchmark_specification.json" --run-dir "${{RUN_DIR}}" || die "parse failed"
 }}
@@ -1118,7 +1121,7 @@ run_validate() {{
   log_section "Validation"
   local validate_cmd
   printf -v validate_cmd '%q ' "${{PYTHON_BIN}}" scripts/validate_results.py --db "${{REPO_ROOT}}/results/benchmark.db" --config "${{CONFIG_FILE}}"
-  echo "[RUN] ${{validate_cmd}}"
+  log_run "${{validate_cmd}}"
   echo "${{validate_cmd}}" >> "${{COMMAND_LOG}}"
   "${{PYTHON_BIN}}" scripts/validate_results.py --db "${{REPO_ROOT}}/results/benchmark.db" --config "${{CONFIG_FILE}}" || die "validation failed"
 }}
@@ -1163,14 +1166,15 @@ finish_benchmark_run
 
 
 def _refresh_workload_option_help(repo_root: Path, fields: dict[str, str]) -> None:
-    """Fill Parameters and the fourth example in an overlay runner that write_runner left in place."""
+    """Fill the workload header, Parameters, and the fourth example in an overlay runner that write_runner left in place."""
     path = repo_root / "run_benchmark.sh"
     if not path.is_file() or path.stat().st_size == 0:
         return
     if not (repo_root / "benchmark_specification.json").is_file():
         return
     text = path.read_text(encoding="utf-8")
-    updated = replace_workload_options(text, option_help_lines(fields))
+    updated = replace_help_header(text, fields)
+    updated = replace_workload_options(updated, option_help_lines(fields))
     updated = replace_override_example(updated, override_example(fields))
     if updated != text:
         _write(path, updated)

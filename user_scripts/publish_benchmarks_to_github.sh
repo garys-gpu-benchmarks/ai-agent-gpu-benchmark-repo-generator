@@ -32,16 +32,15 @@ if grep -q $'\r' "$0"; then echo "This file has Windows (CRLF) line endings. Fix
 #   - The bundle's copy of run_benchmark_suite.sh runs only the smoke profile
 #     when no profile option is given, and its --help examples use that bundle's workload
 #     numbers (the shared script's examples name 101-132 in every bundle).
-#   - Bundle README: Getting started begins with x07 (STREAM, CPU only, no
+#   - Bundle README: Quick check begins with x07 (STREAM, CPU only, no
 #     GPU install or restart), then x01, x02 and x14 (host-GPU copy at
 #     256 MiB) instead of x15, whose smoke arrays then fit in GPU cache
 #     (x15 smoke reads HBM since TEMPLATE_00_117).
-#   - Bundle README: the first GPU command says it is quiet for 5-20 minutes while
-#     it installs, and how to watch it (--show-output or install_status.txt).
-#   - Bundle README: smoke is a wiring check, not a number to quote; the
-#     full run is an explicit --smoke --baseline --extended; what to do after
-#     the install restarts the machine; results that are expected to be na;
-#     Hugging Face range x23-x32; how to see which release is installed.
+#   - Bundle README (short form, 2026-11-06): requirements, install, a quick
+#     check (x07, then x01/x02/x14 with --show-output while the GPU stack
+#     installs), smoke is not a number to quote, the full run is an explicit
+#     --smoke --baseline --extended, what to do after a ROCm restart, results
+#     to read carefully, update, and a benchmark table with short names.
 #   - Step 7 stops if the suite-script edits did not apply; step 8 also checks
 #     the test clone for a branch line, the smoke default, and that every
 #     ./script.sh the README names is in the bundle.
@@ -543,13 +542,24 @@ check_bundle_suite_script() {
 
 bundle_readme() {
   local s=$1 bundle=$2 want=$3 rows=$4 text
-  local plat vendor stack os
+  local plat vendor stack os prereq restart others="" t label slug
   plat=$(platform "$s")
-  local prereq restart lead2 start2 end2 total2 stamp2
   # NVIDIA setup installs CUDA and checks nvidia-smi; it never installs the driver
   # or restarts. ROCm setup may restart on 24.04 and does restart on 26.04.
   case $s in 1 | 3) vendor=AMD; stack="ROCm" ;; *) vendor=NVIDIA; stack="CUDA" ;; esac
   case $s in 1 | 2) os=24.04 ;; *) os=26.04 ;; esac
+  # Links to the other three bundles (never to this one).
+  for t in 1 2 3 4; do
+    [[ "$t" == "${s:0:1}" ]] && continue
+    case $t in
+      1) label="AMD 24.04"; slug=bundle-amd-ubuntu-2404 ;;
+      2) label="NVIDIA 24.04"; slug=bundle-nvidia-ubuntu-2404 ;;
+      3) label="AMD 26.04"; slug=bundle-amd-ubuntu-2604 ;;
+      4) label="NVIDIA 26.04"; slug=bundle-nvidia-ubuntu-2604 ;;
+    esac
+    [[ -n "${others}" ]] && others+=$' \xc2\xb7\n'
+    others+="[${label}](https://github.com/@ORG@/${slug})"
+  done
   local restart_steps='This is planned, not a failure:
 
 1. Log in again as root after a few minutes. Setup continues on its own after
@@ -559,23 +569,17 @@ bundle_readme() {
 3. Run the same command again. If it says setup is still running, wait a few
    minutes and run it again. Benchmarks already installed are not installed
    again.'
-  start2="Mon Oct 19 22:07:13 UTC 2026"; end2="Mon Oct 19 22:13:14 UTC 2026"
-  total2="0 hours 6 minutes 1 seconds"; stamp2="20261019_220713"
-  lead2="When all three pass, it ends like this:"
   case $s in
     1)
-      prereq='- A machine where installing ROCm and one restart are acceptable: the first
-  run installs ROCm, and may restart the machine once.'
+      prereq='- The first run installs ROCm and may restart the machine once; that must be acceptable.'
       restart="**If the machine restarts.** Installing ROCm may restart the machine once,
 which closes your connection. ${restart_steps}"
       ;;
     3)
-      prereq='- A machine where installing ROCm and one restart are acceptable: the first
-  run installs ROCm and restarts the machine once.'
+      prereq='- The first run installs ROCm and restarts the machine once; that must be acceptable.'
       restart="**The machine restarts once.** The Ubuntu 26.04 image cannot start the MI300X
 until ROCm's firmware is installed, so the first install ends with one restart,
-which closes your connection. With \`--show-output\`, the output ends like this
-(in quiet mode, only the last line appears):
+which closes your connection. With \`--show-output\`, the output ends like this:
 
 \`\`\`text
 Successfully installed PyYAML-6.0.3
@@ -584,40 +588,27 @@ Connection to <your-machine-address> closed by remote host.
 \`\`\`
 
 ${restart_steps}"
-      lead2="After the restart, the same command ends like this when all three pass:"
-      start2="Mon Oct 19 22:27:43 UTC 2026"; end2="Mon Oct 19 22:28:18 UTC 2026"
-      total2="0 hours 0 minutes 35 seconds"; stamp2="20261019_222743"
       ;;
     *)
-      prereq='- The NVIDIA driver already installed: `nvidia-smi` lists the GPUs. The first
-  run installs CUDA; it does not install the driver or restart the machine.'
-      restart="@S@01 installs CUDA only. It does not install the NVIDIA driver and does not
-restart the machine."
+      prereq='- The NVIDIA driver installed: `nvidia-smi` lists the GPUs. The first run installs CUDA;
+  it never installs the driver or restarts the machine.'
+      restart=""
       ;;
   esac
   text=$(cat <<'README'
 # @PLATFORM@ benchmark bundle
 
 @WANT@ system and GPU benchmarks for @VENDOR@ GPU machines running Ubuntu @OS@,
-each pinned to its tested @VERSION@ release.
+each pinned to its tested @VERSION@ release. Other platforms have their own bundle:
+@OTHERS@
 
-Use this bundle only on that platform. The others have their own bundle:
-[AMD 24.04](https://github.com/@ORG@/bundle-amd-ubuntu-2404) ·
-[NVIDIA 24.04](https://github.com/@ORG@/bundle-nvidia-ubuntu-2404) ·
-[AMD 26.04](https://github.com/@ORG@/bundle-amd-ubuntu-2604) ·
-[NVIDIA 26.04](https://github.com/@ORG@/bundle-nvidia-ubuntu-2604)
+## Requirements
 
-## Before you start
-
-- A freshly installed **Ubuntu @OS@** machine with @VENDOR@ GPUs, connected to the internet.
-- **root** access: log in as root, or run `sudo -i` first.
-- Plenty of free disk space. Each benchmark installs its own software (its own
-  Python environment) the first time it runs, and checks for at least 20 GiB
-  free before it does. That check is per benchmark, not for the whole suite,
-  and the AI benchmarks also download models.
+- A fresh **Ubuntu @OS@** machine with @VENDOR@ GPUs, online, with **root** access (`sudo -i`).
 @PREREQ@
-- For the AI model benchmarks (@S@23 to @S@32): if a model's license on Hugging
-  Face requires it, accept the license there and set a token first:
+- At least 20 GiB free per benchmark: each one installs its own Python environment on
+  first run, and the AI benchmarks also download models.
+- For @S@23 to @S@32: if a model's Hugging Face license requires it, accept it there and
   `export HF_TOKEN=hf_...`
 
 ## Install
@@ -626,223 +617,103 @@ Use this bundle only on that platform. The others have their own bundle:
 apt-get update && apt-get install -y git tmux
 git clone --recurse-submodules https://github.com/@ORG@/@BUNDLE@ /opt/benchmarks
 cd /opt/benchmarks
-./run_benchmark_suite.sh --list
+./run_benchmark_suite.sh --list      # all @WANT@ should show as ready
 ```
 
-`./run_benchmark_suite.sh --list` should show all @WANT@ benchmarks as `ready`.
-Do not use GitHub's **Download ZIP**: it leaves the benchmark folders empty.
+Clone with git; GitHub's **Download ZIP** leaves the benchmark folders empty.
 
-## Getting started
-
-Each command below ends with a summary like the samples shown. Your times,
-host name and log file name will differ; what matters is `0 failed`. If a run
-fails, the summary names it under `Failed runs:`; open the log file named on
-the summary's last line.
-
-### 1. A CPU benchmark (about a minute, no GPU software)
+## Quick check
 
 ```bash
-cd /opt/benchmarks
-./run_benchmark_suite.sh -w @S@07 --smoke --show-output
+./run_benchmark_suite.sh -w @S@07 --smoke --show-output            # CPU only, about a minute
+./run_benchmark_suite.sh -w @S@01,@S@02,@S@14 --smoke --show-output    # installs @STACK@ first: 5 to 20 minutes
 ```
-
-@S@07 is STREAM, CPU memory bandwidth. It installs only a compiler and its own
-Python environment, not @STACK@, and does not restart the machine. It ends
-with Copy, Scale, Add and Triad rates in GB/s. Smoke uses 4 threads; the
-`baseline` profile is the figure to quote for this machine. If this run
-passes, the bundle, the suite runner, the results and the runtime ledger all
-work. It ends like this:
-
-```text
-======================================================================
-SUMMARY: 1 of 1 runs finished: 1 passed, 0 failed
-Started:       Mon Oct 19 22:03:51 UTC 2026
-Completed:     Mon Oct 19 22:04:35 UTC 2026
-Total runtime: 0 hours 0 minutes 44 seconds
-Log file:      /opt/benchmarks/benchmark_suite_log/run_benchmark_suite_<host>_20261019_220351.log
-======================================================================
-```
-
-To see that run in the runtime ledger: `./show_metrics.sh @S@07`
-
-### 2. The GPU software and two quick GPU checks (5 to 20 minutes the first time)
-
-The first time, @S@01 installs @STACK@, which takes 5 to 20 minutes. Run it
-either way:
-
-```bash
-./run_benchmark_suite.sh -w @S@01,@S@02,@S@14 --smoke --show-output   # shows progress while @STACK@ installs
-./run_benchmark_suite.sh -w @S@01,@S@02,@S@14 --smoke                 # quiet: prints nothing for 5 to 20 minutes
-```
-
-In quiet mode, watch progress from a second window with
-`tail -f /opt/benchmarks/@S@01-*/results/install_status.txt`.
-
-| Benchmark | What it checks |
-|---|---|
-| @S@01 | installs @STACK@, then checks the installed GPU software (the long step) |
-| @S@02 | GPU health: the GPUs are visible, with temperature and link status |
-| @S@14 | copy bandwidth between the host and the GPU, measured at 256 MiB |
 
 @RESTART@
 
-@SAMPLE2_LEAD@
+Each run ends with a summary. What matters is `0 failed`; if a run fails, it is listed
+under `Failed runs:` and the log file is named on the summary's last line.
 
-```text
-======================================================================
-SUMMARY: 3 of 3 runs finished: 3 passed, 0 failed
-Started:       @SAMPLE2_START@
-Completed:     @SAMPLE2_END@
-Total runtime: @SAMPLE2_TOTAL@
-Log file:      /opt/benchmarks/benchmark_suite_log/run_benchmark_suite_<host>_@SAMPLE2_STAMP@.log
-======================================================================
-```
+Smoke runs are small and only prove each benchmark installs, runs and records results.
+Quote `baseline` or `extended` numbers.
 
-### 3. Smoke is a wiring check, not a measurement
-
-Smoke shows that each benchmark installs, runs and records its results. Most
-smoke runs use small sizes, so their numbers are not for reports: for example,
-@S@20 (HPL FP64) smoke solves a 4096 x 4096 system, too small to load the GPU,
-and @S@15 (GPU memory bandwidth) smoke runs only 20 iterations. Quote
-`baseline` or `extended` results. Smoke is short for most
-benchmarks, but the AI benchmarks (@S@23 to @S@32) download models the first
-time, so their first smoke run takes longer.
-
-### 4. Run one benchmark
-
-Each benchmark installs its own software the first time it runs, so a first
-run takes longer than later ones. Each run prints a short block, and the suite
-ends with the summary shown above. The full output is in
-`/opt/benchmarks/benchmark_suite_log/`. To run a single benchmark with its
-output on screen:
+## Run benchmarks
 
 ```bash
-./run_benchmark_suite.sh -w @S@05 --smoke --show-output      # benchmark @S@05, smoke profile
-./run_benchmark_suite.sh -w @S@05 --baseline --show-output   # the standard profile
+./run_benchmark_suite.sh -w @S@05 --baseline --show-output   # one benchmark
 ```
 
-## See your results
-
-`show_metrics.sh` prints one benchmark's runs from the runtime ledger: one row
-per run with its metrics, then the mean for each profile.
-
-```bash
-cd /opt/benchmarks
-./show_metrics.sh @S@07                # benchmark @S@07, every profile
-./show_metrics.sh @S@07 --baseline     # baseline runs only
-./show_metrics.sh --help             # all options
-```
-
-To list every run on this machine (workload, profile, runtime, exit code)
-without copying anything:
-
-```bash
-./show_ledger_runs.sh              # every run
-./show_ledger_runs.sh --failed     # only runs whose exit code is not 0
-```
-
-To copy every result on this machine into one folder (the ledger as a
-timestamped CSV, each benchmark's `results/raw` and `results/parsed`, and the
-suite logs):
-
-```bash
-./get_benchmark_results.sh -o ~/results    # no --host: collects from this machine
-```
-
-To copy the results to your laptop, see [Results](#results).
-
-## Run everything
-
-Run the full suite inside `tmux`, so it keeps running if your connection drops.
-It takes many hours.
+For the full suite (many hours), run the Quick check first on a new machine, then use
+`tmux` so it survives a dropped connection (detach **Ctrl+B D**, reattach
+`tmux attach -t bench`):
 
 ```bash
 tmux new -s bench
-cd /opt/benchmarks
-./run_benchmark_suite.sh --smoke --baseline --extended
+cd /opt/benchmarks && ./run_benchmark_suite.sh --smoke --baseline --extended
 ```
 
-This runs all @WANT@ benchmarks with the `smoke` profile, then all with
-`baseline`, then all with `extended`. With no profile option,
-`./run_benchmark_suite.sh` runs the `smoke` profile only. Detach with
-**Ctrl+B** then **D**; reattach later with `tmux attach -t bench`.
-
-Run "Getting started" first on a new machine, so the one-time install (and any
-restart) happens before the long run.
-
-| Option | What it does |
+| Option | Effect |
 |---|---|
-| `--baseline` | profile to run: `--smoke`, `--baseline` or `--extended`; give more than one to run them in that order. Default: `--smoke` |
-| `-w @S@01,@S@07,@S@21` | only these benchmarks; ranges work too: `-w @S@01-@S@10` |
-| `-r 20` | repeat the whole set 20 times (soak test) |
-| `--fail-fast` | stop at the first failed run |
-| `--show-output` | show each run's full output on screen too (it always goes to the log) |
-| `--list` | list the benchmarks as `ready` or `not fetched`, then exit |
-| `-n` | show what would run, without running it |
-| `--help` | all options |
-
-## Results that are expected to be `na`
-
-A metric written as `na (reason)` was not measured on this machine; it is
-never an invented number. Read the reason before reporting a fault. These are
-expected:
-
-| Benchmark | Expected result |
-|---|---|
-| @S@16 | On a machine with one GPU, the bandwidth metrics are `na (requires at least two GPUs)` and the run still passes. |
-| @S@11 | Hardware counters are `na` with the reason when `perf` is not installed for the running kernel, or when `perf_event_paranoid` denies access. |
-| @S@06 | Measures a file (`data/fio_target.bin`) on the disk that holds the benchmark, not a raw NVMe device. |
-| @S@08 | Measures the loopback path (`127.0.0.1`), not a network card. |
-| @S@30, @S@31 | The `smoke` profile may use a stand-in server; only `baseline` and `extended` measure SGLang. |
+| `--smoke` `--baseline` `--extended` | Profiles to run, in that order. Default: `--smoke` |
+| `-w @S@01,@S@07` or `-w @S@01-@S@10` | Only these benchmarks |
+| `-r 20` | Repeat the whole set 20 times |
+| `--fail-fast` | Stop at the first failure |
+| `--show-output` | Show each run's output on screen (always written to the log) |
+| `-n` | Show what would run, without running it |
+| `--help` | All options |
 
 ## Results
 
+```bash
+./show_metrics.sh @S@07 [--baseline]     # one benchmark's runs and per-profile means
+./show_ledger_runs.sh [--failed]       # every run on this machine
+./get_benchmark_results.sh -o ~/results   # copy ledger, results and logs into one folder
+```
+
 | What | Where |
 |---|---|
-| Summary of the suite | end of the screen output |
-| Full output of every run | `/opt/benchmarks/benchmark_suite_log/` |
-| Each benchmark's results | `/opt/benchmarks/<benchmark>/results/` (`raw/` and `parsed/`) |
-| One line per run (time, exit code) | `/var/opt/benchmarks/runtime_ledger.csv` |
-| One benchmark's runs and per-profile means | `./show_metrics.sh <benchmark>` |
-| Which release is installed | `git -C /opt/benchmarks describe --tags` |
+| Suite logs | `/opt/benchmarks/benchmark_suite_log/` |
+| Per-benchmark results | `/opt/benchmarks/<benchmark>/results/` |
+| Runtime ledger (one line per run) | `/var/opt/benchmarks/runtime_ledger.csv` |
+| Installed release | `git -C /opt/benchmarks describe --tags` |
 
-To copy the ledger, every benchmark's `results/` and the suite logs to your
-laptop (Git Bash on Windows), use `get_benchmark_results.sh` from
-[gpu-bench-suite](https://github.com/@ORG@/gpu-bench-suite). It writes
-`RUNTIME_LEDGERS/` and `DIRECTORIES/` in the folder you run it from:
+To pull results to your laptop (Git Bash on Windows works), clone
+[gpu-bench-suite](https://github.com/@ORG@/gpu-bench-suite) and run
+`./scripts/get_benchmark_results.sh --host <address>` (add `--port N` if ssh is not on 22).
+`show_ledger_runs.sh` and `show_metrics.sh` there accept `--host` too.
+
+## Reading the results
+
+A value of `na (reason)` means not measured on this machine, never an invented number.
+
+| Benchmark | Note |
+|---|---|
+| @S@16 | One GPU: bandwidth metrics are `na (requires at least two GPUs)`; the run still passes. |
+| @S@11 | Hardware counters are `na` when `perf` is missing for the running kernel or `perf_event_paranoid` denies access. |
+| @S@06 | Measures a file (`data/fio_target.bin`) on the benchmark's disk, not a raw NVMe device. |
+| @S@08 | Measures loopback (`127.0.0.1`), not a network card. |
+| @S@30, @S@31 | Smoke uses a stand-in server; only `baseline` and `extended` measure SGLang. |
+
+## Update
 
 ```bash
-git clone https://github.com/@ORG@/gpu-bench-suite && cd gpu-bench-suite
-./scripts/show_ledger_runs.sh --host 203.0.113.10     # just the run table; copies nothing
-./scripts/get_benchmark_results.sh --host 203.0.113.10  # this machine's address; --port PORT if ssh is not on 22
-./scripts/show_metrics.sh @S@07 --host 203.0.113.10      # the same table, read over ssh
+cd /opt/benchmarks && git pull && git submodule update --init --recursive
 ```
 
-## Update to a newer release
-
-```bash
-cd /opt/benchmarks
-git pull && git submodule update --init --recursive
-```
-
-Do not use `git submodule update --remote`: it moves the benchmarks off the
-release they were tested at.
-
-Copies made before v1.0.5 keep their benchmarks in a `benchmarks/` subfolder;
-delete those and clone again as shown under Install.
+Do not use `git submodule update --remote`; it moves benchmarks off their tested release.
 
 ## Benchmarks
 
+| # | Repository |
+|---|---|
 @ROWS@
 README
 )
+  text=${text//@OTHERS@/"${others}"}
   text=${text//@PREREQ@/"${prereq}"}
   text=${text//@RESTART@/"${restart}"}
-  text=${text//@SAMPLE2_LEAD@/"${lead2}"}
-  text=${text//@SAMPLE2_START@/"${start2}"}
-  text=${text//@SAMPLE2_END@/"${end2}"}
-  text=${text//@SAMPLE2_TOTAL@/"${total2}"}
-  text=${text//@SAMPLE2_STAMP@/"${stamp2}"}
+  # NVIDIA has no restart paragraph; drop the blank lines it leaves.
+  while [[ "${text}" == *$'\n\n\n'* ]]; do text=${text//$'\n\n\n'/$'\n\n'}; done
   text=${text//@PLATFORM@/"${plat}"}
   text=${text//@VENDOR@/"${vendor}"}
   text=${text//@STACK@/"${stack}"}
@@ -852,7 +723,7 @@ README
   text=${text//@WANT@/"${want}"}
   text=${text//@VERSION@/"${VERSION}"}
   text=${text//@S@/"${s}"}
-  text=${text//@ROWS@/"${rows}"}
+  text=${text//@ROWS@/"${rows%$'\n'}"}
   printf '%s\n' "${text}"
 }
 
@@ -1382,7 +1253,8 @@ if is_done bundles; then skipped 7; else
       fi
       git -C "${dir}" -c advice.detachedHead=false checkout -q "${VERSION}" || stop "${dir} has no ${VERSION} tag on GitHub"
       again git add "${dir}" || stop "git add failed for ${dir} in ${bundle}"
-      rows="${rows}- **${dir:0:3}** - [${dir}](https://github.com/${ORG}/${dir})"$'\n'
+      short=${dir:4}; short=${short%-ubu[0-9][0-9][0-9][0-9]}; short=${short#*-bench-}; short=${short#*-}
+      rows="${rows}| ${dir:0:3} | [${short}](https://github.com/${ORG}/${dir}) |"$'\n'
     done
     # Each workload is pinned to ${VERSION}. A "branch = main" line (bundles
     # before 2026-10-19 have one) would let "git submodule update --remote"

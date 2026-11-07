@@ -124,7 +124,6 @@ def main() -> int:
         check=True,
         env=env,
     )
-    Path("HPL.dat").write_text(Path("HPL.dat").read_text(encoding="utf-8"), encoding="utf-8")
     command = [
         # bin/rochpl is a single-GPU solve: always one rank. num_gpus, the P x Q
         # grid, block size and panel factorization are not parameters any more

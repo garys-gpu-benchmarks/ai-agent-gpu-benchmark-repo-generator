@@ -277,6 +277,57 @@ def override_example(fields: dict[str, str]) -> str | None:
     return f"bash run_benchmark.sh --baseline {_flag_of(name)} {value}"
 
 
+HELP_HEADER_FIELDS = (
+    ("Workload Name:", "Workload Name"),
+    ("Main Goal:", "Main Goal"),
+    ("Command Tools Executed:", "Command Tools Executed"),
+)
+HELP_HEADER_LABEL_WIDTH = 24
+HELP_HEADER_WIDTH = 100
+# The help page starts with one blank line before "Usage:".
+_USAGE_WITHOUT_BLANK = re.compile(r"(cat <<'USAGE'\n)(Usage: bash run_benchmark\.sh \[OPTIONS\])")
+_HELP_HEADER_SLOT = re.compile(
+    r"(Usage: bash run_benchmark\.sh \[OPTIONS\]\n\n)(.*?)(\nProfiles \(default)", re.DOTALL
+)
+
+
+def help_header_lines(fields: dict[str, str]) -> list[str]:
+    """Workload Name, Main Goal, and Command Tools Executed from the workbook row.
+
+    Labels sit in a 24-column field. Long values wrap at 100 columns with the
+    continuation lines under the value. Each value ends with a period.
+    """
+    import textwrap
+
+    lines: list[str] = []
+    for label, field in HELP_HEADER_FIELDS:
+        value = " ".join(str(fields.get(field, "") or "").split())
+        if value in EMPTY:
+            continue
+        if not value.endswith((".", "!", "?")):
+            value += "."
+        wrapped = textwrap.wrap(
+            value,
+            width=HELP_HEADER_WIDTH - HELP_HEADER_LABEL_WIDTH,
+            break_on_hyphens=False,
+            break_long_words=False,
+        )
+        lines.append(f"{label:<{HELP_HEADER_LABEL_WIDTH}}{wrapped[0]}")
+        lines.extend(" " * HELP_HEADER_LABEL_WIDTH + part for part in wrapped[1:])
+    return lines
+
+
+def replace_help_header(text: str, fields: dict[str, str]) -> str:
+    """Put the workbook header block between the Usage line and Profiles in usage(),
+    and start the help page with a blank line before "Usage:"."""
+    text = _USAGE_WITHOUT_BLANK.sub(lambda m: m.group(1) + "\n" + m.group(2), text, count=1)
+    lines = help_header_lines(fields)
+    if not lines or not _HELP_HEADER_SLOT.search(text):
+        return text
+    block = "\n".join(lines) + "\n"
+    return _HELP_HEADER_SLOT.sub(lambda m: m.group(1) + block + m.group(3), text, count=1)
+
+
 def replace_workload_options(text: str, lines: list[str]) -> str:
     """Replace the usage() Parameters block. Leave runners without that section unchanged."""
     if not _PARAMETERS_BLOCK.search(text):

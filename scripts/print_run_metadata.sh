@@ -42,6 +42,67 @@ stack_value() {
   [[ -n "${value}" ]] && printf '%s\n' "${value}" || printf '%s\n' "${missing_text}"
 }
 
+# Version of the first installed package among the names or dpkg patterns given.
+first_package_version() {
+  local pattern version
+  for pattern in "$@"; do
+    version="$(dpkg-query -W -f='${db:Status-Abbrev} ${Version}\n' "${pattern}" 2>/dev/null |
+      awk '$1 ~ /^ii/ && $2 != "" {print $2; exit}' || true)"
+    if [[ -n "${version}" ]]; then
+      printf '%s' "${version}"
+      return 0
+    fi
+  done
+  return 0
+}
+
+# ROCm 10.x (TheRock) installs amdrocm-* packages under /opt/rocm/core-<ver>,
+# not the older rocm-core package, so read the install itself first.
+rocm_install_version() {
+  local file dir version
+  for file in /opt/rocm/.info/version /opt/rocm/core-*/.info/version /opt/rocm-*/.info/version; do
+    if [[ -r "${file}" ]]; then
+      version="$(head -n 1 "${file}" | tr -d '[:space:]')"
+      [[ -n "${version}" ]] && { printf '%s' "${version}"; return 0; }
+    fi
+  done
+  version="$(first_package_version rocm-core 'amdrocm-base*' 'amdrocm10.*' 'amdrocm-core*' amdrocm)"
+  [[ -n "${version}" ]] && { printf '%s' "${version}"; return 0; }
+  for dir in /opt/rocm/core-* /opt/rocm-[0-9]*; do
+    if [[ -d "${dir}" ]]; then
+      basename "${dir}" | sed -E 's/^(core-|rocm-)//'
+      return 0
+    fi
+  done
+  return 0
+}
+
+# rocBLAS version, most specific first: the pre-10.x rocblas package; the
+# installed library's own version suffix (librocblas.so.<major>.<minor>...);
+# else the ROCm 10.x package, named, because its version is the ROCm release
+# (amdrocm-blas10.1 10.1.0-3), not the rocBLAS version.
+rocblas_install_version() {
+  local version lib line
+  version="$(first_package_version rocblas)"
+  [[ -n "${version}" ]] && { printf '%s' "${version}"; return 0; }
+  for lib in /opt/rocm/lib/librocblas.so.*.* /opt/rocm/lib64/librocblas.so.*.* \
+             /opt/rocm/core-*/lib/librocblas.so.*.* /opt/rocm/core-*/lib64/librocblas.so.*.*; do
+    if [[ -e "${lib}" ]]; then
+      basename "${lib}" | sed -E 's/^librocblas\.so\.//'
+      return 0
+    fi
+  done
+  lib="$(find /opt/rocm/ -maxdepth 5 -name 'librocblas.so.*.*' -print -quit 2>/dev/null || true)"
+  if [[ -n "${lib}" ]]; then
+    basename "${lib}" | sed -E 's/^librocblas\.so\.//'
+    return 0
+  fi
+  line="$(dpkg-query -W -f='${db:Status-Abbrev} ${Package} ${Version}\n' 'amdrocm-blas[0-9]*' 2>/dev/null |
+    awk '$1 ~ /^ii/ && $3 != "" {print $2 " " $3; exit}' || true)"
+  [[ -n "${line}" ]] && printf '%s' "${line}"
+  return 0
+}
+
 ubuntu_version="$(
   . /etc/os-release 2>/dev/null
   printf '%s' "${PRETTY_NAME:-}"
@@ -72,8 +133,8 @@ if [[ "${gpu_vendor}" == "NVIDIA" ]]; then
   printf '[INFO] %-31s %s\n' "CUDA Version:" "$(stack_value "${cuda_version}")"
   printf '[INFO] %-31s %s\n' "NVIDIA Driver Version:" "$(stack_value "${driver_version}")"
 else
-  rocblas_version="$(dpkg-query -W -f='${Version}' rocblas 2>/dev/null || true)"
-  rocm_version="$(dpkg-query -W -f='${Version}' rocm-core 2>/dev/null || true)"
+  rocblas_version="$(rocblas_install_version)"
+  rocm_version="$(rocm_install_version)"
   printf '[INFO] %-31s %s\n' "rocBLAS Version:" "$(stack_value "${rocblas_version}")"
   printf '[INFO] %-31s %s\n' "ROCm Version:" "$(stack_value "${rocm_version}")"
 fi

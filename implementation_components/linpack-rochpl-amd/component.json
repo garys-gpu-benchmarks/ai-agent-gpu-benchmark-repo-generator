@@ -5,8 +5,7 @@
     "src/rochpl.cpp",
     "scripts/collect_workload.py",
     "scripts/build.sh",
-    "Makefile",
-    "HPL.dat"
+    "Makefile"
   ],
   "entry_point": "scripts/collect_workload.py",
   "selectors": [
@@ -27,8 +26,7 @@
     "src/rochpl.cpp",
     "scripts/collect_workload.py",
     "scripts/build.sh",
-    "Makefile",
-    "HPL.dat"
+    "Makefile"
   ],
   "does_not_provide": []
 }

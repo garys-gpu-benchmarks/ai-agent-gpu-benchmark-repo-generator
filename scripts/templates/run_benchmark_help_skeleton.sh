@@ -15,7 +15,8 @@
 #
 # Copy usage() and the early --help loop into generated run_benchmark.sh.
 # Do not source this file unchanged.
-# Replace the description line with this workload's header Description field.
+# The generator starts the page with a blank line and replaces the lines between
+# Usage and Profiles with the workbook Workload Name, Main Goal, and Command Tools Executed.
 # Use default CLI profile smoke.
 # Immediately after sourcing common.sh, call
 # capture_benchmark_run_command_submitted "$@" so the ledger records argv as
@@ -57,7 +58,7 @@ Parameters (override the profile's value):
 General options:
   --config <file>               Config file (default: config/benchmark_config.yaml)
   --quiet                       Suppress nonessential stdout
-  --log-level <level>           ERROR|WARN|INFO|DEBUG (default: INFO)
+  --log-level <level>           ERROR|WARN|INFO|DEBUG (default: INFO; DEBUG also prints [RUN] commands)
   --specification               Print this workload's specification and exit
   --help                        Show this help and exit
 

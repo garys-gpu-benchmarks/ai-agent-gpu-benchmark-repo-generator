@@ -43,7 +43,7 @@ Parameters (override the profile's value):
 General options:
   --config <file>               Config file (default: config/benchmark_config.yaml)
   --quiet                       Suppress nonessential stdout
-  --log-level <level>           ERROR|WARN|INFO|DEBUG (default: INFO)
+  --log-level <level>           ERROR|WARN|INFO|DEBUG (default: INFO; DEBUG also prints [RUN] commands)
   --specification               Print this workload's specification and exit
   --help                        Show this help and exit
 
@@ -91,6 +91,7 @@ for _help_arg in "$@"; do
       ;;
   esac
 done
+run_profiles_in_order "${REPO_ROOT}/run_benchmark.sh" "$@"
 
 PROFILE="smoke"
 CONFIG_FILE="config/benchmark_config.yaml"
@@ -204,8 +205,7 @@ BENCHMARK_RUN_COMMAND+=" --model-name ${MODEL_NAME} --dtype ${DTYPE} --kv-cache-
 set_benchmark_run_command "${BENCHMARK_RUN_COMMAND}"
 
 HOSTNAME_VALUE="$(hostname -s 2>/dev/null || hostname)"
-STAMP="$(date -u +"%Y%m%d_%H%M%S")"
-RUN_DIR="${REPO_ROOT}/results/raw/${STAMP}_${REPO_NAME}_${HOSTNAME_VALUE}"
+RUN_DIR="${REPO_ROOT}/results/raw/$(benchmark_raw_run_dir_name "${REPO_NAME}" "${HOSTNAME_VALUE}")"
 mkdir -p "${RUN_DIR}"
 RAW_FILE="${RUN_DIR}/raw_output.txt"
 set_benchmark_run_dir "${RUN_DIR}"
@@ -229,16 +229,19 @@ run_collection() {
   max_model_len="$(serving_max_model_len)"
   export BENCHMARK_READY_WAIT_SEC="${BENCHMARK_READY_WAIT_SEC:-1800}"
   server_cmd="${PYTHON_BIN} -m vllm.entrypoints.openai.api_server --model ${MODEL_NAME} --dtype ${DTYPE} --kv-cache-dtype ${KV_CACHE_DTYPE} --gpu-memory-utilization ${GPU_MEMORY_UTILIZATION} --max-model-len ${max_model_len} --no-enable-prefix-caching --port 8000 --host 127.0.0.1"
-  echo "[RUN] ${server_cmd}"
+  if ! "${PYTHON_BIN}" -c 'import aiter' >/dev/null 2>&1; then
+    log_warn "amd-aiter is not installed; vLLM runs without its AITER kernels, so token rates may be lower than with AITER."
+  fi
+  log_run "${server_cmd}"
   echo "${server_cmd}" >> "${COMMAND_LOG}"
   bash -c "${server_cmd}" >> "${RUN_DIR}/server.log" 2>&1 &
   SERVER_PID="$!"
   wait_for_server "http://127.0.0.1:8000/v1/models"
   local collect_cmd
   printf -v collect_cmd '%q ' "${PYTHON_BIN}" scripts/benchmark_serving.py --run-dir "${RUN_DIR}" --raw-file "${RAW_FILE}" --profile "${PROFILE}" --base-url "http://127.0.0.1:8000" --model-name "${MODEL_NAME}" --dtype "${DTYPE}" --kv-cache-dtype "${KV_CACHE_DTYPE}" --gpu-memory-utilization "${GPU_MEMORY_UTILIZATION}" --max-model-len "${max_model_len}" --input-len "${INPUT_LEN}" --output-len "${OUTPUT_LEN}" --num-prompts "${NUM_PROMPTS}" --concurrency "${CONCURRENCY}" --seed "${SEED}" --output-format "${OUTPUT_FORMAT}"
-  echo "[RUN] ${collect_cmd}"
+  log_run "${collect_cmd}"
   echo "${collect_cmd}" >> "${COMMAND_LOG}"
-  if ! "${PYTHON_BIN}" scripts/benchmark_serving.py --run-dir "${RUN_DIR}" --raw-file "${RAW_FILE}" --profile "${PROFILE}" --base-url "http://127.0.0.1:8000" --model-name "${MODEL_NAME}" --dtype "${DTYPE}" --kv-cache-dtype "${KV_CACHE_DTYPE}" --gpu-memory-utilization "${GPU_MEMORY_UTILIZATION}" --max-model-len "${max_model_len}" --input-len "${INPUT_LEN}" --output-len "${OUTPUT_LEN}" --num-prompts "${NUM_PROMPTS}" --concurrency "${CONCURRENCY}" --seed "${SEED}" --output-format "${OUTPUT_FORMAT}" 2>&1 | tee -a "${RUN_DIR}/run.log"; then
+  if ! "${PYTHON_BIN}" scripts/benchmark_serving.py --run-dir "${RUN_DIR}" --raw-file "${RAW_FILE}" --profile "${PROFILE}" --base-url "http://127.0.0.1:8000" --model-name "${MODEL_NAME}" --dtype "${DTYPE}" --kv-cache-dtype "${KV_CACHE_DTYPE}" --gpu-memory-utilization "${GPU_MEMORY_UTILIZATION}" --max-model-len "${max_model_len}" --input-len "${INPUT_LEN}" --output-len "${OUTPUT_LEN}" --num-prompts "${NUM_PROMPTS}" --concurrency "${CONCURRENCY}" --seed "${SEED}" --output-format "${OUTPUT_FORMAT}" 2>&1 | tee -a "${RUN_DIR}/run.log" | hide_run_lines; then
     die "collection failed with status 1"
   fi
   cleanup_server
@@ -248,7 +251,7 @@ run_parse() {
   log_section "Parse"
   local parse_cmd
   printf -v parse_cmd '%q ' "${PYTHON_BIN}" scripts/parse_results.py --raw-file "${RAW_FILE}" --db "${REPO_ROOT}/results/benchmark.db" --summary "${REPO_ROOT}/results/summary.json" --definition "${REPO_ROOT}/benchmark_specification.json" --run-dir "${RUN_DIR}"
-  echo "[RUN] ${parse_cmd}"
+  log_run "${parse_cmd}"
   echo "${parse_cmd}" >> "${COMMAND_LOG}"
   "${PYTHON_BIN}" scripts/parse_results.py --raw-file "${RAW_FILE}" --db "${REPO_ROOT}/results/benchmark.db" --summary "${REPO_ROOT}/results/summary.json" --definition "${REPO_ROOT}/benchmark_specification.json" --run-dir "${RUN_DIR}" || die "parse failed"
 }
@@ -257,7 +260,7 @@ run_validate() {
   log_section "Validation"
   local validate_cmd
   printf -v validate_cmd '%q ' "${PYTHON_BIN}" scripts/validate_results.py --db "${REPO_ROOT}/results/benchmark.db" --config "${CONFIG_FILE}"
-  echo "[RUN] ${validate_cmd}"
+  log_run "${validate_cmd}"
   echo "${validate_cmd}" >> "${COMMAND_LOG}"
   "${PYTHON_BIN}" scripts/validate_results.py --db "${REPO_ROOT}/results/benchmark.db" --config "${CONFIG_FILE}" || die "validation failed"
 }

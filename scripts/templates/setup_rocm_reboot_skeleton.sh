@@ -753,7 +753,12 @@ if [[ -x "${VENV_ROOT}/bin/python" ]]; then
     die "${VENV_ROOT} already uses Python ${VENV_PYTHON_VERSION}; remove it and rerun setup for Python ${PYTHON_TARGET_VERSION}."
 fi
 if [[ ! -x "${VENV_ROOT}/bin/python" ]] || ! "${VENV_ROOT}/bin/python" -c 'import pip' >/dev/null 2>&1; then
-  echo "[WARN] Existing Python venv is incomplete; recreating it with pip: ${VENV_ROOT}"
+  # A first install has no venv yet: that is not a repair, so say so plainly.
+  if [[ -e "${VENV_ROOT}" ]]; then
+    echo "[WARN] Existing Python venv is incomplete; recreating it with pip: ${VENV_ROOT}"
+  else
+    echo "[INFO] Creating Python venv: ${VENV_ROOT}"
+  fi
   "${PYTHON_BOOTSTRAP}" -m venv --clear --upgrade-deps "${VENV_ROOT}" 2>/dev/null ||
     "${PYTHON_BOOTSTRAP}" -m venv --clear "${VENV_ROOT}"
 fi
@@ -860,6 +865,22 @@ PY
     # amd-quark>=0.8.99 is missing.
     "${PYTHON_BIN}" -m pip install uvloop fastapi "aiohttp>=3.13.3" ||
       die "vLLM API-server extras (uvloop/fastapi/aiohttp) failed."
+    # The ROCm vLLM wheel requires amd-aiter, which the extra-deps step above
+    # skips so pip cannot replace the ROCm torch. Install it without its
+    # dependencies. A missing AITER is not fatal: vLLM runs its non-AITER
+    # kernels, so it is logged here and again at each run.
+    if ! "${PYTHON_BIN}" -c 'import aiter' >/dev/null 2>&1; then
+      "${PYTHON_BIN}" -m pip install --no-deps "amd-aiter==${AITER_VERSION}" \
+        --index-url "${VLLM_WHEEL_INDEX_URL}" \
+        --extra-index-url https://pypi.org/simple ||
+        log_warn "amd-aiter ${AITER_VERSION} install failed; vLLM will run without AITER kernels."
+    fi
+    if "${PYTHON_BIN}" -c 'import aiter' >/dev/null 2>&1; then
+      install_status_log_step aiter "amd-aiter ${AITER_VERSION} installed for vLLM"
+    else
+      log_warn "amd-aiter is not importable; vLLM will run without AITER kernels (not fatal)."
+      install_status_log_step aiter "amd-aiter missing; vLLM runs without AITER kernels (not fatal)"
+    fi
     install_rocm_bundled_amdsmi
     # Importing torch first empties amdsmi handles on this stack. A .pth
     # import runs before vLLM argparse so baseline/extended can infer ROCm.

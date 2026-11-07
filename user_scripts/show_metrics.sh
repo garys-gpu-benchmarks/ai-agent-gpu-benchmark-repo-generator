@@ -357,7 +357,7 @@ end_to_end_request_latency_p50_msec                      E2E_ms
 request_throughput_requests_sec                          Req/s
 end_to_end_query_latency_retrieval_generation_ms         E2E_ms
 generation_phase_time_to_first_token_ms                  TTFT_ms
-retrieval_latency_vector_search_ms                       Ret_ms
+retrieval_latency_vector_search_ms                       CPURtms
 generation_throughput_output_tokens_s                    GenTk/s
 embedding_throughput_chunks_s                            EmbCk/s
 faiss_index_ntotal                                       FAISS_N
@@ -457,7 +457,7 @@ workload_name_table() {
 216   NCCL BW
 217   cuBLAS GEMM
 218   cuDNN Conv
-219   TorchBench
+219   Torch Kernel
 220   NVIDIA HPL
 221   ResNet50 Trn
 222   ResNet50 Inf
@@ -521,7 +521,7 @@ workload_name_table() {
 416   NCCL BW
 417   cuBLAS GEMM
 418   cuDNN Conv
-419   TorchBench
+419   Torch Kernel
 420   NVIDIA HPL
 421   ResNet50 Trn
 422   ResNet50 Inf

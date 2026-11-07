@@ -859,6 +859,35 @@ def definition_fields(definition: Path) -> dict[str, str]:
     }
 
 
+def iteration_note(raw_run_dir: str | Path | None) -> str:
+    """Note a run that stopped before its requested iteration count.
+
+    Collectors that stop at a profile time limit (JAX x26) write
+    requested_iterations and completed_iterations into raw_results.csv. The
+    ledger's num_iterations value is the requested count, so say how many ran.
+    """
+    if not raw_run_dir:
+        return ""
+    path = Path(raw_run_dir) / "raw_results.csv"
+    if not path.is_file():
+        return ""
+    try:
+        with path.open(encoding="utf-8", newline="") as handle:
+            rows = list(csv.DictReader(handle))
+    except (OSError, csv.Error):
+        return ""
+    for row in reversed(rows):
+        try:
+            requested = int(float(row.get("requested_iterations") or ""))
+            completed = int(float(row.get("completed_iterations") or ""))
+        except ValueError:
+            continue
+        if 0 <= completed < requested:
+            return f"completed {completed} of {requested} requested iterations (stopped at the profile time limit)"
+        return ""
+    return ""
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--definition", type=Path, default=Path("benchmark_specification.json"))
@@ -902,7 +931,7 @@ def main() -> int:
     parser.add_argument(
         "--raw-run-dir",
         default="",
-        help="Per-invocation results/raw/<timestamp>_<repo>_<host> directory.",
+        help="Per-invocation results/raw/YYYYMMDD_HHMMSSZ_WORKLOAD-<NNN>_SYSTEM-<hostname> directory.",
     )
     parser.add_argument("--runtime-root", type=Path, default=Path.cwd())
     parser.add_argument(
@@ -963,6 +992,9 @@ def main() -> int:
         notes = "; ".join(part for part in (notes, model_note) if part)
     if cache_note and result_status != "SMOKE-STANDIN":
         notes = "; ".join(part for part in (notes, cache_note) if part)
+    short_note = iteration_note(args.raw_run_dir)
+    if short_note and result_status != "SMOKE-STANDIN":
+        notes = "; ".join(part for part in (notes, short_note) if part)
     metric_defs.extend([""] * (METRIC_SLOT_COUNT - len(metric_defs)))
     results.extend([""] * (METRIC_SLOT_COUNT - len(results)))
 

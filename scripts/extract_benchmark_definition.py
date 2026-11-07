@@ -374,7 +374,6 @@ def _extract_profile_parameter_values(
         smoke_idx = _header_lookup(header, "smoke")
         baseline_idx = _header_lookup(header, "baseline")
         extended_idx = _header_lookup(header, "extended")
-        notes_idx = _header_lookup(header, "notes")
         if None in (number_idx, param_idx, smoke_idx, baseline_idx, extended_idx):
             continue
         values: dict[str, dict[str, str]] = {}
@@ -392,7 +391,6 @@ def _extract_profile_parameter_values(
                 "smoke": _strip_profile_cell(_row_cell(row, smoke_idx)),
                 "baseline": _strip_profile_cell(_row_cell(row, baseline_idx)),
                 "extended": _strip_profile_cell(_row_cell(row, extended_idx)),
-                "notes": _strip_profile_cell(_row_cell(row, notes_idx)),
             }
         return sheet.name, values
     return "Parameters_SmokeBaselineExtend", {}

@@ -39,7 +39,7 @@ Parameters (override the profile's value):
 General options:
   --config <file>               Config file (default: config/benchmark_config.yaml)
   --quiet                       Suppress nonessential stdout
-  --log-level <level>           ERROR|WARN|INFO|DEBUG (default: INFO)
+  --log-level <level>           ERROR|WARN|INFO|DEBUG (default: INFO; DEBUG also prints [RUN] commands)
   --specification               Print this workload's specification and exit
   --help                        Show this help and exit
 
@@ -74,6 +74,7 @@ for _help_arg in "$@"; do
       ;;
   esac
 done
+run_profiles_in_order "${REPO_ROOT}/run_benchmark.sh" "$@"
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -156,8 +157,7 @@ BENCHMARK_RUN_COMMAND+=" --prompt-len ${PROMPT_LEN} --batch-size ${BATCH_SIZE}"
 set_benchmark_run_command "${BENCHMARK_RUN_COMMAND}"
 
 HOSTNAME_VALUE="$(hostname -s 2>/dev/null || hostname)"
-STAMP="$(date -u +"%Y%m%d_%H%M%S")"
-RUN_DIR="${REPO_ROOT}/results/raw/${STAMP}_${REPO_NAME}_${HOSTNAME_VALUE}"
+RUN_DIR="${REPO_ROOT}/results/raw/$(benchmark_raw_run_dir_name "${REPO_NAME}" "${HOSTNAME_VALUE}")"
 mkdir -p "${RUN_DIR}"
 RAW_FILE="${RUN_DIR}/raw_output.txt"
 set_benchmark_run_dir "${RUN_DIR}"
@@ -188,7 +188,7 @@ mask_environment "${RUN_DIR}/env_variables.txt"
 run_collection() {
   log_section "Collection"
   if [[ "${BACKEND}" == "sdxl" ]]; then
-    echo "[RUN] bash scripts/install_sdxl_python.sh --prefetch"
+    log_run "bash scripts/install_sdxl_python.sh --prefetch"
     echo "bash scripts/install_sdxl_python.sh --prefetch" >> "${COMMAND_LOG}"
     bash scripts/install_sdxl_python.sh --prefetch
     export HF_HUB_OFFLINE=1
@@ -202,7 +202,7 @@ run_collection() {
     --guidance-scale "${GUIDANCE_SCALE}" --seed "${SEED}" \
     --prompt-len "${PROMPT_LEN}" --batch-size "${BATCH_SIZE}" \
     --output "${RUN_DIR}/sdxl.csv"
-  echo "[RUN] ${collect_cmd}"
+  log_run "${collect_cmd}"
   echo "${collect_cmd}" >> "${COMMAND_LOG}"
   "${PYTHON_BIN}" scripts/infer_sdxl.py \
     --backend "${BACKEND}" --profile "${PROFILE}" \
@@ -218,7 +218,7 @@ run_parse() {
   log_section "Parse"
   local parse_cmd
   printf -v parse_cmd '%q ' "${PYTHON_BIN}" scripts/parse_results.py --raw-file "${RAW_FILE}" --db "${REPO_ROOT}/results/benchmark.db" --config "${CONFIG_FILE}" --run-dir "${RUN_DIR}" --profile "${PROFILE}"
-  echo "[RUN] ${parse_cmd}"
+  log_run "${parse_cmd}"
   echo "${parse_cmd}" >> "${COMMAND_LOG}"
   "${PYTHON_BIN}" scripts/parse_results.py --raw-file "${RAW_FILE}" --db "${REPO_ROOT}/results/benchmark.db" --config "${CONFIG_FILE}" --run-dir "${RUN_DIR}" --profile "${PROFILE}" || die "parse failed"
 }
@@ -227,7 +227,7 @@ run_validate() {
   log_section "Validation"
   local validate_cmd
   printf -v validate_cmd '%q ' "${PYTHON_BIN}" scripts/validate_results.py --db "${REPO_ROOT}/results/benchmark.db" --config "${CONFIG_FILE}"
-  echo "[RUN] ${validate_cmd}"
+  log_run "${validate_cmd}"
   echo "${validate_cmd}" >> "${COMMAND_LOG}"
   "${PYTHON_BIN}" scripts/validate_results.py --db "${REPO_ROOT}/results/benchmark.db" --config "${CONFIG_FILE}" || die "validation failed"
 }

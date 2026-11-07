@@ -81,6 +81,12 @@ def main() -> int:
     # time; the sweep therefore takes ~2x one min_bytes call, and the repeat
     # rounds are halved to keep baseline/extended durations where they were.
     rounds = {"smoke": 1, "baseline": 10, "extended": 24}.get(str(args.profile), 1)
+    if num_gpus < 2:
+        # One GPU cannot cross a link, so every metric is na. Run one
+        # smallest-message call to show NCCL initializes, not the sweep.
+        sizes, iters, warmup, rounds = [min_bytes], 1, 0, 1
+        print("[INFO] one GPU requested: one quick NCCL check, no size sweep; "
+              "every metric is na (requires at least two GPUs)", flush=True)
     sweep_log = run_dir / "nccl_sweep.csv"
     sweep_log.write_text("round,collective,bytes,iterations,algbw_gb_s,busbw_gb_s,latency_us\n", encoding="utf-8")
     single_gpu_seen = False

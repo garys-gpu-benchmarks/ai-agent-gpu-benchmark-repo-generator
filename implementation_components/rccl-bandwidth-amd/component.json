@@ -1,6 +1,6 @@
 {
   "component_id": "rccl-bandwidth-amd",
-  "description": "hipcc + -lrccl build for five RCCL perf binaries. Sources hipcc_host_gcc.sh so Ubuntu 26.04 Clang 23 finds <cstdlib>.",
+  "description": "hipcc + -lrccl build for the RCCL AllReduce probe bin/all_reduce_perf. Sources hipcc_host_gcc.sh so Ubuntu 26.04 Clang 23 finds <cstdlib>.",
   "overlay": [
     "src/rccl_perf.cpp",
     "scripts/build.sh",

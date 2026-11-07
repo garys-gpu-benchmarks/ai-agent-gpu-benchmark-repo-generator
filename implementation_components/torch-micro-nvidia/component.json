@@ -1,6 +1,6 @@
 {
   "component_id": "torch-micro-nvidia",
-  "description": "Local GEMM/Conv2d TorchBench microkernels for NVIDIA 219/419 (same scripts as torch-micro-amd 119/319).",
+  "description": "Local GEMM/Conv2d PyTorch microkernels for NVIDIA 219/419 (same scripts as torch-micro-amd 119/319).",
   "overlay": [
     "scripts/gemm.py",
     "scripts/conv2d.py",
@@ -11,7 +11,7 @@
     {
       "field": "Workload Name",
       "operator": "equals",
-      "value": "TorchBench Microkernels"
+      "value": "PyTorch Microkernel Suite"
     },
     {
       "field": "GPU Vendor",
