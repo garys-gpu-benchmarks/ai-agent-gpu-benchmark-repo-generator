@@ -54,6 +54,13 @@ NS_RE = re.compile(r"ns/access\s*=\s*([0-9]+(?:\.[0-9]+)?)", re.IGNORECASE)
 BW_RE = re.compile(r"bandwidth_gb_s\s*=\s*([0-9]+(?:\.[0-9]+)?)", re.IGNORECASE)
 MISS_RE = re.compile(r"^\s*([0-9][0-9,]*)\s+cache-misses", re.IGNORECASE | re.MULTILINE)
 ELAPSED_RE = re.compile(r"([0-9]+(?:\.[0-9]+)?)\s+seconds time elapsed", re.IGNORECASE)
+# The DRAM tier must outgrow the last-level cache. Cloud VMs can hide L3 from
+# sysfs and lscpu (the 2026-11-08 MI300X VM showed L1d and L2 only, on a Xeon
+# 8568Y+ with a 300 MB L3), so the detected size can be 0. A 256 MB buffer then
+# stayed mostly in L3 and 110/310 reported 72 ns "DRAM" while 109/309, with a
+# 1 GiB buffer, measured 120 ns. Use at least 1 GiB, as 109/309 do.
+DRAM_WORKING_SET_FLOOR = 1024**3
+DRAM_LLC_MULTIPLE = 4
 
 
 def pick(sweep: dict, key: str, profile: str, default: str = "") -> str:
@@ -184,6 +191,14 @@ def list_numa_nodes() -> list[int]:
     return nodes or [0]
 
 
+def node_cpu_list(node: int) -> str:
+    """CPUs of one NUMA node, e.g. "0-35,72-107", or "" when unknown."""
+    try:
+        return Path(f"/sys/devices/system/node/node{node}/cpulist").read_text(encoding="utf-8").strip()
+    except OSError:
+        return ""
+
+
 def resolve_remote_node(source: int, nodes: list[int]) -> int:
     for node in nodes:
         if node != source:
@@ -235,6 +250,7 @@ def launch_sweep(
     env: dict[str, str],
     use_perf: bool,
     perf_bin: str = "perf",
+    cpu_list: str = "",
 ) -> tuple[int, str, list[str], bool, bool]:
     official = [
         "numactl",
@@ -246,8 +262,14 @@ def launch_sweep(
     fallbacks = [
         official,
         ["numactl", f"--cpunodebind={cpu_node}", str(binary), *extra_args],
-        [str(binary), *extra_args],
     ]
+    # Containers can refuse numactl but still allow sched_setaffinity. Without a
+    # pin, threads on a 2-socket host float between sockets: 410 DRAM read 134 ns
+    # on baseline and 162 ns on extended. The main thread builds the buffer, so
+    # pinning the whole process also keeps first-touch pages on this node.
+    if cpu_list and shutil.which("taskset"):
+        fallbacks.append(["taskset", "-c", cpu_list, str(binary), *extra_args])
+    fallbacks.append([str(binary), *extra_args])
     code = 1
     text = ""
     used = official
@@ -344,7 +366,9 @@ def main() -> int:
     cache_index, dram_index = summary_indices(sizes, levels)
     requested_dram_size = sizes[dram_index]
     llc_bytes = largest_last_level_cache_bytes()
-    minimum_dram_size = max(256 * 1024**2, 2 * llc_bytes)
+    minimum_dram_size = max(DRAM_WORKING_SET_FLOOR, DRAM_LLC_MULTIPLE * llc_bytes)
+    if llc_bytes <= 0:
+        print("# INFO no L3 cache is visible to this host (common in VMs); DRAM tier uses the 1 GiB floor")
     sizes[dram_index] = max(requested_dram_size, minimum_dram_size)
     if sizes[dram_index] != requested_dram_size:
         print(
@@ -413,47 +437,64 @@ def main() -> int:
         "threads": str(num_threads),
         "pattern": str(access_pattern),
     }
+    source_cpus = node_cpu_list(source_node)
+    # Only the DRAM-sized remote run feeds a metric. Skip the other remote runs,
+    # and skip remote entirely when it would equal local or cannot be bound;
+    # those results were discarded anyway and doubled the runtime.
+    measure_remote = remote_node != source_node
+    cases: list[tuple[int, str]] = []
     for size in sizes:
         for target_token in targets:
-            mem_node = remote_node if target_token.lower() == "remote" else int(float(target_token))
-            extra_args = [
-                "--size",
-                str(size),
-                "--stride",
-                extra_args_base["stride"],
-                "--iters",
-                extra_args_base["iters"],
-                "--threads",
-                extra_args_base["threads"],
-                "--pattern",
-                extra_args_base["pattern"],
-            ]
-            print(f"# target={target_token} size={size} cpunodebind={source_node} membind={mem_node}")
-            code, text, _used, perf_enabled, membind_ok = launch_sweep(
-                binary,
-                extra_args,
-                str(source_node),
-                str(mem_node),
-                env,
-                use_perf,
-                perf_bin or "perf",
-            )
-            if not perf_enabled:
-                use_perf = False
-            ns_value = parse_ns_per_access(text)
-            bw_value = parse_bandwidth(text)
-            if code != 0 or ns_value is None or bw_value is None:
-                raise SystemExit(f"[FAIL] numa_sweep target {target_token} size {size} did not report ns/access and bandwidth.")
-            measured[(size, target_token)] = {
-                "latency": ns_value,
-                "bandwidth": bw_value,
-                "misses": (
-                    parse_cache_misses_per_sec(text)
-                    if perf_enabled
-                    else NA_PERF_COUNTER
-                ),
-                "membind_ok": membind_ok,
-            }
+            if target_token.lower() == "remote" and size != dram_size:
+                continue
+            cases.append((size, target_token))
+    cases.sort(key=lambda case: case[1].lower() == "remote")
+    for size, target_token in cases:
+        if target_token.lower() == "remote" and not measure_remote:
+            print(f"# INFO skipped target=remote size={size}: remote NUMA memory is not measurable here")
+            continue
+        mem_node = remote_node if target_token.lower() == "remote" else int(float(target_token))
+        extra_args = [
+            "--size",
+            str(size),
+            "--stride",
+            extra_args_base["stride"],
+            "--iters",
+            extra_args_base["iters"],
+            "--threads",
+            extra_args_base["threads"],
+            "--pattern",
+            extra_args_base["pattern"],
+        ]
+        print(f"# target={target_token} size={size} cpunodebind={source_node} membind={mem_node}")
+        code, text, _used, perf_enabled, membind_ok = launch_sweep(
+            binary,
+            extra_args,
+            str(source_node),
+            str(mem_node),
+            env,
+            use_perf,
+            perf_bin or "perf",
+            source_cpus,
+        )
+        if not perf_enabled:
+            use_perf = False
+        ns_value = parse_ns_per_access(text)
+        bw_value = parse_bandwidth(text)
+        if code != 0 or ns_value is None or bw_value is None:
+            raise SystemExit(f"[FAIL] numa_sweep target {target_token} size {size} did not report ns/access and bandwidth.")
+        measured[(size, target_token)] = {
+            "latency": ns_value,
+            "bandwidth": bw_value,
+            "misses": (
+                parse_cache_misses_per_sec(text)
+                if perf_enabled
+                else NA_PERF_COUNTER
+            ),
+            "membind_ok": membind_ok,
+        }
+        if target_token.lower() != "remote" and not membind_ok:
+            measure_remote = False
 
     local_key = next((token for token in targets if token.lower() != "remote"), targets[0])
     remote_key = next((token for token in targets if token.lower() == "remote"), None)
@@ -469,8 +510,8 @@ def main() -> int:
     dram_misses = dram_measurement["misses"]
     remote_ns = NA_REMOTE_NUMA
     ratio = NA_REMOTE_NUMA
-    if remote_key is not None and remote_node != source_node:
-        remote_measurement = measured[(dram_size, remote_key)]
+    remote_measurement = measured.get((dram_size, remote_key)) if remote_key is not None else None
+    if remote_measurement is not None and remote_node != source_node:
         if remote_measurement["membind_ok"]:
             remote_ns = remote_measurement["latency"]
             ratio = remote_ns / dram_ns if dram_ns > 0 else None

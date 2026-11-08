@@ -7,10 +7,10 @@ Operator tools for the GPU benchmark suite under
 
 | Script | Runs on | What it does |
 |---|---|---|
-| [`scripts/run_benchmark_suite.sh`](scripts/run_benchmark_suite.sh) | the GPU host | Runs the workloads already installed under one folder (default `__SUITE_INSTALL_ROOT__`), one after another, for each requested profile, optionally repeated. One log file for the whole run and a pass/fail summary at the end. It discovers workloads from the folder, so the same script serves all four platforms, and it downloads nothing. |
-| [`scripts/get_benchmark_results.sh`](scripts/get_benchmark_results.sh) | your laptop (Git Bash on Windows) with `--host`, or the GPU host without it | With `--host`, over one SSH connection; without `--host`, from the machine it runs on. Copies the runtime ledger (CSV, plus an Excel copy on Windows), every workload's `results/raw` and `results/parsed`, and the suite logs, into `RUNTIME_LEDGERS/` and `DIRECTORIES/`. |
-| [`scripts/list_runs.sh`](scripts/list_runs.sh) | your laptop with `--host`, or the GPU host without it | Prints one line per run in the runtime ledger (workload, profile, runtime, exit code) under a header line, and nothing else. Copies nothing. `--smoke`, `--baseline`, `--extended` or `--failed` narrow the list; `--file` reads a saved ledger copy. |
-| [`scripts/show_metrics.sh`](scripts/show_metrics.sh) | your laptop or the GPU host | Prints one workload's runs from the runtime ledger (local file, or over SSH with `--host`) in fixed 7-character metric columns plus an Exit column, with per-profile means. Column headings and the 12-character workload names are generated from the `Metric_Short_Labels` and `Workload_Short_Names` sheets in the generator. |
+| [`run_benchmark_suite.sh`](run_benchmark_suite.sh) | the GPU host | Runs the workloads already installed under one folder (default `__SUITE_INSTALL_ROOT__`), one after another, for each requested profile, optionally repeated. One log file for the whole run and a pass/fail summary at the end. It discovers workloads from the folder, so the same script serves all four platforms, and it downloads nothing. |
+| [`get_benchmark_results.sh`](get_benchmark_results.sh) | your laptop (Git Bash on Windows) with `--host`, or the GPU host without it | With `--host`, over one SSH connection; without `--host`, from the machine it runs on. Copies the runtime ledger (CSV, plus an Excel copy on Windows), every workload's `results/raw` and `results/parsed`, and the suite logs, into `RUNTIME_LEDGERS/` and `DIRECTORIES/`. |
+| [`list_runs.sh`](list_runs.sh) | your laptop with `--host`, or the GPU host without it | Prints one line per run in the runtime ledger (workload, profile, runtime, exit code) under a header line, and nothing else. Copies nothing. `--smoke`, `--baseline`, `--extended` or `--failed` narrow the list; `--file` reads a saved ledger copy. |
+| [`show_metrics.sh`](show_metrics.sh) | your laptop or the GPU host | Prints one workload's runs from the runtime ledger (local file, or over SSH with `--host`) in fixed 7-character metric columns plus an Exit column, with per-profile means. Column headings and the 12-character workload names are generated from the `Metric_Short_Labels` and `Workload_Short_Names` sheets in the generator. |
 
 `run_benchmark_suite.sh` and `show_metrics.sh` are also published at the top of
 every bundle repository. Cloning a bundle into
@@ -55,18 +55,20 @@ may ask for your `sudo` password and, for ROCm, may need one reboot. Logs go to
 ## On your laptop
 
 ```bash
-./scripts/get_benchmark_results.sh --host 203.0.113.10            # root@host, port 22
-./scripts/get_benchmark_results.sh --host 203.0.113.10 --port 2222 # another ssh port
-./scripts/get_benchmark_results.sh --host ubuntu@203.0.113.10 -i ~/.ssh/id_ed25519 -o ~/results
-./scripts/get_benchmark_results.sh 203.0.113.10 2222               # positional form, same as --host/--port
-./scripts/get_benchmark_results.sh --help
+git clone https://github.com/__CI_OWNER__/__SUITE_TOOLS_REPO__ && cd __SUITE_TOOLS_REPO__
 
-./scripts/list_runs.sh --host 203.0.113.10                        # run table only, copies nothing
-./scripts/list_runs.sh --host 203.0.113.10 --failed               # runs that did not exit 0
+./get_benchmark_results.sh --host 203.0.113.10            # root@host, port 22
+./get_benchmark_results.sh --host 203.0.113.10 --port 2222 # another ssh port
+./get_benchmark_results.sh --host ubuntu@203.0.113.10 -i ~/.ssh/id_ed25519 -o ~/results
+./get_benchmark_results.sh 203.0.113.10 2222               # positional form, same as --host/--port
+./get_benchmark_results.sh --help
 
-./scripts/show_metrics.sh 332 --host 203.0.113.10                 # workload 332, all profiles
-./scripts/show_metrics.sh 332 --baseline --file RUNTIME_LEDGERS/runtime_ledger_301_332_<time>.csv
-./scripts/show_metrics.sh --help
+./list_runs.sh --host 203.0.113.10                        # run table only, copies nothing
+./list_runs.sh --host 203.0.113.10 --failed               # runs that did not exit 0
+
+./show_metrics.sh 332 --host 203.0.113.10                 # workload 332, all profiles
+./show_metrics.sh 332 --baseline --file RUNTIME_LEDGERS/runtime_ledger_301_332_<time>.csv
+./show_metrics.sh --help
 ```
 
 Without `-i`, it tries your SSH defaults, then each private key in `~/.ssh`.

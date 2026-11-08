@@ -85,7 +85,8 @@ class BundleReadmeToolsTests(unittest.TestCase):
                 with self.subTest(script=script.name, platform=digit):
                     for name in shipped:
                         self.assertIn(f"./{name} ", readme, f"{name} is shipped but not shown in the README")
-                    self.assertIn("./scripts/get_benchmark_results.sh --host ", readme)
+                    self.assertIn("`./get_benchmark_results.sh --host ", readme)
+                    self.assertNotIn("./scripts/", readme)
                     self.assertIsNone(re.search(r"@[A-Z]+@", readme), "unfilled placeholder")
                     self.assertNotIn("./run.sh", readme)
 

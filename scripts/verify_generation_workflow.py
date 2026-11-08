@@ -73,11 +73,13 @@ def check_catalog() -> None:
 
 def suite_readme_link_resolves(path: Path, target: str) -> bool:
     """templates/suite-tools/README.md becomes gpu-bench-suite/README.md, whose
-    scripts/<name> links point at the suite tools emitted from user_scripts/."""
+    <name>.sh links point at the suite tools emitted from user_scripts/ to the
+    top of that repository (scripts/<name> before 2026-11-07)."""
     suite_readme = path.parent.name == "suite-tools" and path.parent.parent.name == "templates"
-    if not suite_readme or not target.startswith("scripts/"):
+    name = target.split("#", 1)[0].removeprefix("scripts/")
+    if not suite_readme or not name or "/" in name:
         return False
-    return (path.parents[2] / "user_scripts" / target.split("#", 1)[0].removeprefix("scripts/")).is_file()
+    return (path.parents[2] / "user_scripts" / name).is_file()
 
 
 def check_markdown_links() -> None:

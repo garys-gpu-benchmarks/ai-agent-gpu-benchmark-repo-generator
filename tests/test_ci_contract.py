@@ -122,9 +122,10 @@ class EmitterTests(unittest.TestCase):
                         "tests/fixtures/sample-workload/schemas/benchmark_specification.schema.json"):
                 self.assertTrue((shared / rel).is_file(), rel)
             suite = Path(tmp) / "gpu-bench-suite"
-            for rel in ("scripts/run_benchmark_suite.sh", "scripts/get_benchmark_results.sh", "scripts/list_runs.sh",
-                        "scripts/show_metrics.sh", "README.md"):
+            for rel in ("run_benchmark_suite.sh", "get_benchmark_results.sh", "list_runs.sh",
+                        "show_metrics.sh", "README.md"):
                 self.assertTrue((suite / rel).is_file(), rel)
+            self.assertFalse((suite / "scripts").exists(), "suite tools sit at the top of gpu-bench-suite (2026-11-07)")
             for path in list(shared.rglob("*")) + list(suite.rglob("*")):
                 if path.is_file():
                     self.assertNotRegex(path.read_text(encoding="utf-8"), ci_contract.PLACEHOLDER_RE, str(path))

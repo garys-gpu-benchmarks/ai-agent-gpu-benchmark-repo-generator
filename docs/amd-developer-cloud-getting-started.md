@@ -189,7 +189,7 @@ After ROCm is installed, `amd-smi` shows the GPU's memory and utilization (`rocm
 
 ## 6. Tearing down
 
-1. **Copy your results off first.** Destroying the droplet deletes everything on it. From your PC, clone [`gpu-bench-suite`](https://github.com/garys-gpu-benchmarks/gpu-bench-suite) and run `./scripts/get_benchmark_results.sh --host <DROPLET_IP>` (Git Bash on Windows). It copies the runtime ledger, every workload's results, and the suite logs.
+1. **Copy your results off first.** Destroying the droplet deletes everything on it. From your PC, clone [`gpu-bench-suite`](https://github.com/garys-gpu-benchmarks/gpu-bench-suite) and run `./get_benchmark_results.sh --host <DROPLET_IP>` (Git Bash on Windows). It copies the runtime ledger, every workload's results, and the suite logs.
 2. In the AMD Developer Cloud control panel, **destroy** the droplet. Powering it off is not enough: a powered-off droplet is still billed.
 3. Check the droplets list to confirm it's gone.
 4. If you made an automation key (section 2), delete `amd-devcloud-automation` and `amd-devcloud-automation.pub` from `.ssh\`, and remove its public key from the console.

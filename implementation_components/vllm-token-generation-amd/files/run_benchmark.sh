@@ -190,6 +190,11 @@ BENCHMARK_RUN_COMMAND="bash run_benchmark.sh --${PROFILE}"
 BENCHMARK_RUN_COMMAND+=" --model-name ${MODEL_NAME} --dtype ${DTYPE} --tensor-parallel-size ${TENSOR_PARALLEL_SIZE} --gpu-memory-utilization ${GPU_MEMORY_UTILIZATION} --prompt-source ${PROMPT_SOURCE} --input-len ${INPUT_LEN} --output-len ${OUTPUT_LEN} --max-num-seqs ${MAX_NUM_SEQS} --max-concurrency ${MAX_CONCURRENCY}"
 set_benchmark_run_command "${BENCHMARK_RUN_COMMAND}"
 
+# Download the model before the published clock starts. The first vLLM smoke on a
+# fresh VM spent 111 s of its 3:26 downloading weights (127, 2026-11-08); with
+# the model cached it takes about 30 s.
+prefetch_vllm_model_weights "${PYTHON_BIN}" "${MODEL_NAME}"
+mark_benchmark_measure_start
 HOSTNAME_VALUE="$(hostname -s 2>/dev/null || hostname)"
 RUN_DIR="${REPO_ROOT}/results/raw/$(benchmark_raw_run_dir_name "${REPO_NAME}" "${HOSTNAME_VALUE}")"
 mkdir -p "${RUN_DIR}"

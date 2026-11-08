@@ -216,6 +216,60 @@ mark_benchmark_measure_start() {
   export BENCHMARK_START_DATETIME BENCHMARK_START_NS
 }
 
+prefetch_vllm_model_weights() {
+  # Download the files vLLM will load before the published clock starts.
+  # On 2026-11-08 the first vLLM smoke on each fresh VM (127/227/327/427) spent
+  # 111 s of its 3:26 in "Time spent downloading weights"; with the model cached
+  # the same smoke took about 30 s. Callers run mark_benchmark_measure_start
+  # after this so the ledger times the benchmark, not the download.
+  # Best effort: any failure prints a WARN and vLLM downloads as it did before.
+  # Set VLLM_SKIP_PREFETCH=1 to skip.
+  local python_bin="$1"
+  local model_id="${2:-}"
+  [[ -n "${model_id}" ]] || return 0
+  if [[ "${VLLM_SKIP_PREFETCH:-0}" == "1" ]]; then
+    log_info "VLLM_SKIP_PREFETCH=1: vLLM downloads ${model_id} itself inside the timed run"
+    return 0
+  fi
+  log_info "Fetching ${model_id} weights before the timed run (files already cached are not downloaded again)"
+  "${python_bin}" - "${model_id}" <<'PY' || log_warn "model prefetch did not finish; vLLM will download ${model_id} inside the timed run"
+import os
+import sys
+import time
+
+repo = sys.argv[1]
+if os.path.isdir(repo):
+    print(f"[INFO] {repo} is a local directory; nothing to download", flush=True)
+    raise SystemExit(0)
+try:
+    from huggingface_hub import HfApi, snapshot_download
+except Exception as exc:
+    print(f"[WARN] huggingface_hub is not importable: {exc}", flush=True)
+    raise SystemExit(0)
+try:
+    files = set(HfApi().list_repo_files(repo))
+except Exception as exc:
+    print(f"[WARN] cannot list {repo} on the Hugging Face Hub: {exc}", flush=True)
+    raise SystemExit(0)
+# vLLM loads a Mistral-format checkpoint (params.json + consolidated*.safetensors)
+# when the repo has one; on 2026-11-08 it downloaded only consolidated.safetensors
+# for mistralai/Mistral-7B-v0.3. Otherwise it loads the Hugging Face weights.
+if "params.json" in files and any(f.startswith("consolidated") and f.endswith(".safetensors") for f in files):
+    patterns = ["*.json", "consolidated*.safetensors", "tokenizer.model*"]
+elif any(f.endswith(".safetensors") for f in files):
+    patterns = ["*.json", "*.safetensors", "tokenizer*"]
+else:
+    patterns = ["*.json", "*.bin", "tokenizer*"]
+start = time.monotonic()
+try:
+    path = snapshot_download(repo, allow_patterns=patterns)
+except Exception as exc:
+    print(f"[WARN] {repo} download failed: {exc}", flush=True)
+    raise SystemExit(0)
+print(f"[INFO] {repo} ready in {path} ({time.monotonic() - start:.0f} s, patterns {patterns})", flush=True)
+PY
+}
+
 record_benchmark_stop() {
   # Same instant as the printed Stop time, with sub-second resolution for the summary.
   STOP_TIME="$(iso_utc_now)"

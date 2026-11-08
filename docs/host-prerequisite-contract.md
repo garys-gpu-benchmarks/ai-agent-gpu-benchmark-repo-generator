@@ -25,7 +25,7 @@ The resulting prerequisite set must include every package and command actually r
 | SQLite CSV/JSON export | `sqlite3` CLI |
 | Rust extension build | current stable Rust via `rustup`, `rustc`, `cargo` |
 | Protocol Buffer extension build | `protobuf-compiler`, `libprotobuf-dev`, `protoc` |
-| AMD SGLang kernels | AITER source checkout with recursive submodules |
+| AMD SGLang kernels | pinned `amd-aiter` wheel from the ROCm vLLM index (no AITER source checkout) |
 | FAISS ROCm source build | `libopenblas-dev`, `libgflags-dev`, `swig`, `python3-dev`, matching `python3.x-dev` |
 
 The table is guidance, not a fixed package list. Workload-specific dependencies derived from the source fields and generated scripts must also be included.

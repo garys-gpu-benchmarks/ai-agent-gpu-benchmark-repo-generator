@@ -213,7 +213,7 @@ def evaluate(values: dict[str, str], workloads: list[str], kernels: dict[str, st
         if 0 <= free < LOW_DISK_GB:
             warnings.append(f"Only {free:.0f} GB free on {label}; the model workloads need about {LOW_DISK_GB:.0f} GB.")
     if values.get("hf_token") == "missing" and any(str(w)[-2:] in {"27", "28", "29", "30", "31", "32"} for w in workloads):
-        warnings.append("No Hugging Face token on the VM (~/.cache/huggingface/token or HF_TOKEN). mistralai/Mistral-7B-v0.3 is gated.")
+        warnings.append("No Hugging Face token on the VM (~/.cache/huggingface/token or HF_TOKEN). mistralai/Mistral-7B-v0.3 may be gated; if its download fails, set HF_TOKEN.")
     for key, label in (("download_huggingface_bps", "huggingface.co"), ("download_pytorch_bps", "download.pytorch.org")):
         speed = _float(values.get(key)) / 1e6
         if speed <= 0:

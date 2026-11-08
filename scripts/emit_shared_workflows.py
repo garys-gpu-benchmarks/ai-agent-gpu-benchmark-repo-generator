@@ -97,7 +97,7 @@ def build_suite_tools(template_root: Path, contract: dict, dest: Path) -> None:
         src = template_root / USER_SCRIPTS_REL / name
         if not src.is_file():
             raise ContractError(f"{src} is missing; gpu-bench-suite needs it")
-        render_file(src, dest / "scripts" / name, shared_placeholders(contract))
+        render_file(src, dest / name, shared_placeholders(contract))
     _copy_lf(template_root / "LICENSE", dest / "LICENSE")
 
 

@@ -192,11 +192,16 @@ run_collection() {
   find "${VENV_ROOT:-${REPO_ROOT}/.venv}/lib" -name 'lock_module_*' -delete 2>/dev/null || true
   rm -f /tmp/aiter_configs/*.lock 2>/dev/null || true
   # A consolidated.safetensors cache is not a finished shard set. Download the
-  # index shards and launch with that snapshot directory, not the repo id.
+  # index shards, config.json and the tokenizer files, load AutoConfig and
+  # AutoTokenizer from the snapshot, and launch with that snapshot directory,
+  # not the repo id.
   sglang_model_path="$("${PYTHON_BIN}" scripts/prefetch_sglang_model.py --model-id "${MODEL_NAME}" | tail -n 1)"
   if [[ -z "${sglang_model_path}" || ! -d "${sglang_model_path}" ]]; then
-    die "SGLang shard prefetch did not return a snapshot directory"
+    die "SGLang model prefetch did not return a snapshot with config.json, weights and a loadable tokenizer (see the [FAIL] line above)"
   fi
+  # Restart the published clock after the download (as the vLLM runners do):
+  # the ledger times the server start and the requests, not the network.
+  mark_benchmark_measure_start
   server_cmd="${PYTHON_BIN} -m sglang.launch_server --model-path ${sglang_model_path} --dtype ${DTYPE} --port 30000 --host 127.0.0.1 --tp 1 --mem-fraction-static 0.8 --schedule-policy ${SCHEDULE_POLICY} --max-total-tokens ${MAX_TOTAL_TOKENS} --max-running-requests ${MAX_RUNNING_REQUESTS} --disable-cuda-graph --watchdog-timeout 1800"
   log_run "${server_cmd}"
   echo "${server_cmd}" >> "${COMMAND_LOG}"

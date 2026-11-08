@@ -21,21 +21,23 @@ while [[ $# -gt 0 ]]; do
     esac
 done
 PROFILE="${PROFILE:-smoke}"
+# A hung import (AITER spun for 49 minutes on 330, 2026-11-08) must not hang the run.
+SETUP_CHECK_TIMEOUT_SEC="${SETUP_CHECK_TIMEOUT_SEC:-300}"
 
 if [[ -f .setup_state ]]; then
     if [[ ! -x "${REPO_ROOT}/.venv/bin/python" ]]; then
         printf '[WARN] .setup_state exists but .venv python is missing; re-running setup.\n'
         rm -f .setup_state
-    elif ! "${REPO_ROOT}/.venv/bin/python" -c "import sglang" >/dev/null 2>&1; then
+    elif ! timeout "${SETUP_CHECK_TIMEOUT_SEC}" "${REPO_ROOT}/.venv/bin/python" -c "import sglang" >/dev/null 2>&1; then
         printf '[WARN] .setup_state exists but sglang import failed; re-running setup.\n'
         rm -f .setup_state
-    elif ! "${REPO_ROOT}/.venv/bin/python" -c "import aiter" >/dev/null 2>&1; then
+    elif ! timeout "${SETUP_CHECK_TIMEOUT_SEC}" "${REPO_ROOT}/.venv/bin/python" -c "import aiter" >/dev/null 2>&1; then
         printf '[WARN] .setup_state exists but aiter import failed; re-running setup.\n'
         rm -f .setup_state
-    elif ! "${REPO_ROOT}/.venv/bin/python" -m sglang.launch_server --help >/dev/null 2>&1; then
+    elif ! timeout "${SETUP_CHECK_TIMEOUT_SEC}" "${REPO_ROOT}/.venv/bin/python" -m sglang.launch_server --help >/dev/null 2>&1; then
         printf '[WARN] .setup_state exists but sglang.launch_server --help failed; re-running setup.\n'
         rm -f .setup_state
-    elif ! "${REPO_ROOT}/.venv/bin/python" -c "from sglang.srt.entrypoints.http_server import launch_server" >/dev/null 2>&1; then
+    elif ! timeout "${SETUP_CHECK_TIMEOUT_SEC}" "${REPO_ROOT}/.venv/bin/python" -c "from sglang.srt.entrypoints.http_server import launch_server" >/dev/null 2>&1; then
         printf '[WARN] .setup_state exists but http_server.launch_server import failed; re-running setup.\n'
         rm -f .setup_state
     else

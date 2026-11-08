@@ -104,7 +104,8 @@ if grep -q $'\r' "$0"; then echo "This file has Windows (CRLF) line endings. Fix
 #
 # Revision: 2026-11-07 (step 10 also copies docs/images/github-organization.png
 #           onto the profile repository as images/github-organization.png;
-#           show_ledger_runs.sh renamed list_runs.sh; bundle slugs quoted)
+#           show_ledger_runs.sh renamed list_runs.sh; bundle slugs quoted;
+#           gpu-bench-suite tools moved from scripts/ to the top of the repository)
 #           2026-10-31 (step 10 copies BenchmarkSpecDefinitions.xlsx onto
 #           github.com/garymichaelbass/garymichaelbass; only that file changes)
 #           2026-10-19 (the only publish script: the former
@@ -710,7 +711,7 @@ cd /opt/benchmarks && ./run_benchmark_suite.sh --smoke --baseline --extended
 
 To pull results to your laptop (Git Bash on Windows works), clone
 [gpu-bench-suite](https://github.com/@ORG@/gpu-bench-suite) and run
-`./scripts/get_benchmark_results.sh --host <address>` (add `--port N` if ssh is not on 22).
+`./get_benchmark_results.sh --host <address>` (add `--port N` if ssh is not on 22).
 `list_runs.sh` and `show_metrics.sh` there accept `--host` too.
 
 ## Reading the results
@@ -1063,8 +1064,9 @@ fi
 #   Self-test must pass before the tag moves: the first release of a major
 #   tag is vN.0.0, each later change the next vN.x.0, and vN is moved to it.
 #
-# gpu-bench-suite: operator tools (scripts/run_benchmark_suite.sh for the GPU
-#   host, scripts/get_benchmark_results.sh for the laptop or the host). Tagged with this run's
+# gpu-bench-suite: operator tools at the top of the repository (run_benchmark_suite.sh
+#   for the GPU host, get_benchmark_results.sh, list_runs.sh and show_metrics.sh for
+#   the laptop or the host; in scripts/ before 2026-11-07). Tagged with this run's
 #   version. Step 7 copies its run_benchmark_suite.sh into every bundle.
 #
 # Runs every time; nothing is pushed or tagged when nothing changed.
@@ -1148,11 +1150,15 @@ if [[ -z "${TOOLS_REPO}" ]]; then
 else
   TOOLS_DIR="${WORKSPACE}/${TOOLS_REPO}"
   emit_repo suite-tools "${TOOLS_DIR}"
-  [[ -f "${TOOLS_DIR}/scripts/run_benchmark_suite.sh" ]] || stop "the generator did not write scripts/run_benchmark_suite.sh in ${TOOLS_DIR}"
+  [[ -f "${TOOLS_DIR}/run_benchmark_suite.sh" ]] || stop "the generator did not write run_benchmark_suite.sh in ${TOOLS_DIR}"
   cd "${TOOLS_DIR}" || stop "cannot open ${TOOLS_DIR}"
-  # show_ledger_runs.sh was renamed list_runs.sh (2026-11-07). The emit step
-  # leaves files it no longer writes, so remove the old name here.
-  rm -f scripts/show_ledger_runs.sh
+  # The tools moved from scripts/ to the top of the repository, and
+  # show_ledger_runs.sh was renamed list_runs.sh (both 2026-11-07). The emit
+  # step leaves files it no longer writes, so remove the old copies here;
+  # commit_all's git add -A then records the removal on GitHub.
+  rm -f scripts/run_benchmark_suite.sh scripts/get_benchmark_results.sh scripts/list_runs.sh \
+    scripts/show_metrics.sh scripts/show_ledger_runs.sh
+  rmdir scripts 2>/dev/null || true
   [[ -d .git ]] || git init -q -b main || stop "git init failed in ${TOOLS_DIR}"
   use_github_repo "${TOOLS_REPO}" "Operator tools for the GPU benchmark suite: run every workload on a GPU host, collect the results to your laptop" || stop "could not create ${ORG}/${TOOLS_REPO}"
   commit_all "Initial operator tools from ${GENREPO} ${VERSION}" "Update from ${GENREPO} ${VERSION}" || stop "committing ${TOOLS_REPO} failed"
@@ -1171,18 +1177,18 @@ fi
 
 # Where the bundles get run_benchmark_suite.sh: the generator's copy, or, for
 # a generator without suite tools, a copy next to this script.
-SUITE_SCRIPT="${TOOLS_DIR:+${TOOLS_DIR}/scripts/run_benchmark_suite.sh}"
+SUITE_SCRIPT="${TOOLS_DIR:+${TOOLS_DIR}/run_benchmark_suite.sh}"
 [[ -n "${SUITE_SCRIPT}" && -f "${SUITE_SCRIPT}" ]] || SUITE_SCRIPT="${SCRIPT_DIR}/run_benchmark_suite.sh"
 # show_metrics.sh comes along the same way, so a cloned bundle has it in
 # /opt/benchmarks (the README says so).
-METRICS_SCRIPT="${TOOLS_DIR:+${TOOLS_DIR}/scripts/show_metrics.sh}"
+METRICS_SCRIPT="${TOOLS_DIR:+${TOOLS_DIR}/show_metrics.sh}"
 [[ -n "${METRICS_SCRIPT}" && -f "${METRICS_SCRIPT}" ]] || METRICS_SCRIPT="${SCRIPT_DIR}/show_metrics.sh"
 # get_benchmark_results.sh too: on the GPU host it collects from this machine
 # when it is run without --host.
-RESULTS_SCRIPT="${TOOLS_DIR:+${TOOLS_DIR}/scripts/get_benchmark_results.sh}"
+RESULTS_SCRIPT="${TOOLS_DIR:+${TOOLS_DIR}/get_benchmark_results.sh}"
 [[ -n "${RESULTS_SCRIPT}" && -f "${RESULTS_SCRIPT}" ]] || RESULTS_SCRIPT="${SCRIPT_DIR}/get_benchmark_results.sh"
 # list_runs.sh prints the ledger's run table without copying anything.
-RUNS_SCRIPT="${TOOLS_DIR:+${TOOLS_DIR}/scripts/list_runs.sh}"
+RUNS_SCRIPT="${TOOLS_DIR:+${TOOLS_DIR}/list_runs.sh}"
 [[ -n "${RUNS_SCRIPT}" && -f "${RUNS_SCRIPT}" ]] || RUNS_SCRIPT="${SCRIPT_DIR}/list_runs.sh"
 cd "${PUB}" || stop "cannot open ${PUB}"
 

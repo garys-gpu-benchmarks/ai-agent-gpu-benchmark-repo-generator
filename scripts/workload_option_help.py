@@ -377,7 +377,8 @@ def help_header_lines(fields: dict[str, str]) -> list[str]:
     """Workload Name, Main Goal, and Command Tools Executed from the workbook row.
 
     Labels sit in a 24-column field. Long values wrap at 100 columns with the
-    continuation lines under the value. Each value ends with a period.
+    continuation lines under the value. No value ends with a period: the three are
+    labels and short phrases, so a trailing period in the workbook cell is dropped.
     """
     import textwrap
 
@@ -386,8 +387,7 @@ def help_header_lines(fields: dict[str, str]) -> list[str]:
         value = " ".join(str(fields.get(field, "") or "").split())
         if value in EMPTY:
             continue
-        if not value.endswith((".", "!", "?")):
-            value += "."
+        value = value.rstrip(".").rstrip()
         wrapped = textwrap.wrap(
             value,
             width=HELP_HEADER_WIDTH - HELP_HEADER_LABEL_WIDTH,

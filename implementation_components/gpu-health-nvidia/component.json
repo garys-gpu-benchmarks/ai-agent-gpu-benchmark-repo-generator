@@ -1,6 +1,6 @@
 {
   "component_id": "gpu-health-nvidia",
-  "description": "NVIDIA 202/402 health probes. Independent nvidia-smi/dmon samples plus dmesg Xid count. Does not reuse one row as two samples.",
+  "description": "NVIDIA 202/402 health probes. Samples nvidia-smi for every GPU once per second for monitor_duration_sec, plus NVRM Xid lines in dmesg; fails when fewer than expected_gpu_count devices or a link narrower than min_pcie_link_width appears.",
   "overlay": [
     "scripts/collect_workload.py"
   ],

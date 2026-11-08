@@ -960,9 +960,13 @@ if rocm_required:
             if token not in setup:
                 raise SystemExit(f"[FAIL] vLLM ROCm contract missing: {token}")
     if "sglang" in framework:
-        for token in ("import aiter", "SGLANG_USE_AITER", "github.com/ROCm/aiter.git"):
+        for token in ("import aiter", "SGLANG_USE_AITER", "amd-aiter==${AITER_VERSION}", "AITER_IMPORT_TIMEOUT_SEC"):
             if token not in setup:
                 raise SystemExit(f"[FAIL] SGLang AITER contract missing: {token}")
+        # TEMPLATE_00_127: only the pinned amd-aiter wheel. A failed import must stop
+        # setup, not clone unpinned ROCm/aiter (330 on 2026-11-08).
+        if "github.com/ROCm/aiter.git" in setup or "setup.py develop" in setup:
+            raise SystemExit("[FAIL] SGLang setup must not build AITER from source; install the pinned amd-aiter wheel.")
         if "BENCHMARK_INSTALL_AITER_WAS_SET" not in setup:
             raise SystemExit("[FAIL] SGLang setup must auto-enable AITER from Framework.")
         if "BENCHMARK_COMPILE_SGLANG_WAS_SET" not in setup:

@@ -141,8 +141,8 @@ def quickstart_notes(fields: dict[str, str]) -> str:
         )
     if _needs_gated_model(fields):
         notes.append(
-            f"The model `{GATED_MODEL}` is gated on Hugging Face. "
-            "Set `HF_TOKEN` before setup (see [Troubleshooting](#troubleshooting))."
+            f"The model `{GATED_MODEL}` may be gated on Hugging Face. "
+            "If its download is refused, set `HF_TOKEN` (see [Troubleshooting](#troubleshooting))."
         )
     return "\n\n".join(notes)
 
@@ -336,7 +336,7 @@ def troubleshooting(fields: dict[str, str]) -> str:
         )
     if _needs_gated_model(fields):
         entries.append(
-            f"- **Model download refused (401 or 403):** `{GATED_MODEL}` is gated. Accept its license on "
+            f"- **Model download refused (401 or 403):** `{GATED_MODEL}` may be gated. Accept its license on "
             "Hugging Face, then `export HF_TOKEN=<token>` and run setup with `sudo -E bash setup.sh --assume-yes` "
             "so the token reaches it."
         )

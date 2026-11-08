@@ -1,6 +1,6 @@
 {
   "component_id": "rocm-health-amd",
-  "description": "AMD ROCm System Validation collector (clocks, temp, HSA, PCIe).",
+  "description": "AMD ROCm System Validation collector (102 / 302). Samples amd-smi, rocminfo, and every AMD GPU's sysfs PCIe link once per second for monitor_duration_sec; fails when fewer than expected_gpu_count HSA agents or a link narrower than min_pcie_link_width appears.",
   "role": "collector",
   "completeness": "thin",
   "provides": [

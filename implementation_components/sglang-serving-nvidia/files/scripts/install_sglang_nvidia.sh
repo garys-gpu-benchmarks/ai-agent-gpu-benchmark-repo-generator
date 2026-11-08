@@ -38,21 +38,54 @@ needs_cu130_sglang() {
 }
 
 install_sglang_runtime_deps() {
-  # launch_server imports uvicorn. sglang is installed --no-deps so those
-  # modules are absent. Keep torch and sglang-kernel out of this transaction.
-  "${PYTHON_BIN}" -m pip install \
-    'uvicorn' 'fastapi' 'uvloop' 'watchfiles' 'python-multipart' \
-    'aiohttp' 'orjson' 'pyzmq>=25.1.2' 'msgspec' 'setproctitle' \
-    'partial-json-parser' 'pybase64' 'einops' 'prometheus-client>=0.20.0' \
-    'psutil' 'requests' 'numpy' 'pillow' 'sentencepiece' 'tiktoken' 'gguf' \
-    'interegular' 'py-spy' 'scipy' 'packaging' 'nvidia-ml-py' \
-    'compressed-tensors' 'modelscope' 'blobfile==3.0.0' 'anthropic>=0.20.0' \
-    'IPython' 'build' 'cuda-python==12.9' 'llguidance>=0.7.11,<0.8' \
-    'openai==2.6.1' 'openai-harmony==0.0.4' 'mistral_common>=1.9.0' \
-    'soundfile==0.13.1' 'timm==1.0.16' 'torchao==0.9.0' \
-    'torch_memory_saver==0.0.9' 'quack-kernels>=0.3.0' \
-    'nvidia-cutlass-dsl>=4.4.1' 'smg-grpc-servicer>=0.5.0' 'datasets' \
+  # launch_server imports these. sglang is installed --no-deps so they are absent.
+  # Keep torch, its CUDA libraries and sglang-kernel out of this transaction.
+  # On 2026-11-08 (431, TEMPLATE_00_126) one unconstrained install of this list
+  # made pip backtrack: cuda-python==12.9 needs cuda-bindings 12.9, torch
+  # 2.13.0+cu130 declares cuda-bindings>=13, and timm/torchao depend on torch, so
+  # pip replaced torch with 2.10 from PyPI (915 MB, CUDA 12 libraries) and this
+  # script then downloaded 2.13.0+cu130 again (526 MB) and restored NCCL.
+  local constraints rc=0
+  local -a deps=(
+    'uvicorn' 'fastapi' 'uvloop' 'watchfiles' 'python-multipart'
+    'aiohttp' 'orjson' 'pyzmq>=25.1.2' 'msgspec' 'setproctitle'
+    'partial-json-parser' 'pybase64' 'einops' 'prometheus-client>=0.20.0'
+    'psutil' 'requests' 'numpy' 'pillow' 'sentencepiece' 'tiktoken' 'gguf'
+    'interegular' 'py-spy' 'scipy' 'packaging' 'nvidia-ml-py'
+    'compressed-tensors' 'modelscope' 'blobfile==3.0.0' 'anthropic>=0.20.0'
+    'IPython' 'build' 'llguidance>=0.7.11,<0.8'
+    'openai==2.6.1' 'openai-harmony==0.0.4' 'mistral_common>=1.9.0'
+    'soundfile==0.13.1' 'torch_memory_saver==0.0.9' 'quack-kernels>=0.3.0'
+    'nvidia-cutlass-dsl>=4.4.1' 'smg-grpc-servicer>=0.5.0' 'datasets'
     'tqdm' 'pydantic'
+  )
+  # Pin what is installed now, so nothing in the list can swap it.
+  constraints="$(mktemp)"
+  "${PYTHON_BIN}" - "${constraints}" <<'PY'
+import importlib.metadata as md
+import sys
+
+names = ("torch", "torchvision", "torchaudio", "triton", "nvidia-nccl-cu13")
+with open(sys.argv[1], "w", encoding="utf-8") as handle:
+    for name in names:
+        try:
+            handle.write(f"{name}=={md.version(name)}\n")
+        except md.PackageNotFoundError:
+            pass
+PY
+  "${PYTHON_BIN}" -m pip install -c "${constraints}" "${deps[@]}" || rc=$?
+  rm -f "${constraints}"
+  if [[ "${rc}" != 0 ]]; then
+    # Not seen yet. Keep the old path working: install unpinned, and the torch
+    # and NCCL checks after this function put torch 2.13.0+cu130 back.
+    echo "[WARN] SGLang runtime deps could not be installed with torch pinned; retrying without the pin" >&2
+    "${PYTHON_BIN}" -m pip install "${deps[@]}"
+  fi
+  # These three pull torch (timm, torchao) or CUDA 12 bindings (cuda-python) as
+  # dependencies. Their own dependencies are already installed. cuda-bindings
+  # 12.9 with torch 2.13.0+cu130 is what the passing 431 venv had on 2026-11-08.
+  "${PYTHON_BIN}" -m pip install --no-deps \
+    'timm==1.0.16' 'torchao==0.9.0' 'cuda-python==12.9' 'cuda-bindings~=12.9.0'
 }
 
 # True when torch 2.13.0+cu130 and sglang-kernel 0.4.6.post1 are installed and
@@ -76,7 +109,19 @@ reinstall_sglang_kernel() {
     --extra-index-url https://pypi.org/simple
 }
 
+restore_nvidia_nccl() {
+  # Runtime deps can overwrite nvidia/nccl/lib/libnccl.so.2 with a larger build
+  # that does not export ncclCommResume, while the 2.29.7 dist-info stays.
+  # Put the torch 2.13 library back before the next import. An import failure
+  # here would otherwise force a torch reinstall from download.pytorch.org.
+  "${PYTHON_BIN}" -m pip install --force-reinstall --no-deps 'nvidia-nccl-cu13==2.29.7'
+}
+
 install_cu130_sglang() {
+  # A previous attempt may have left a overwritten libnccl.so.2. Restore it
+  # before the first torch import, or that import is treated as a bad pin and
+  # setup re-downloads torch from download.pytorch.org.
+  restore_nvidia_nccl
   "${PYTHON_BIN}" -m pip install ninja
   # sglang-kernel 0.4.6.post1 loads on torch 2.13. Kernel 0.4.1 was built
   # against an older c10 ABI and fails to import on 2.9.1 and 2.13.
@@ -104,6 +149,7 @@ install_cu130_sglang() {
     cp "${REPO_ROOT}/scripts/sglang_py314.pth" "${site}/sglang_py314.pth"
   fi
   install_sglang_runtime_deps
+  restore_nvidia_nccl
   if ! "${PYTHON_BIN}" -c "import torch; import sys; sys.exit(0 if torch.__version__.startswith('2.13.0') and 'cu130' in torch.__version__ else 1)" >/dev/null 2>&1; then
     "${PYTHON_BIN}" -m pip install --force-reinstall --no-deps \
       'torch==2.13.0+cu130' 'torchvision==0.28.0+cu130' 'torchaudio==2.11.0+cu130' \
@@ -118,16 +164,17 @@ install_cu130_sglang() {
     || ! "${PYTHON_BIN}" -c "from sglang.srt.layers.sampler import create_sampler" >/dev/null 2>&1 \
     || ! "${PYTHON_BIN}" -c "import sgl_kernel" >/dev/null 2>&1; then
     "${PYTHON_BIN}" "${REPO_ROOT}/scripts/install_sglang_launch_deps.py" || true
-    "${PYTHON_BIN}" -m pip install --force-reinstall --no-deps \
-      'torch==2.13.0+cu130' 'torchvision==0.28.0+cu130' 'torchaudio==2.11.0+cu130' \
-      --index-url https://download.pytorch.org/whl/cu130
+    if ! "${PYTHON_BIN}" -c "import torch; import sys; sys.exit(0 if torch.__version__.startswith('2.13.0') and 'cu130' in torch.__version__ else 1)" >/dev/null 2>&1; then
+      "${PYTHON_BIN}" -m pip install --force-reinstall --no-deps \
+        'torch==2.13.0+cu130' 'torchvision==0.28.0+cu130' 'torchaudio==2.11.0+cu130' \
+        --index-url https://download.pytorch.org/whl/cu130
+    fi
     "${PYTHON_BIN}" -m pip install --force-reinstall --no-deps 'sglang-kernel==0.4.6.post1' \
       --index-url https://docs.sglang.ai/whl/cu130/ \
       --extra-index-url https://pypi.org/simple
   fi
-  # A dependency install can overwrite nvidia/nccl/lib/libnccl.so.2 with a
-  # build that does not export ncclCommResume. Put the torch 2.13 NCCL back.
-  "${PYTHON_BIN}" -m pip install --force-reinstall --no-deps 'nvidia-nccl-cu13==2.29.7'
+  # A later kernel reinstall can overwrite libnccl.so.2 again.
+  restore_nvidia_nccl
   # shellcheck disable=SC1091
   source "${REPO_ROOT}/scripts/lib/sglang_nvidia_libs.sh"
   prepend_venv_nvidia_libs "${PYTHON_BIN}"

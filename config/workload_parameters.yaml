@@ -3327,6 +3327,35 @@ parameters:
     cli_config_key: workload-specific
     interaction_precedence: workload-specific interaction rules
     notes_constraints: Do not assume this shared name has identical units or semantics across all workloads.
+  expected_gpu_count:
+    description: Fewest GPUs that must stay visible; fewer fails the run.
+    data_type: integer
+    units: GPUs
+    default_value: workload-specific
+    valid_range: integer >= 1
+    required: workload-specific
+    semantic_scope: workload-specific; see workload definitions below
+    workloads_using:
+    - 102
+    - 202
+    - 302
+    - 402
+    workload_specific_overrides:
+      '102':
+        workload_name: ROCm System Validation (clocks, temp, etc.)
+        meaning: fewest HSA GPU agents that must stay visible; fewer fails the run (1)
+      '202':
+        workload_name: NVIDIA System Validation (clocks, temperature, etc.)
+        meaning: fewest CUDA devices that must stay visible; fewer fails the run (1)
+      '302':
+        workload_name: ROCm System Validation (clocks, temp, etc.)
+        meaning: fewest HSA GPU agents that must stay visible; fewer fails the run (1)
+      '402':
+        workload_name: NVIDIA System Validation (clocks, temperature, etc.)
+        meaning: fewest CUDA devices that must stay visible; fewer fails the run (1)
+    cli_config_key: workload-specific
+    interaction_precedence: more visible GPUs than this is allowed
+    notes_constraints: Do not assume this shared name has identical units or semantics across all workloads.
   filename:
     description: Shared workload parameter.
     data_type: string
@@ -3997,6 +4026,64 @@ parameters:
         meaning: allocation size in GB
     cli_config_key: workload-specific
     interaction_precedence: workload-specific interaction rules
+    notes_constraints: Do not assume this shared name has identical units or semantics across all workloads.
+  min_pcie_link_width:
+    description: Narrowest acceptable PCIe link width on every GPU; narrower fails the run.
+    data_type: integer
+    units: lanes
+    default_value: workload-specific
+    valid_range: 1, 2, 4, 8, or 16
+    required: workload-specific
+    semantic_scope: workload-specific; see workload definitions below
+    workloads_using:
+    - 102
+    - 202
+    - 302
+    - 402
+    workload_specific_overrides:
+      '102':
+        workload_name: ROCm System Validation (clocks, temp, etc.)
+        meaning: narrowest acceptable PCIe link, in lanes, on every AMD GPU; narrower fails the run (16)
+      '202':
+        workload_name: NVIDIA System Validation (clocks, temperature, etc.)
+        meaning: narrowest acceptable PCIe link, in lanes, on every GPU; narrower fails the run (16)
+      '302':
+        workload_name: ROCm System Validation (clocks, temp, etc.)
+        meaning: narrowest acceptable PCIe link, in lanes, on every AMD GPU; narrower fails the run (16)
+      '402':
+        workload_name: NVIDIA System Validation (clocks, temperature, etc.)
+        meaning: narrowest acceptable PCIe link, in lanes, on every GPU; narrower fails the run (16)
+    cli_config_key: workload-specific
+    interaction_precedence: a width that cannot be read is skipped and noted, not failed
+    notes_constraints: Do not assume this shared name has identical units or semantics across all workloads.
+  monitor_duration_sec:
+    description: How long to keep sampling GPU health, once per second.
+    data_type: number
+    units: seconds
+    default_value: workload-specific
+    valid_range: number > 0
+    required: workload-specific
+    semantic_scope: workload-specific; see workload definitions below
+    workloads_using:
+    - 102
+    - 202
+    - 302
+    - 402
+    workload_specific_overrides:
+      '102':
+        workload_name: ROCm System Validation (clocks, temp, etc.)
+        meaning: seconds to keep sampling; temperature is the peak over the window (smoke 5 / baseline 200 / extended 580)
+      '202':
+        workload_name: NVIDIA System Validation (clocks, temperature, etc.)
+        meaning: seconds to keep sampling; temperature is the peak over the window (smoke 5 / baseline 200 / extended 580)
+      '302':
+        workload_name: ROCm System Validation (clocks, temp, etc.)
+        meaning: seconds to keep sampling; temperature is the peak over the window (smoke 5 / baseline 200 / extended 580)
+      '402':
+        workload_name: NVIDIA System Validation (clocks, temperature, etc.)
+        meaning: seconds to keep sampling; temperature is the peak over the window (smoke 5 / baseline 200 / extended 580)
+    cli_config_key: workload-specific
+    interaction_precedence: temperature becomes the peak over the window; at least two samples are taken
     notes_constraints: Do not assume this shared name has identical units or semantics across all workloads.
   norm_check:
     description: Shared workload parameter.

@@ -213,7 +213,7 @@ Creating a Pod downloads its container image (`ubuntu:24.04` or `ubuntu:26.04`) 
 1. **Copy your results off first.** Terminating the Pod deletes everything on it. From your PC, clone [`gpu-bench-suite`](https://github.com/garys-gpu-benchmarks/gpu-bench-suite) and, in Git Bash, run:
 
    ```bash
-   ./scripts/get_benchmark_results.sh --host <POD_IP> --port <SSH_PORT> -i ~/.ssh/runpod-ssh-key -o ~/results
+   ./get_benchmark_results.sh --host <POD_IP> --port <SSH_PORT> -i ~/.ssh/runpod-ssh-key -o ~/results
    ```
 
    It copies the runtime ledger, every workload's results, and the suite logs.

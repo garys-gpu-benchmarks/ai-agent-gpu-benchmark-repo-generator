@@ -39,15 +39,17 @@ class WorkloadOptionHelpTests(unittest.TestCase):
         "Command Tools Executed": "Run rvs --version, rocminfo, amd-smi version, amd-smi static, uname -a, modinfo amdgpu, hipcc --version, and dpkg-query.",
     }
 
-    def test_help_header_labels_periods_and_wrapping(self) -> None:
+    def test_help_header_labels_no_periods_and_wrapping(self) -> None:
         lines = help_header_lines(self.HEADER)
-        self.assertEqual(lines[0], "Workload Name:          System Config Verification.")
-        self.assertEqual(lines[1], "Main Goal:              Analyze ROCm software stack consistency against yaml expectations.")
+        self.assertEqual(lines[0], "Workload Name:          System Config Verification")
+        self.assertEqual(lines[1], "Main Goal:              Analyze ROCm software stack consistency against yaml expectations")
         self.assertTrue(lines[2].startswith("Command Tools Executed: Run rvs --version"))
         self.assertFalse(any(line.startswith("Validation Objective:") for line in lines))  # removed 2026-11-06
         self.assertTrue(all(len(line) <= 100 for line in lines))
         self.assertTrue(lines[3].startswith(" " * 24))  # wrapped continuation sits under the value
-        self.assertTrue("".join(lines).count("dpkg-query.") == 1)  # existing period is not doubled
+        joined = "\n".join(lines)
+        self.assertTrue(joined.endswith("dpkg-query"))  # a trailing period in the cell is dropped
+        self.assertFalse(any(line.rstrip().endswith(".") for line in lines))  # no value ends with a period (2026-11-07)
         self.assertNotIn("amd-smi\n", "\n".join(lines))  # no break inside a hyphenated word
 
     def test_help_header_replaces_overlay_description(self) -> None:
@@ -58,9 +60,9 @@ class WorkloadOptionHelpTests(unittest.TestCase):
         )
         updated = replace_help_header(text, self.HEADER)
         self.assertNotIn("Every profile starts a server.", updated)
-        self.assertIn("cat <<'USAGE'\n\nUsage: bash run_benchmark.sh [OPTIONS]\n\nWorkload Name:          System Config Verification.\n", updated)
+        self.assertIn("cat <<'USAGE'\n\nUsage: bash run_benchmark.sh [OPTIONS]\n\nWorkload Name:          System Config Verification\n", updated)
         self.assertNotIn("Validation Objective:", updated)
-        self.assertIn("dpkg-query.\n\nProfiles (default: --smoke):", updated)
+        self.assertIn("dpkg-query\n\nProfiles (default: --smoke):", updated)
         self.assertEqual(replace_help_header(updated, self.HEADER), updated)  # idempotent
 
     def test_shared_value_is_printed_once_and_notes_are_omitted(self) -> None:

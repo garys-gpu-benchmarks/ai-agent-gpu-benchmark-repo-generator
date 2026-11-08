@@ -9,7 +9,7 @@
 # Requirements: Ubuntu 24.04 or Ubuntu 26.04; bash; selected Python interpreter; sudo/systemd for ROCm installation.
 # Environment: Local benchmark host; remote execution is not supported.
 # Dependencies: scripts/lib/common.sh, scripts/lib/rocm_install.sh (dispatches to rocm_install_24_04.sh or rocm_install_26_04.sh), python3-venv, sqlite3, autotools
-# Variables: BENCHMARK_PYTHON, BENCHMARK_SKIP_ROCM, BENCHMARK_SKIP_RVS, BENCHMARK_BUILD_FAISS_ROCM, BENCHMARK_INSTALL_RUST, BENCHMARK_INSTALL_PYTORCH, BENCHMARK_INSTALL_TORCHVISION, BENCHMARK_INSTALL_AITER, BENCHMARK_INSTALL_SGLANG, SGLANG_SOURCE_DIR, SGLANG_REPO_URL, AITER_SOURCE_DIR, AITER_REPO_URL, ROCM_VERSION, UBUNTU_CODENAME, GFX_TARGET, ROCM_RELOAD_INSTEAD_OF_REBOOT, PYTORCH_ROCM_INDEX_URL, PYTORCH_VERSION, TORCHVISION_VERSION, PYTORCH_INSTALL_SPEC, TORCHVISION_INSTALL_SPEC
+# Variables: BENCHMARK_PYTHON, BENCHMARK_SKIP_ROCM, BENCHMARK_SKIP_RVS, BENCHMARK_BUILD_FAISS_ROCM, BENCHMARK_INSTALL_RUST, BENCHMARK_INSTALL_PYTORCH, BENCHMARK_INSTALL_TORCHVISION, BENCHMARK_INSTALL_AITER, BENCHMARK_INSTALL_SGLANG, SGLANG_SOURCE_DIR, SGLANG_REPO_URL, ROCM_VERSION, UBUNTU_CODENAME, GFX_TARGET, ROCM_RELOAD_INSTEAD_OF_REBOOT, PYTORCH_ROCM_INDEX_URL, PYTORCH_VERSION, TORCHVISION_VERSION, PYTORCH_INSTALL_SPEC, TORCHVISION_INSTALL_SPEC, AITER_IMPORT_TIMEOUT_SEC
 # Repository: gpu-bench/sys-bench template
 # License: Apache-2.0
 
@@ -66,8 +66,6 @@ SGLANG_SOURCE_DIR="${SGLANG_SOURCE_DIR:-}"
 SGLANG_REPO_URL="${SGLANG_REPO_URL:-https://github.com/sgl-project/sglang.git}"
 # ROCm 10.1.0 lists SGLang 0.5.18. Pin the commit AMD pairs with torch 2.13.
 SGLANG_REPO_REF="${SGLANG_REPO_REF:-71de97b264b04dcd514cf904003028aefe9775c8}"
-AITER_SOURCE_DIR="${AITER_SOURCE_DIR:-}"
-AITER_REPO_URL="${AITER_REPO_URL:-https://github.com/ROCm/aiter.git}"
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_NAME="$(basename "${REPO_ROOT}")"
@@ -79,12 +77,6 @@ if [[ -z "${SGLANG_SOURCE_DIR}" ]]; then
 elif [[ "${SGLANG_SOURCE_DIR}" != "${REPO_ROOT}/"* ]]; then
   echo "[WARN] Ignoring external SGLANG_SOURCE_DIR=${SGLANG_SOURCE_DIR}; using ${REPO_ROOT}/third_party/sglang" >&2
   SGLANG_SOURCE_DIR="${REPO_ROOT}/third_party/sglang"
-fi
-if [[ -z "${AITER_SOURCE_DIR}" ]]; then
-  AITER_SOURCE_DIR="${REPO_ROOT}/third_party/aiter"
-elif [[ "${AITER_SOURCE_DIR}" != "${REPO_ROOT}/"* ]]; then
-  echo "[WARN] Ignoring external AITER_SOURCE_DIR=${AITER_SOURCE_DIR}; using ${REPO_ROOT}/third_party/aiter" >&2
-  AITER_SOURCE_DIR="${REPO_ROOT}/third_party/aiter"
 fi
 # Check for Ubuntu's own /usr/bin/python3, not any python3 on PATH: some cloud images
 # activate a virtualenv (for example /root/.venv, Python 3.11) and ship no distro
@@ -1019,36 +1011,48 @@ fi
 
 if [[ "${BENCHMARK_INSTALL_AITER}" == 1 ]]; then
   # ROCm 10.1.0 publishes amd-aiter on the vLLM multi-arch index. Import name is aiter.
+  # Only the pinned wheel is installed. Setup no longer builds AITER from a git
+  # checkout when "import aiter" fails (TEMPLATE_00_127). On a fresh 26.04
+  # MI300X VM (2026-11-08, workload 330) that import ran before the postponed
+  # amdgpu reboot, failed for want of a GPU with its error discarded, and setup
+  # built unpinned AITER HEAD, which also swapped torch's ROCm 10.1 Triton for a
+  # ROCm 7.2 build; the next "import aiter" then spun for 49 minutes.
   export LIBRARY_PATH="/opt/rocm/lib:${LIBRARY_PATH:-}"
   export LD_LIBRARY_PATH="/opt/rocm/lib:${LD_LIBRARY_PATH:-}"
   if [[ -e /opt/rocm/lib/libamdhip64.so && ! -e "${VENV_ROOT}/lib/libamdhip64.so" ]]; then
     ln -sfn /opt/rocm/lib/libamdhip64.so "${VENV_ROOT}/lib/libamdhip64.so"
   fi
-  if ! "${PYTHON_BIN}" -c 'import aiter' >/dev/null 2>&1; then
+  # Decide from the installed version, not from an import: importing needs a GPU.
+  aiter_installed_version="$("${PYTHON_BIN}" -c 'import importlib.metadata as m; print(m.version("amd-aiter"))' 2>/dev/null || true)"
+  if [[ "${aiter_installed_version}" != "${AITER_VERSION}" ]]; then
+    if [[ -n "${aiter_installed_version}" ]]; then
+      log_warn "amd-aiter ${aiter_installed_version} is installed; replacing it with the pinned ${AITER_VERSION}."
+    fi
     "${PYTHON_BIN}" -m pip install "amd-aiter==${AITER_VERSION}" \
       --index-url "${VLLM_WHEEL_INDEX_URL}" \
-      --extra-index-url https://pypi.org/simple || true
-  fi
-  if ! "${PYTHON_BIN}" -c 'import aiter' >/dev/null 2>&1; then
-    if [[ "${BENCHMARK_COMPILE_SGLANG}" == 1 ]]; then
-      if [[ ! -d "${AITER_SOURCE_DIR}/.git" ]]; then
-        git clone --recursive "${AITER_REPO_URL}" "${AITER_SOURCE_DIR}"
-      else
-        git -C "${AITER_SOURCE_DIR}" submodule sync
-        git -C "${AITER_SOURCE_DIR}" submodule update --init --recursive
-      fi
-      (
-        cd "${AITER_SOURCE_DIR}"
-        PYTORCH_ROCM_ARCH="${GFX_TARGET}" "${PYTHON_BIN}" setup.py develop
-      )
-    else
-      log_warn "AITER source clone skipped; install the AMD amd-aiter wheel so import aiter succeeds."
-    fi
+      --extra-index-url https://pypi.org/simple ||
+      die "amd-aiter ${AITER_VERSION} could not be installed from ${VLLM_WHEEL_INDEX_URL}."
   fi
   export SGLANG_USE_AITER=1
-  gpu_check "AITER installation failed or ROCm Torch was replaced." \
-    "${PYTHON_BIN}" -c 'import aiter, torch; assert torch.version.hip'
-  install_status_log_step aiter "installed and verified AMD AITER kernels"
+  if [[ "${GPU_CHECKS_AFTER_REBOOT}" == 1 ]]; then
+    # No usable GPU until the postponed reboot. The run after the reboot imports it.
+    install_status_log_step aiter "installed amd-aiter ${AITER_VERSION} (import check after the reboot)"
+  else
+    mkdir -p "${REPO_ROOT}/results"
+    aiter_import_log="${REPO_ROOT}/results/aiter_import.log"
+    aiter_import_timeout="${AITER_IMPORT_TIMEOUT_SEC:-300}"
+    aiter_import_rc=0
+    timeout "${aiter_import_timeout}" "${PYTHON_BIN}" -c 'import aiter, torch; assert torch.version.hip' \
+      > "${aiter_import_log}" 2>&1 || aiter_import_rc=$?
+    if [[ "${aiter_import_rc}" != 0 ]]; then
+      tail -n 30 "${aiter_import_log}" >&2 || true
+      if [[ "${aiter_import_rc}" == 124 ]]; then
+        die "import aiter did not finish within ${aiter_import_timeout}s (amd-aiter ${AITER_VERSION}). Output: ${aiter_import_log}"
+      fi
+      die "import aiter failed with the pinned amd-aiter ${AITER_VERSION} (exit ${aiter_import_rc}). Output: ${aiter_import_log}. Setup does not build AITER from source."
+    fi
+    install_status_log_step aiter "installed and verified AMD AITER kernels (amd-aiter ${AITER_VERSION})"
+  fi
 fi
 
 if [[ "${BENCHMARK_INSTALL_SGLANG}" == 1 ]]; then

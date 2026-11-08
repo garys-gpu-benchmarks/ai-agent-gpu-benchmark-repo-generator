@@ -5,6 +5,7 @@
 #   scripts/tiny_sglang_server.py, which proved nothing about SGLang. The stub
 #   stays in the overlays only for the local client tests
 #   (tests/test_sglang_stub_clients.py); no runner or setup check may use it.
+#   TEMPLATE_00_127: NVIDIA smoke may add --disable-cuda-graph, nothing else.
 from __future__ import annotations
 
 import unittest
@@ -31,7 +32,16 @@ class SglangSmokeRealServer(unittest.TestCase):
                 text = (COMPONENTS / component / "files" / "run_benchmark.sh").read_text(encoding="utf-8")
                 self.assertNotIn("tiny_sglang_server.py", text)
                 self.assertNotIn("BENCHMARK_SERVER_KIND=stub", text)
-                self.assertNotIn('"${PROFILE}" == "smoke"', text)
+                # TEMPLATE_00_127: the only smoke branch allowed is the NVIDIA one that
+                # adds --disable-cuda-graph to the same launch_server command.
+                smoke_branches = text.count('"${PROFILE}" == "smoke"')
+                if component.endswith("nvidia"):
+                    self.assertEqual(smoke_branches, 1)
+                    block = text.split('if [[ "${PROFILE}" == "smoke" ]]; then', 1)[1].split("\n  fi\n", 1)[0]
+                    code = [line.strip() for line in block.splitlines() if line.strip() and not line.strip().startswith("#")]
+                    self.assertEqual(code, ['server_cmd+=" --disable-cuda-graph"'])
+                else:
+                    self.assertEqual(smoke_branches, 0)
                 self.assertEqual(text.count("-m sglang.launch_server --model-path"), 1)
 
     def test_amd_setup_check_does_not_skip_smoke(self) -> None:

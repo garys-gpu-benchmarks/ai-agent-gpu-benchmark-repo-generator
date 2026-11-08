@@ -38,7 +38,7 @@ SHARED_WORKFLOWS_REL = Path("templates") / "shared-workflows"
 SUITE_TOOLS_REL = Path("templates") / "suite-tools"
 # Master copies of the operator scripts, in one place at the generator root.
 # Generation never copies this folder into a workload (init_generated_repo.py
-# SHARED_DIRS). The suite tools below are emitted to gpu-bench-suite/scripts/.
+# SHARED_DIRS). The suite tools below are emitted to the top of gpu-bench-suite/.
 USER_SCRIPTS_REL = Path("user_scripts")
 SUITE_TOOL_SCRIPTS = (
     "run_benchmark_suite.sh",
