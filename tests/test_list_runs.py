@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
-# File: tests/test_show_ledger_runs.py
-# Description: show_ledger_runs.sh prints only the runtime ledger's run table
+# File: tests/test_list_runs.py
+# Description: list_runs.sh prints only the runtime ledger's run table
 #   (a header line, then one line per run) and copies nothing. Runs the real script against sample ledgers: this machine
 #   (no --host, via --file), the profile and --failed filters, Windows line
 #   endings, a missing ledger, usage errors, and --host through a stand-in ssh
@@ -16,7 +16,7 @@ import unittest
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-SCRIPT = ROOT / "user_scripts" / "show_ledger_runs.sh"
+SCRIPT = ROOT / "user_scripts" / "list_runs.sh"
 BASH = shutil.which("bash")
 
 LEDGER = (
@@ -38,7 +38,7 @@ exec bash -c "${last}"
 
 
 @unittest.skipIf(BASH is None, "bash is not installed")
-class ShowLedgerRunsTests(unittest.TestCase):
+class ListRunsTests(unittest.TestCase):
     def setUp(self) -> None:
         self.tmp = Path(tempfile.mkdtemp())
         self.addCleanup(shutil.rmtree, self.tmp, ignore_errors=True)

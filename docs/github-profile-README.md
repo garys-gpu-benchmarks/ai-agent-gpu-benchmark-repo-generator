@@ -101,6 +101,8 @@ GPU_HOST=203.0.113.10                              # replace with your GPU host'
 
 Each bundle holds its 32 workload repositories as git submodules pinned to a tested release. Workload *x*NN is the same test on every platform: 115, 215, 315 and 415 are all BabelStream HBM bandwidth.
 
+![garys-gpu-benchmarks organization: 4 bundles, 128 benchmark repositories, 3 suite repositories](images/github-organization.png)
+
 **128 total benchmark workloads**
 
 ---
@@ -125,7 +127,7 @@ Where applicable, workloads support three execution profiles:
 
 | Profile | Typical Runtime | Purpose |
 |---|---:|---|
-| **Smoke** | ≤ 1 minute | Quick installation and functionality validation |
+| **Smoke** | ≤ 1 minute (up to ~6 minutes for x24 SDXL and x27–x31 LLM serving, which load a model each run) | Quick installation and functionality validation |
 | **Baseline** | 3–5 minutes | Standard benchmark execution |
 | **Extended** | 8–15 minutes | Longer performance characterization |
 

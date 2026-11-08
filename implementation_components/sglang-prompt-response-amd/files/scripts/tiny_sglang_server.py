@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
-"""Smoke-only OpenAI-compatible completions server for SGLang workloads.
-
-Baseline and extended must launch python -m sglang.launch_server.
+"""Local test server for the SGLang client scripts (tests/test_sglang_stub_clients.py).
+No profile starts it: run_benchmark.sh launches real SGLang on smoke, baseline, and extended.
+OpenAI-compatible completions stand-in for SGLang workloads.
 """
 from __future__ import annotations
 
@@ -12,7 +12,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 
 def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Tiny OpenAI-compatible SGLang smoke server")
+    parser = argparse.ArgumentParser(description="Tiny OpenAI-compatible SGLang stand-in for local client tests")
     parser.add_argument("--host", default="127.0.0.1")
     parser.add_argument("--port", type=int, default=30000)
     parser.add_argument("--model-name", default="mistralai/Mistral-7B-v0.3")

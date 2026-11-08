@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # File: run_benchmark.sh
 # Version: 1.0.0
-# Description: Smoke uses tiny_sglang; baseline/extended launch python -m sglang.launch_server.
+# Description: Every profile launches python -m sglang.launch_server; smoke uses the smallest request sizes.
 # Execution: bash run_benchmark.sh [--smoke|--baseline|--extended]
 # Options: --smoke, --baseline, --extended, --config, --quiet, --log-level, --model-name, --dtype, --input-len, --output-len, --num-prompts, --seed, --specification, --help
 set -euo pipefail
@@ -173,35 +173,30 @@ run_collection() {
   export HF_HOME="${HF_HOME:-${REPO_ROOT}/.cache/huggingface}"
   mkdir -p "${HF_HOME}"
   local server_cmd=""
-  if [[ "${PROFILE}" == "smoke" ]]; then
-    export BENCHMARK_SERVER_KIND=stub
-    server_cmd="${PYTHON_BIN} scripts/tiny_sglang_server.py"
-  else
-    if ! "${PYTHON_BIN}" -c "import sglang" >/dev/null 2>&1; then
-      log_info "SGLang missing in .venv; installing NVIDIA extras"
-      bash scripts/install_sglang_nvidia.sh
-    fi
-    prepend_venv_nvidia_libs "${PYTHON_BIN}"
-    if [[ -f scripts/lib/nvcc_glibc_throw.sh ]]; then
-      # shellcheck disable=SC1091
-      source scripts/lib/nvcc_glibc_throw.sh
-      nvcc_flashinfer_workspace
-    fi
-    if [[ -f scripts/lib/disk_space.sh ]]; then
-      # shellcheck disable=SC1091
-      source scripts/lib/disk_space.sh
-      require_free_kib "${TMPDIR:-${REPO_ROOT}}" $((8 * 1024 * 1024)) \
-        "SGLang FlashInfer JIT needs 8 GiB free for nvcc temporary files."
-    fi
-    export BENCHMARK_READY_WAIT_SEC="${BENCHMARK_READY_WAIT_SEC:-1800}"
-    # A consolidated.safetensors cache is not a finished shard set. Download the
-    # index shards and launch with that snapshot directory, not the repo id.
-    sglang_model_path="$("${PYTHON_BIN}" scripts/prefetch_sglang_model.py --model-id "${MODEL_NAME}" | tail -n 1)"
-    if [[ -z "${sglang_model_path}" || ! -d "${sglang_model_path}" ]]; then
-      die "SGLang shard prefetch did not return a snapshot directory"
-    fi
-    server_cmd="${PYTHON_BIN} -m sglang.launch_server --model-path ${sglang_model_path} --dtype ${DTYPE} --port 30000 --host 127.0.0.1 --tp 1 --attention-backend flashinfer --mem-fraction-static 0.8 --schedule-policy ${SCHEDULE_POLICY} --max-total-tokens ${MAX_TOTAL_TOKENS} --max-running-requests ${MAX_RUNNING_REQUESTS} --enable-cache-report"
+  if ! "${PYTHON_BIN}" -c "import sglang" >/dev/null 2>&1; then
+    log_info "SGLang missing in .venv; installing NVIDIA extras"
+    bash scripts/install_sglang_nvidia.sh
   fi
+  prepend_venv_nvidia_libs "${PYTHON_BIN}"
+  if [[ -f scripts/lib/nvcc_glibc_throw.sh ]]; then
+    # shellcheck disable=SC1091
+    source scripts/lib/nvcc_glibc_throw.sh
+    nvcc_flashinfer_workspace
+  fi
+  if [[ -f scripts/lib/disk_space.sh ]]; then
+    # shellcheck disable=SC1091
+    source scripts/lib/disk_space.sh
+    require_free_kib "${TMPDIR:-${REPO_ROOT}}" $((8 * 1024 * 1024)) \
+      "SGLang FlashInfer JIT needs 8 GiB free for nvcc temporary files."
+  fi
+  export BENCHMARK_READY_WAIT_SEC="${BENCHMARK_READY_WAIT_SEC:-1800}"
+  # A consolidated.safetensors cache is not a finished shard set. Download the
+  # index shards and launch with that snapshot directory, not the repo id.
+  sglang_model_path="$("${PYTHON_BIN}" scripts/prefetch_sglang_model.py --model-id "${MODEL_NAME}" | tail -n 1)"
+  if [[ -z "${sglang_model_path}" || ! -d "${sglang_model_path}" ]]; then
+    die "SGLang shard prefetch did not return a snapshot directory"
+  fi
+  server_cmd="${PYTHON_BIN} -m sglang.launch_server --model-path ${sglang_model_path} --dtype ${DTYPE} --port 30000 --host 127.0.0.1 --tp 1 --attention-backend flashinfer --mem-fraction-static 0.8 --schedule-policy ${SCHEDULE_POLICY} --max-total-tokens ${MAX_TOTAL_TOKENS} --max-running-requests ${MAX_RUNNING_REQUESTS} --enable-cache-report"
   log_run "${server_cmd}"
   echo "${server_cmd}" >> "${COMMAND_LOG}"
   bash -c "${server_cmd}" >> "${RUN_DIR}/server.log" 2>&1 &

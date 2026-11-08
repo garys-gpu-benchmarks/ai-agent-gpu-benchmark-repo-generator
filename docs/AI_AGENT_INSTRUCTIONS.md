@@ -145,7 +145,7 @@ Imperative rules:
     ```
 
     The log is `results/generator_repairs.md` in this generator (ignored by git). `run_from_prompt.py` prints the entries added during the batch at the end of its summary, and the batch report ends with that list (or `Generator repairs: none`).
-14. **Counters the host does not have.** When a collector cannot read a counter because the host does not have it (no ECC, no second GPU, no second NUMA node, PMU access denied, a stub server), the collector writes `na (expected: <reason>)` for that metric, for example `na (expected: ECC disabled)`. `scripts/metric_contract.py` already accepts that form. Do not add new string matches to `classify_na` for a new reason; fix the collector to emit `na (expected: <reason>)` and log the repair (rule 13). A plain `na` stays unexpected and blocks `PASS`.
+14. **Counters the host does not have.** When a collector cannot read a counter because the host does not have it (no ECC, no second GPU, no second NUMA node, PMU access denied), the collector writes `na (expected: <reason>)` for that metric, for example `na (expected: ECC disabled)`. `scripts/metric_contract.py` already accepts that form. Do not add new string matches to `classify_na` for a new reason; fix the collector to emit `na (expected: <reason>)` and log the repair (rule 13). A plain `na` stays unexpected and blocks `PASS`.
 
 ## Generated repository location
 

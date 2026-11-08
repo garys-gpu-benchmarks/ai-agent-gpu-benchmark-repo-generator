@@ -95,7 +95,7 @@ class RemoteShowMetricsInstallTests(unittest.TestCase):
             )
         self.assertEqual(rc, 0)
         self.assertEqual(len(calls), 5)  # the workload copy plus the four suite tools
-        for name in ("show_metrics.sh", "run_benchmark_suite.sh", "get_benchmark_results.sh", "show_ledger_runs.sh"):
+        for name in ("show_metrics.sh", "run_benchmark_suite.sh", "get_benchmark_results.sh", "list_runs.sh"):
             install = next(command for command in calls if f"/opt/benchmarks/{name}" in command)
             self.assertIn(f"chmod 755 /opt/benchmarks/{name}", install)
             self.assertIn(f"user_scripts/{name}", install.replace("\\", "/"))

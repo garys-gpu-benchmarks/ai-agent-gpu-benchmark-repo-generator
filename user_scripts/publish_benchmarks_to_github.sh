@@ -22,7 +22,8 @@ if grep -q $'\r' "$0"; then echo "This file has Windows (CRLF) line endings. Fix
 #                               get_benchmark_results.sh)
 #   the generator               ai-agent-gpu-benchmark-repo-generator
 #   the profile repository      github.com/garymichaelbass/garymichaelbass
-#                               receives BenchmarkSpecDefinitions.xlsx only
+#                               receives BenchmarkSpecDefinitions.xlsx and
+#                               images/github-organization.png only
 #                               (its README and sample folders are left as they are)
 #
 # Changes 2026-10-19 (lab-technician review of the v1.0.14 bundles):
@@ -101,7 +102,10 @@ if grep -q $'\r' "$0"; then echo "This file has Windows (CRLF) line endings. Fix
 #   1  stopped on a problem (see the STOPPED line)
 #   2  usage error
 #
-# Revision: 2026-10-31 (step 10 copies BenchmarkSpecDefinitions.xlsx onto
+# Revision: 2026-11-07 (step 10 also copies docs/images/github-organization.png
+#           onto the profile repository as images/github-organization.png;
+#           show_ledger_runs.sh renamed list_runs.sh; bundle slugs quoted)
+#           2026-10-31 (step 10 copies BenchmarkSpecDefinitions.xlsx onto
 #           github.com/garymichaelbass/garymichaelbass; only that file changes)
 #           2026-10-19 (the only publish script: the former
 #           publish_benchmarks_to_github_manual.sh, renamed; the variant that
@@ -126,10 +130,16 @@ readonly GENREPO="ai-agent-gpu-benchmark-repo-generator"
 readonly OLD_GENREPO="999-ai-agent-gpu-benchmark-repo-generator"
 readonly PERSONAL_GENERATOR="garymichaelbass/ai-agent-gpu-benchmark-repo-generator"
 # The GitHub profile repository. Step 10 copies BenchmarkSpecDefinitions.xlsx
-# from the generator in the run folder onto this repository. Only that file
-# is added or updated; the profile README and sample folders stay.
+# and the organization diagram (GEN_PROFILE_IMAGE in the generator, published
+# as PROFILE_IMAGE) from the generator in the run folder onto this repository.
+# Only those two files are added or updated; the profile README and sample
+# folders stay. The README shows the diagram with
+#   ![garys-gpu-benchmarks organization](images/github-organization.png)
+# (add that line by hand once; see docs/github-profile-README.md).
 readonly PROFILE_REPO="garymichaelbass/garymichaelbass"
 readonly PROFILE_SPEC="BenchmarkSpecDefinitions.xlsx"
+readonly PROFILE_IMAGE="images/github-organization.png"
+readonly GEN_PROFILE_IMAGE="docs/images/github-organization.png"
 
 # Only matters the first time the generator is published, and only if GitHub
 # already has it under the personal account ($PERSONAL_GENERATOR):
@@ -192,8 +202,9 @@ Steps:
   7  Build and publish the 4 bundles in RUN_FOLDER_Bundles
   8  Test one bundle the way an end user would
   9  Publish the generator
-  10 Publish BenchmarkSpecDefinitions.xlsx to github.com/${PROFILE_REPO}
-     (that file only; the profile README and sample folders are not changed)
+  10 Publish BenchmarkSpecDefinitions.xlsx and ${PROFILE_IMAGE}
+     to github.com/${PROFILE_REPO} (those files only; the profile README
+     and sample folders are not changed)
 
 Versions are chosen from GitHub: v1.0.0 on the first run, then the next
 patch number (v1.0.8 -> v1.0.9). The choice is kept in
@@ -322,34 +333,54 @@ use_github_repo() {
   gh repo view "${ORG}/$1" >/dev/null 2>&1 || gh repo create "${ORG}/$1" --public --description "$2" >/dev/null
 }
 
-# Copies BenchmarkSpecDefinitions.xlsx ($1) onto the profile repository.
-# $2 is the local clone directory, $3 is the remote URL. Only that file is
+# Copies BenchmarkSpecDefinitions.xlsx ($1) onto the profile repository,
+# and the organization diagram ($4, optional) as ${PROFILE_IMAGE}.
+# $2 is the local clone directory, $3 is the remote URL. Only those files are
 # staged. git add -A is not used, so a profile README or sample folder that
 # is absent from this clone cannot be deleted. Returns 1 on failure.
 publish_profile_spec() {
-  local spec=$1 dest=$2 remote=$3
+  local spec=$1 dest=$2 remote=$3 image=${4:-}
   [[ -f "${spec}" ]] || { echo "missing workbook: ${spec}"; return 1; }
+  [[ -z "${image}" || -f "${image}" ]] || { echo "missing diagram: ${image}"; return 1; }
   profile_clone() {
     rm -rf "${dest}"
     git clone -q "${remote}" "${dest}"
   }
   again profile_clone || { echo "cloning ${PROFILE_REPO} failed"; return 1; }
   cp -a "${spec}" "${dest}/${PROFILE_SPEC}" || { echo "copying ${PROFILE_SPEC} into the profile clone failed"; return 1; }
+  if [[ -n "${image}" ]]; then
+    mkdir -p "${dest}/$(dirname "${PROFILE_IMAGE}")" &&
+      cp -a "${image}" "${dest}/${PROFILE_IMAGE}" || { echo "copying ${PROFILE_IMAGE} into the profile clone failed"; return 1; }
+  fi
   (
     cd "${dest}" || exit 1
     again git add -- "${PROFILE_SPEC}" || exit 1
+    if [[ -n "${image}" ]]; then again git add -- "${PROFILE_IMAGE}" || exit 1; fi
     if git diff --cached --quiet; then
       echo "${PROFILE_SPEC} on ${PROFILE_REPO} is already this file"
+      [[ -n "${image}" ]] && echo "${PROFILE_IMAGE} on ${PROFILE_REPO} is already this file"
       exit 0
     fi
-    if git cat-file -e "HEAD:${PROFILE_SPEC}" 2>/dev/null; then
-      msg="Update BenchmarkSpecDefinitions.xlsx to ${VERSION}"
-    else
-      msg="Add BenchmarkSpecDefinitions.xlsx (${VERSION})"
+    msg=""
+    if ! git diff --cached --quiet -- "${PROFILE_SPEC}"; then
+      if git cat-file -e "HEAD:${PROFILE_SPEC}" 2>/dev/null; then
+        msg="Update BenchmarkSpecDefinitions.xlsx to ${VERSION}"
+      else
+        msg="Add BenchmarkSpecDefinitions.xlsx (${VERSION})"
+      fi
+    fi
+    if [[ -n "${image}" ]] && ! git diff --cached --quiet -- "${PROFILE_IMAGE}"; then
+      if git cat-file -e "HEAD:${PROFILE_IMAGE}" 2>/dev/null; then
+        msg="${msg:+${msg}; }Update organization diagram (${VERSION})"
+      else
+        msg="${msg:+${msg}; }Add organization diagram (${VERSION})"
+      fi
     fi
     again git commit -q -m "${msg}" || exit 1
     again git push origin main || exit 1
-    echo "Published ${PROFILE_SPEC} to ${PROFILE_REPO} (${VERSION})"
+    git diff --quiet HEAD~1 HEAD -- "${PROFILE_SPEC}" || echo "Published ${PROFILE_SPEC} to ${PROFILE_REPO} (${VERSION})"
+    [[ -n "${image}" ]] && ! git diff --quiet HEAD~1 HEAD -- "${PROFILE_IMAGE}" && echo "Published ${PROFILE_IMAGE} to ${PROFILE_REPO} (${VERSION})"
+    true
   )
 }
 
@@ -552,10 +583,10 @@ bundle_readme() {
   for t in 1 2 3 4; do
     [[ "$t" == "${s:0:1}" ]] && continue
     case $t in
-      1) label="AMD 24.04"; slug=bundle-amd-ubuntu-2404 ;;
-      2) label="NVIDIA 24.04"; slug=bundle-nvidia-ubuntu-2404 ;;
-      3) label="AMD 26.04"; slug=bundle-amd-ubuntu-2604 ;;
-      4) label="NVIDIA 26.04"; slug=bundle-nvidia-ubuntu-2604 ;;
+      1) label="AMD 24.04"; slug="bundle-amd-ubuntu-2404" ;;
+      2) label="NVIDIA 24.04"; slug="bundle-nvidia-ubuntu-2404" ;;
+      3) label="AMD 26.04"; slug="bundle-amd-ubuntu-2604" ;;
+      4) label="NVIDIA 26.04"; slug="bundle-nvidia-ubuntu-2604" ;;
     esac
     [[ -n "${others}" ]] && others+=$' \xc2\xb7\n'
     others+="[${label}](https://github.com/@ORG@/${slug})"
@@ -666,7 +697,7 @@ cd /opt/benchmarks && ./run_benchmark_suite.sh --smoke --baseline --extended
 
 ```bash
 ./show_metrics.sh @S@07 [--baseline]     # one benchmark's runs and per-profile means
-./show_ledger_runs.sh [--failed]       # every run on this machine
+./list_runs.sh [--failed]                # every run on this machine
 ./get_benchmark_results.sh -o ~/results   # copy ledger, results and logs into one folder
 ```
 
@@ -680,7 +711,7 @@ cd /opt/benchmarks && ./run_benchmark_suite.sh --smoke --baseline --extended
 To pull results to your laptop (Git Bash on Windows works), clone
 [gpu-bench-suite](https://github.com/@ORG@/gpu-bench-suite) and run
 `./scripts/get_benchmark_results.sh --host <address>` (add `--port N` if ssh is not on 22).
-`show_ledger_runs.sh` and `show_metrics.sh` there accept `--host` too.
+`list_runs.sh` and `show_metrics.sh` there accept `--host` too.
 
 ## Reading the results
 
@@ -692,7 +723,7 @@ A value of `na (reason)` means not measured on this machine, never an invented n
 | @S@11 | Hardware counters are `na` when `perf` is missing for the running kernel or `perf_event_paranoid` denies access. |
 | @S@06 | Measures a file (`data/fio_target.bin`) on the benchmark's disk, not a raw NVMe device. |
 | @S@08 | Measures loopback (`127.0.0.1`), not a network card. |
-| @S@30, @S@31 | Smoke uses a stand-in server; only `baseline` and `extended` measure SGLang. |
+| @S@30, @S@31 | Every profile, smoke included, starts the real SGLang server: allow about 2 minutes for it to start, and longer on the first run, which downloads the Mistral weights. |
 
 ## Update
 
@@ -812,6 +843,7 @@ if [[ ! -d "${GEN}/${GENREPO}" ]]; then
   stop "${GENREPO} not found in ${GEN}. Copy the generator into the run folder first (see the top of this file)."
 fi
 [[ -f "${GEN}/${GENREPO}/${PROFILE_SPEC}" ]] || stop "${GENREPO}/${PROFILE_SPEC} is missing from the run folder. Step 10 copies that file to ${PROFILE_REPO}."
+[[ -f "${GEN}/${GENREPO}/${GEN_PROFILE_IMAGE}" ]] || echo "NOTE: ${GENREPO}/${GEN_PROFILE_IMAGE} is missing; step 10 will publish the workbook only."
 # The generator being published should hold the master copy of this script.
 if [[ ! -f "${GEN}/${GENREPO}/user_scripts/${SCRIPT_NAME}" ]]; then
   echo "NOTE: ${GENREPO}/user_scripts/ has no ${SCRIPT_NAME}. Consider adding this script there as the master copy."
@@ -1118,6 +1150,9 @@ else
   emit_repo suite-tools "${TOOLS_DIR}"
   [[ -f "${TOOLS_DIR}/scripts/run_benchmark_suite.sh" ]] || stop "the generator did not write scripts/run_benchmark_suite.sh in ${TOOLS_DIR}"
   cd "${TOOLS_DIR}" || stop "cannot open ${TOOLS_DIR}"
+  # show_ledger_runs.sh was renamed list_runs.sh (2026-11-07). The emit step
+  # leaves files it no longer writes, so remove the old name here.
+  rm -f scripts/show_ledger_runs.sh
   [[ -d .git ]] || git init -q -b main || stop "git init failed in ${TOOLS_DIR}"
   use_github_repo "${TOOLS_REPO}" "Operator tools for the GPU benchmark suite: run every workload on a GPU host, collect the results to your laptop" || stop "could not create ${ORG}/${TOOLS_REPO}"
   commit_all "Initial operator tools from ${GENREPO} ${VERSION}" "Update from ${GENREPO} ${VERSION}" || stop "committing ${TOOLS_REPO} failed"
@@ -1146,9 +1181,9 @@ METRICS_SCRIPT="${TOOLS_DIR:+${TOOLS_DIR}/scripts/show_metrics.sh}"
 # when it is run without --host.
 RESULTS_SCRIPT="${TOOLS_DIR:+${TOOLS_DIR}/scripts/get_benchmark_results.sh}"
 [[ -n "${RESULTS_SCRIPT}" && -f "${RESULTS_SCRIPT}" ]] || RESULTS_SCRIPT="${SCRIPT_DIR}/get_benchmark_results.sh"
-# show_ledger_runs.sh prints the ledger's run table without copying anything.
-RUNS_SCRIPT="${TOOLS_DIR:+${TOOLS_DIR}/scripts/show_ledger_runs.sh}"
-[[ -n "${RUNS_SCRIPT}" && -f "${RUNS_SCRIPT}" ]] || RUNS_SCRIPT="${SCRIPT_DIR}/show_ledger_runs.sh"
+# list_runs.sh prints the ledger's run table without copying anything.
+RUNS_SCRIPT="${TOOLS_DIR:+${TOOLS_DIR}/scripts/list_runs.sh}"
+[[ -n "${RUNS_SCRIPT}" && -f "${RUNS_SCRIPT}" ]] || RUNS_SCRIPT="${SCRIPT_DIR}/list_runs.sh"
 cd "${PUB}" || stop "cannot open ${PUB}"
 
 
@@ -1231,7 +1266,7 @@ if is_done bundles; then skipped 7; else
   echo "run_benchmark_suite.sh for the bundles: ${SUITE_SCRIPT}"
   if [[ -f "${METRICS_SCRIPT}" ]]; then echo "show_metrics.sh for the bundles: ${METRICS_SCRIPT}"; else echo "NOTE: no show_metrics.sh found; the bundles will not include it"; fi
   if [[ -f "${RESULTS_SCRIPT}" ]]; then echo "get_benchmark_results.sh for the bundles: ${RESULTS_SCRIPT}"; else echo "NOTE: no get_benchmark_results.sh found; the bundles will not include it"; fi
-  if [[ -f "${RUNS_SCRIPT}" ]]; then echo "show_ledger_runs.sh for the bundles: ${RUNS_SCRIPT}"; else echo "NOTE: no show_ledger_runs.sh found; the bundles will not include it"; fi
+  if [[ -f "${RUNS_SCRIPT}" ]]; then echo "list_runs.sh for the bundles: ${RUNS_SCRIPT}"; else echo "NOTE: no list_runs.sh found; the bundles will not include it"; fi
   rm -f "${WORK}/run.sh.template"
   for spec in "amd-ubuntu-2404:1" "nvidia-ubuntu-2404:2" "amd-ubuntu-2604:3" "nvidia-ubuntu-2604:4"; do
     IFS=: read -r name s <<<"${spec}"
@@ -1275,8 +1310,9 @@ if is_done bundles; then skipped 7; else
     complete=$(git config -f .gitmodules --get-regexp '^submodule\..*\.url$' 2>/dev/null | wc -l)
     ((complete == want)) || stop "${bundle}/.gitmodules has ${complete} complete submodule entries, expected ${want}"
     # run.sh was folded into run_benchmark_suite.sh (--list, --show-output).
-    git rm -q --ignore-unmatch run.sh >/dev/null 2>&1
-    rm -f run.sh
+    # show_ledger_runs.sh was renamed list_runs.sh (2026-11-07).
+    git rm -q --ignore-unmatch run.sh show_ledger_runs.sh >/dev/null 2>&1
+    rm -f run.sh show_ledger_runs.sh
     tr -d '\r' <"${SUITE_SCRIPT}" >run_benchmark_suite.sh
     bundle_suite_script "${s}" <run_benchmark_suite.sh >run_benchmark_suite.sh.new &&
       mv -f run_benchmark_suite.sh.new run_benchmark_suite.sh || stop "could not write run_benchmark_suite.sh in ${bundle}"
@@ -1292,8 +1328,8 @@ if is_done bundles; then skipped 7; else
       suite_files="${suite_files} get_benchmark_results.sh"
     fi
     if [[ -f "${RUNS_SCRIPT}" ]]; then
-      tr -d '\r' <"${RUNS_SCRIPT}" >show_ledger_runs.sh
-      suite_files="${suite_files} show_ledger_runs.sh"
+      tr -d '\r' <"${RUNS_SCRIPT}" >list_runs.sh
+      suite_files="${suite_files} list_runs.sh"
     fi
     # DIRECTORIES/ and RUNTIME_LEDGERS/ are what get_benchmark_results.sh writes
     # when it is run here without -o.
@@ -1340,7 +1376,7 @@ if is_done enduser-test; then skipped 8; else
       "https://github.com/${ORG}/${bundle}.git" "${WORK}/_test_clone" </dev/null ||
       stop "cloning ${bundle} at ${VERSION} failed"
     [[ -x "${WORK}/_test_clone/run_benchmark_suite.sh" ]] || stop "run_benchmark_suite.sh in ${bundle} is missing or not executable"
-    for f in run_benchmark_suite.sh show_metrics.sh get_benchmark_results.sh show_ledger_runs.sh; do
+    for f in run_benchmark_suite.sh show_metrics.sh get_benchmark_results.sh list_runs.sh; do
       [[ ! -f "${WORK}/_test_clone/${f}" || -x "${WORK}/_test_clone/${f}" ]] || stop "${f} in ${bundle} is not executable"
     done
     [[ ! -e "${WORK}/_test_clone/run.sh" ]] || stop "${bundle} still has run.sh; step 7 should have removed it"
@@ -1449,21 +1485,27 @@ fi
 
 
 # ==============================================================================
-# STEP 10: PUBLISH THE WORKBOOK TO THE PROFILE REPOSITORY
+# STEP 10: PUBLISH THE WORKBOOK AND THE DIAGRAM TO THE PROFILE REPOSITORY
 # ==============================================================================
 # The workbook in the run folder is the one this publish was generated from.
-# It is copied onto github.com/garymichaelbass/garymichaelbass as one file.
+# It is copied onto github.com/garymichaelbass/garymichaelbass, with the
+# organization diagram from the generator (docs/images/github-organization.png)
+# as images/github-organization.png when the generator has it.
 # The profile README and the sample workload folders are not part of this step.
 
 if is_done profile-spec; then skipped 10; else
-  step 10 "Publish ${PROFILE_SPEC} to ${PROFILE_REPO}"
+  step 10 "Publish ${PROFILE_SPEC} and ${PROFILE_IMAGE} to ${PROFILE_REPO}"
+  profile_image="${GEN}/${GENREPO}/${GEN_PROFILE_IMAGE}"
+  [[ -f "${profile_image}" ]] || { echo "NOTE: ${GEN_PROFILE_IMAGE} is not in the generator; publishing the workbook only"; profile_image=""; }
   publish_profile_spec \
     "${GEN}/${GENREPO}/${PROFILE_SPEC}" \
     "${WORK}/_profile_repo" \
     "https://github.com/${PROFILE_REPO}.git" \
-    || stop "updating ${PROFILE_SPEC} on ${PROFILE_REPO} failed. The gh login must be allowed to push to that repository. Fix that and run again."
+    "${profile_image}" \
+    || stop "updating ${PROFILE_REPO} failed. The gh login must be allowed to push to that repository. Fix that and run again."
   rm -rf "${WORK}/_profile_repo"
   echo "Download: https://github.com/${PROFILE_REPO}/raw/main/${PROFILE_SPEC}"
+  [[ -n "${profile_image}" ]] && echo "Diagram:  https://github.com/${PROFILE_REPO}/blob/main/${PROFILE_IMAGE}"
   mark_done profile-spec
 fi
 

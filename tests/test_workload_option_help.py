@@ -74,18 +74,22 @@ class WorkloadOptionHelpTests(unittest.TestCase):
     def test_different_profile_values_are_all_printed(self) -> None:
         lines = option_help_lines(STREAM)
         threads = next(line for line in lines if line.startswith("  --num-threads "))
-        size = next(line for line in lines if line.startswith("  --array-size "))
+        start = lines.index(next(line for line in lines if line.startswith("  --array-size ")))
+        size = lines[start:start + 4]  # too wide for one line: description, then one line per profile
         self.assertIn("Execution threads issuing work", threads)
         self.assertIn("(smoke 4, baseline 16, extended 20)", threads)
         self.assertNotIn("do not print", threads)
-        self.assertIn("Number of elements in benchmark arrays", size)
-        self.assertIn("(smoke 10000000, baseline 20000000, extended 40000000)", size)
+        self.assertIn("Number of elements in benchmark arrays", size[0])
+        self.assertEqual([line.split() for line in size[1:]],
+                         [["smoke:", "10000000"], ["baseline:", "20000000"], ["extended:", "40000000"]])
 
     def test_unshared_parameter_uses_the_execution_description(self) -> None:
         lines = option_help_lines(STREAM)
-        knob = next(line for line in lines if line.startswith("  --private-stream-knob "))
+        start = lines.index(next(line for line in lines if line.startswith("  --private-stream-knob ")))
+        knob = "\n".join(lines[start:start + 4])
         self.assertIn("STREAM triad passes", knob)
-        self.assertIn("(smoke 1, baseline 1, extended 2)", knob)
+        self.assertIn("smoke/baseline: 1", knob)
+        self.assertIn("extended:       2", knob)
 
     def test_replace_keeps_the_following_section(self) -> None:
         original = (
@@ -118,6 +122,43 @@ class WorkloadOptionHelpTests(unittest.TestCase):
         removed = replace_override_example(updated, None)
         self.assertNotIn("--num-threads", removed)
         self.assertIn("bash run_benchmark.sh --extended\n", removed)
+
+    def test_long_entry_wraps_per_profile_within_100_columns(self) -> None:
+        commands = ",".join(
+            f"stress-ng --{kind} {{num_cpus}} --timeout {{duration}}s --metrics-brief"
+            for kind in ("cpu", "cache", "branch", "vm")
+        )
+        fields = {
+            "Parameter_01": "workload_commands",
+            "Parameter_02": "omit_initial_seconds",
+            "Execution Description With Parameters": "",
+            "Profile Parameter Values": json.dumps(
+                {
+                    "workload_commands": {"smoke": commands.split(",stress-ng --branch")[0], "baseline": commands, "extended": commands},
+                    "omit_initial_seconds": {"smoke": "0", "baseline": "1", "extended": "1"},
+                }
+            ),
+        }
+        lines = option_help_lines(fields)
+        self.assertTrue(all(len(line) <= 100 for line in lines), lines)
+        self.assertTrue(lines[0].startswith("  --workload-commands <value>"))
+        self.assertNotIn("(smoke", lines[0])  # values moved to their own lines
+        self.assertTrue(any(line.lstrip().startswith("smoke:") for line in lines))
+        self.assertTrue(any(line.lstrip().startswith("baseline/extended:") for line in lines))  # equal values share a line
+        joined = " ".join(line.strip() for line in lines)
+        self.assertIn("stress-ng --vm {num_cpus}", joined)  # nothing dropped
+        # each list item after the first starts its own line where it fits
+        self.assertTrue(any(line.strip().startswith("stress-ng --cache") for line in lines))
+        # a flag too long for the 32-column field puts its description on the next line
+        omit = lines.index(next(line for line in lines if line.startswith("  --omit-initial-seconds")))
+        self.assertEqual(lines[omit].rstrip(), "  --omit-initial-seconds <value>")
+        self.assertTrue(lines[omit + 1].startswith(" " * 32) and lines[omit + 1].strip())
+
+    def test_short_entry_keeps_the_one_line_form(self) -> None:
+        lines = option_help_lines(STREAM)
+        self.assertTrue(all(len(line) <= 100 for line in lines))
+        self.assertEqual(lines[0], "  --numa-node <n>               NUMA node selected for placement (smoke/baseline/extended: 0)")
+        self.assertTrue(lines[1].startswith("  --num-threads <n>") and lines[1].endswith("(smoke 4, baseline 16, extended 20)"))
 
     def test_workload_without_parameters_has_no_fourth_example(self) -> None:
         self.assertIsNone(override_example({"Parameter_01": "-", "Profile Parameter Values": "{}"}))

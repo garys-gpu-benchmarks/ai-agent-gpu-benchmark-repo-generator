@@ -272,7 +272,7 @@ def remote_copy(ssh: str, repo_dir: Path, *, reuse: bool) -> int:
 
 
 # Installed beside the workload trees, not inside them. Bundles already ship both.
-REMOTE_SUITE_SCRIPTS = ("show_metrics.sh", "run_benchmark_suite.sh", "get_benchmark_results.sh", "show_ledger_runs.sh")
+REMOTE_SUITE_SCRIPTS = ("show_metrics.sh", "run_benchmark_suite.sh", "get_benchmark_results.sh", "list_runs.sh")
 
 
 def install_remote_suite_script(ssh: str, name: str) -> int:
@@ -303,7 +303,7 @@ def install_remote_suite_tools(ssh: str) -> int:
 
     Workload trees live in /opt/benchmarks/<repo>. The tools stay beside them,
     where an operator runs `bash show_metrics.sh 101`, `bash run_benchmark_suite.sh`,
-    `bash show_ledger_runs.sh` or `bash get_benchmark_results.sh -o ~/results`
+    `bash list_runs.sh` or `bash get_benchmark_results.sh -o ~/results`
     (no --host: this machine).
     """
     for name in REMOTE_SUITE_SCRIPTS:

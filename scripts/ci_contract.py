@@ -43,7 +43,7 @@ USER_SCRIPTS_REL = Path("user_scripts")
 SUITE_TOOL_SCRIPTS = (
     "run_benchmark_suite.sh",
     "show_metrics.sh",
-    "show_ledger_runs.sh",
+    "list_runs.sh",
     "get_benchmark_results.sh",
 )
 

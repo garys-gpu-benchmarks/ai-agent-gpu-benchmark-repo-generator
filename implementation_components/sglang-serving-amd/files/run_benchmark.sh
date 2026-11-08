@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # File: run_benchmark.sh
 # Version: 1.0.0
-# Description: Smoke uses tiny_sglang; baseline/extended launch python -m sglang.launch_server.
+# Description: Every profile launches python -m sglang.launch_server; smoke uses the smallest request sizes.
 # Execution: bash run_benchmark.sh [--smoke|--baseline|--extended]
 # Options: --smoke, --baseline, --extended, --config, --quiet, --log-level, --model-name, --dtype, --input-len, --output-len, --num-prompts, --concurrency, --seed, --specification, --help
 set -euo pipefail
@@ -169,40 +169,35 @@ run_collection() {
   export HF_HOME="${HF_HOME:-${HOME}/.cache/huggingface}"
   mkdir -p "${HF_HOME}"
   local server_cmd=""
-  if [[ "${PROFILE}" == "smoke" ]]; then
-    export BENCHMARK_SERVER_KIND=stub
-    server_cmd="${PYTHON_BIN} scripts/tiny_sglang_server.py"
-  else
-    if ! "${PYTHON_BIN}" -c "import sglang" >/dev/null 2>&1; then
-      die "sglang is not installed in .venv. Re-run: BENCHMARK_COMPILE_SGLANG=1 bash setup.sh --assume-yes"
-    fi
-    if ! "${PYTHON_BIN}" -c "import aiter" >/dev/null 2>&1; then
-      die "aiter is not installed; AMD SGLang baseline/extended require AITER."
-    fi
-    if [[ -f "${REPO_ROOT}/scripts/patch_aiter_gfx1250_optional.py" ]]; then
-      "${PYTHON_BIN}" "${REPO_ROOT}/scripts/patch_aiter_gfx1250_optional.py" ||
-        die "AITER gfx1250 optional-import patch failed."
-    fi
-    if [[ -f "${REPO_ROOT}/scripts/patch_triton_gluon_gfx1250_optional.py" ]]; then
-      "${PYTHON_BIN}" "${REPO_ROOT}/scripts/patch_triton_gluon_gfx1250_optional.py" ||
-        die "Triton gluon gfx1250 optional-import patch failed."
-    fi
-    export SGLANG_USE_AITER=1
-    export PATH="/opt/rocm/bin:/opt/rocm/core-10.1/bin:${PATH}"
-    export LD_LIBRARY_PATH="/opt/rocm/lib:/opt/rocm/lib64:${LD_LIBRARY_PATH:-}"
-    export BENCHMARK_READY_WAIT_SEC="${BENCHMARK_READY_WAIT_SEC:-1800}"
-    # A leftover lock_module_* from a killed JIT makes the first decode wait
-    # until the 300s scheduler watchdog kills the server.
-    find "${VENV_ROOT:-${REPO_ROOT}/.venv}/lib" -name 'lock_module_*' -delete 2>/dev/null || true
-    rm -f /tmp/aiter_configs/*.lock 2>/dev/null || true
-    # A consolidated.safetensors cache is not a finished shard set. Download the
-    # index shards and launch with that snapshot directory, not the repo id.
-    sglang_model_path="$("${PYTHON_BIN}" scripts/prefetch_sglang_model.py --model-id "${MODEL_NAME}" | tail -n 1)"
-    if [[ -z "${sglang_model_path}" || ! -d "${sglang_model_path}" ]]; then
-      die "SGLang shard prefetch did not return a snapshot directory"
-    fi
-    server_cmd="${PYTHON_BIN} -m sglang.launch_server --model-path ${sglang_model_path} --dtype ${DTYPE} --port 30000 --host 127.0.0.1 --tp 1 --mem-fraction-static 0.8 --schedule-policy ${SCHEDULE_POLICY} --max-total-tokens ${MAX_TOTAL_TOKENS} --max-running-requests ${MAX_RUNNING_REQUESTS} --disable-cuda-graph --watchdog-timeout 1800"
+  if ! "${PYTHON_BIN}" -c "import sglang" >/dev/null 2>&1; then
+    die "sglang is not installed in .venv. Re-run: BENCHMARK_COMPILE_SGLANG=1 bash setup.sh --assume-yes"
   fi
+  if ! "${PYTHON_BIN}" -c "import aiter" >/dev/null 2>&1; then
+    die "aiter is not installed; AMD SGLang requires AITER."
+  fi
+  if [[ -f "${REPO_ROOT}/scripts/patch_aiter_gfx1250_optional.py" ]]; then
+    "${PYTHON_BIN}" "${REPO_ROOT}/scripts/patch_aiter_gfx1250_optional.py" ||
+      die "AITER gfx1250 optional-import patch failed."
+  fi
+  if [[ -f "${REPO_ROOT}/scripts/patch_triton_gluon_gfx1250_optional.py" ]]; then
+    "${PYTHON_BIN}" "${REPO_ROOT}/scripts/patch_triton_gluon_gfx1250_optional.py" ||
+      die "Triton gluon gfx1250 optional-import patch failed."
+  fi
+  export SGLANG_USE_AITER=1
+  export PATH="/opt/rocm/bin:/opt/rocm/core-10.1/bin:${PATH}"
+  export LD_LIBRARY_PATH="/opt/rocm/lib:/opt/rocm/lib64:${LD_LIBRARY_PATH:-}"
+  export BENCHMARK_READY_WAIT_SEC="${BENCHMARK_READY_WAIT_SEC:-1800}"
+  # A leftover lock_module_* from a killed JIT makes the first decode wait
+  # until the 300s scheduler watchdog kills the server.
+  find "${VENV_ROOT:-${REPO_ROOT}/.venv}/lib" -name 'lock_module_*' -delete 2>/dev/null || true
+  rm -f /tmp/aiter_configs/*.lock 2>/dev/null || true
+  # A consolidated.safetensors cache is not a finished shard set. Download the
+  # index shards and launch with that snapshot directory, not the repo id.
+  sglang_model_path="$("${PYTHON_BIN}" scripts/prefetch_sglang_model.py --model-id "${MODEL_NAME}" | tail -n 1)"
+  if [[ -z "${sglang_model_path}" || ! -d "${sglang_model_path}" ]]; then
+    die "SGLang shard prefetch did not return a snapshot directory"
+  fi
+  server_cmd="${PYTHON_BIN} -m sglang.launch_server --model-path ${sglang_model_path} --dtype ${DTYPE} --port 30000 --host 127.0.0.1 --tp 1 --mem-fraction-static 0.8 --schedule-policy ${SCHEDULE_POLICY} --max-total-tokens ${MAX_TOTAL_TOKENS} --max-running-requests ${MAX_RUNNING_REQUESTS} --disable-cuda-graph --watchdog-timeout 1800"
   log_run "${server_cmd}"
   echo "${server_cmd}" >> "${COMMAND_LOG}"
   bash -c "${server_cmd}" >> "${RUN_DIR}/server.log" 2>&1 &

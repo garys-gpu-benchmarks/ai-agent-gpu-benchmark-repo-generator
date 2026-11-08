@@ -137,7 +137,7 @@
 - [ ] 3.29 `run_benchmark.sh` supports `--log-level` with `ERROR|WARN|INFO|DEBUG`.
 - [ ] 3.29a `run_benchmark.sh` supports `--smoke`, `--baseline`, and `--extended`
            and does not accept `--profile <name>`; LLM Serving CLI default is
-           `smoke` (tiny local server). `--baseline` has an approximately 3–5
+           `smoke`, which starts the real model server. `--baseline` has an approximately 3–5
            minute target. Smoke, baseline,
            and extended yaml must match the workbook `Parameters_SmokeBaselineExtend` sheet, not
            historical 00_50/00_51 timings. After generation,
@@ -159,8 +159,9 @@
            For 127/128/129, 227/228/229, and 327/328/329, every profile launches
            `vllm.entrypoints.openai.api_server`. A runner that contains
            `scripts/tiny_kv_server.py --host` fails self-check.
-           For 130/131/230/231, smoke may use the tiny SGLang server;
-           baseline/extended must launch `sglang.launch_server`. Keep the
+           For 130/131/230/231/330/331/430/431, every profile, smoke
+           included, must launch `sglang.launch_server`; no runner may start
+           `scripts/tiny_sglang_server.py`. Keep the
            00_54 `run_benchmark.sh` overlays for 131/227/228/229/230/231.
            For 124/224 keep the real-SDXL overlays (`scripts/infer_sdxl.py`,
            `scripts/install_sdxl_python.sh`, `run_benchmark.sh`). Smoke may

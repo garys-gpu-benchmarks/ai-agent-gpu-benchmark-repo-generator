@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
 """Help lines for run_benchmark.sh workload flags.
 
-Each line is the flag, a short description, and the smoke, baseline, and
+Each entry is the flag, a short description, and the smoke, baseline, and
 extended values. A value shared by all three profiles is printed once.
-Profile notes are omitted.
+Profile notes are omitted. An entry wider than HELP_WIDTH columns is printed
+as the description plus one indented, wrapped line per profile value.
 """
 from __future__ import annotations
 
@@ -120,10 +121,91 @@ def _description(name: str, execution: str) -> tuple[str, str]:
 
 
 def _line(flag: str, placeholder: str, description: str, phrase: str) -> str:
+    """The one-line form: flag, description, and the profile values in parentheses."""
     left = f"  {flag} {placeholder}"
     gap = "  " if len(left) >= HELP_COLUMN else " " * (HELP_COLUMN - len(left))
     detail = f"{description} ({phrase})" if phrase else description
     return f"{left}{gap}{detail}"
+
+
+# Help lines wrap at the same width as the header block. An entry that fits on
+# one line keeps the one-line form; a longer one puts the description on the
+# flag's line and the values on indented lines, one per group of profiles that
+# share a value, wrapped at commas, semicolons, and spaces.
+HELP_WIDTH = 100
+_PROFILES = ("smoke", "baseline", "extended")
+_VALUE_ITEM = re.compile(r"[^,;]+[,;]?|[,;]")
+
+
+def _wrap_value(value: str, width: int) -> list[str]:
+    """Split a value into lines of at most width characters. Lines break after a
+    comma or semicolon (between list items) where possible; an item longer than
+    width breaks at spaces. A single word longer than width stays whole."""
+    import textwrap
+
+    lines: list[str] = []
+    current = ""
+    for item in _VALUE_ITEM.findall(value):
+        if len(current + item) <= width:
+            current += item
+            continue
+        if current:
+            lines.append(current)
+            current = ""
+        if len(item) <= width:
+            current = item
+            continue
+        parts = textwrap.wrap(item, width=width, break_on_hyphens=False, break_long_words=False)
+        lines.extend(parts[:-1])
+        current = parts[-1] if parts else ""
+    if current:
+        lines.append(current)
+    return lines or [value]
+
+
+def _profile_groups(smoke, baseline, extended) -> list[tuple[str, str]]:
+    """(label, value) per distinct value, in profile order: 'smoke', 'baseline/extended', ..."""
+    groups: dict[str, list[str]] = {}
+    for label, raw in zip(_PROFILES, (smoke, baseline, extended)):
+        value = _display(raw)
+        if value:
+            groups.setdefault(value, []).append(label)
+    return [("/".join(labels), value) for value, labels in groups.items()]
+
+
+def _entry_lines(flag: str, placeholder: str, description: str, triple: tuple) -> list[str]:
+    """Help lines for one flag: one line when it fits, otherwise wrapped per profile."""
+    phrase = _profile_phrase(*triple)
+    single = _line(flag, placeholder, description, phrase)
+    left = f"  {flag} {placeholder}"
+    if len(single) <= HELP_WIDTH and len(left) <= HELP_COLUMN - 2:
+        return [single]
+    import textwrap
+
+    lines: list[str] = []
+    described = textwrap.wrap(
+        description, width=HELP_WIDTH - HELP_COLUMN, break_on_hyphens=False, break_long_words=False
+    ) or [""]
+    if len(left) <= HELP_COLUMN - 2:
+        lines.append(left + " " * (HELP_COLUMN - len(left)) + described[0])
+    else:
+        # The flag is too long for the column: the description starts on the next line.
+        lines.append(left)
+        lines.append(" " * HELP_COLUMN + described[0])
+    lines.extend(" " * HELP_COLUMN + part for part in described[1:])
+    groups = _profile_groups(*triple)
+    if not groups:
+        return lines
+    if len(groups) == 1 and groups[0][0] == "/".join(_PROFILES):
+        groups = [("all profiles", groups[0][1])]
+    label_width = max(len(label) for label, _ in groups) + 2
+    indent = HELP_COLUMN + 2
+    for label, value in groups:
+        head = " " * indent + f"{label}:".ljust(label_width)
+        wrapped = _wrap_value(value, HELP_WIDTH - len(head))
+        lines.append(head + wrapped[0])
+        lines.extend(" " * len(head) + part for part in wrapped[1:])
+    return lines
 
 
 # Knobs a reader can override without learning the workload. Earlier names win
@@ -212,14 +294,14 @@ PARAMETERS_HEADING = "Parameters (override the profile's value):"
 
 
 def option_help_lines(fields: dict[str, str]) -> list[str]:
-    """One help line per Parameter_01..Parameter_20."""
+    """Help lines for Parameter_01..Parameter_20: one line per flag when it fits in
+    HELP_WIDTH columns, otherwise the description plus one indented line per profile."""
     values = _profile_values(fields)
     execution = str(fields.get("Execution Description With Parameters", "") or "")
     lines = []
     for name in _parameters(fields):
         description, placeholder = _description(name, execution)
-        phrase = _profile_phrase(*_profile_triple(values, name))
-        lines.append(_line(_flag_of(name), placeholder, description, phrase))
+        lines.extend(_entry_lines(_flag_of(name), placeholder, description, _profile_triple(values, name)))
     return lines
 
 

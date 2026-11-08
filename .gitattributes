@@ -11,3 +11,6 @@
 *.toml text eol=lf
 *.cfg text eol=lf
 *.ini text eol=lf
+
+*.png binary
+*.xlsx binary

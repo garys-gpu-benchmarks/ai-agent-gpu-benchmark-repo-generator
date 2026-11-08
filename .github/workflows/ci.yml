@@ -149,7 +149,7 @@ jobs:
           test -f user_scripts/run_benchmark_suite.sh
           test -f user_scripts/get_benchmark_results.sh
           test -f user_scripts/show_metrics.sh
-          test -f user_scripts/show_ledger_runs.sh
+          test -f user_scripts/list_runs.sh
           test -f user_scripts/publish_benchmarks_to_github.sh
           test -f scripts/generate_show_metrics.py
           test ! -f docs/examples/generated-repo-workflows/nightly.yml.example

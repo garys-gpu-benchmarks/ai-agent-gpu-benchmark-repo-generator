@@ -44,8 +44,10 @@ README Overview was generated from leftover SDC text.
 
 ## 127–131, 227–231, and 327–331 — LLM Serving default
 
-A bare `bash run_benchmark.sh` is **smoke** (tiny local server). It must not
-download Mistral. Pass `--baseline` or `--extended` to start the real model.
+A bare `bash run_benchmark.sh` is **smoke**. Every profile, smoke included,
+starts the real model server (vLLM or SGLang with Mistral-7B-v0.3); smoke only
+sends the smallest requests. The first smoke on a new install downloads the
+Mistral weights.
 
 Do not run 130 and 131 together, 230 and 231 together, 330 and 331
 together, or 430 and 431 together (shared port 30000). Sequential runs
@@ -56,7 +58,7 @@ Ubuntu 26.04 / 327–331 extras: vLLM must install `uvloop`, `fastapi`, and
 `aiohttp` even when extra-deps pip is skipped. AITER comes from the AMD
 `amd-aiter` wheel (`import aiter`). SGLang setup defaults
 `BENCHMARK_COMPILE_SGLANG=1` and must fail if `import sglang` is missing.
-Smoke still uses `tiny_sglang_server.py`. vLLM 328/329 must keep
+Smoke starts the real SGLang server too. vLLM 328/329 must keep
 `TOKENIZER_CONTEXT_SLACK` (`input+output+64`); a tight window returns
 HTTP 400. See [`AGENTS.md`](../AGENTS.md) §20.2 and
 [`rocm-pytorch-install-contract.md`](rocm-pytorch-install-contract.md).
@@ -150,8 +152,8 @@ for the leftover-DB parser.
 re-ran `setup.sh` every loop because `import sglang` failed. `sgl-kernel`
 `setup_rocm.py` invoked host `g++` with Clang `--gcc-install-dir` from
 `CXXFLAGS` (`unrecognized command-line option`). Do not put that flag on
-`CXXFLAGS`. Smoke must not require a full SGLang compile when
-`tiny_sglang_server.py` is present. NVIDIA 230/231 install CUDA wheels and
+`CXXFLAGS`. Every profile, smoke included, needs the full SGLang build
+(2026-11-07: smoke no longer uses a stub server). NVIDIA 230/231 install CUDA wheels and
 do not hit that `g++` line.
 
 00_78 NVIDIA 230/231: Ubuntu 24.04 must pin `sglang==0.5.19`,
@@ -159,7 +161,7 @@ do not hit that `g++` line.
 cu130 index. Unpinned sglang plus force-reinstall torchvision left
 `torch 2.14.0+cu130`; baseline `launch_server` then died on
 `sgl_kernel` `common_ops.abi3.so` (`c10_cuda_check_implementation`).
-Smoke still uses `tiny_sglang_server.py`. Verify `import sgl_kernel`
+Every profile starts the real server. Verify `import sgl_kernel`
 and `from sglang.srt.entrypoints.http_server import launch_server`.
 
 ## 111 / 211 / 311 / 411 — Linux perf PMU

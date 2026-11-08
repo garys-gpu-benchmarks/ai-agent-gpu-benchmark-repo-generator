@@ -674,10 +674,10 @@ if workload in {"130", "230", "330"} or "sglang-prompt-response" in repo:
     print("[PASS] leftover-DB parse migrate/rebuild contract")
 if workload in {"131", "231", "331"} or "sglang-serving-latency" in repo:
     runner = Path("run_benchmark.sh").read_text(encoding="utf-8", errors="replace")
-    if "tiny_sglang_server.py" not in runner:
-        raise SystemExit("[FAIL] 131/231/331 smoke must be able to start scripts/tiny_sglang_server.py.")
+    if "tiny_sglang_server.py" in runner or "BENCHMARK_SERVER_KIND=stub" in runner:
+        raise SystemExit("[FAIL] 131/231/331 must start real SGLang on every profile, including smoke (no tiny_sglang_server.py).")
     if "sglang.launch_server" not in runner:
-        raise SystemExit("[FAIL] 131/231/331 baseline/extended must start python -m sglang.launch_server.")
+        raise SystemExit("[FAIL] 131/231/331 must start python -m sglang.launch_server.")
     if workload in {"131", "331"} and "isolate_repo_python" not in runner:
         raise SystemExit("[FAIL] 131/331 run_benchmark.sh must call isolate_repo_python.")
     client = Path("scripts/bench_serving.py")
@@ -706,10 +706,10 @@ if workload in {"131", "231", "331"} or "sglang-serving-latency" in repo:
         ensure = Path("scripts/ensure_setup.sh")
         if ensure.is_file():
             ensure_text = ensure.read_text(encoding="utf-8", errors="replace")
-            if "tiny_sglang_server.py" not in ensure_text or "smoke" not in ensure_text:
+            if "tiny_sglang_server.py" in ensure_text:
                 raise SystemExit(
-                    "[FAIL] 131/331 scripts/ensure_setup.sh must skip full SGLang "
-                    "compile checks when the profile is smoke."
+                    "[FAIL] 131/331 scripts/ensure_setup.sh must check the full SGLang "
+                    "install on every profile, including smoke."
                 )
     if workload == "331":
         if "--disable-cuda-graph" not in runner:
@@ -726,12 +726,12 @@ if workload in {"131", "231", "331"} or "sglang-serving-latency" in repo:
                     "[FAIL] 331 scripts/ensure_setup.sh must re-run setup when "
                     "import sglang or launch_server --help fails."
                 )
-            if "tiny_sglang_server.py" not in ensure_text or "smoke" not in ensure_text:
+            if "tiny_sglang_server.py" in ensure_text:
                 raise SystemExit(
-                    "[FAIL] 331 scripts/ensure_setup.sh must skip full SGLang "
-                    "compile checks when the profile is smoke."
+                    "[FAIL] 331 scripts/ensure_setup.sh must check the full SGLang "
+                    "install on every profile, including smoke."
                 )
-    print("[PASS] 131/231/331 SGLang smoke-vs-real launch contract")
+    print("[PASS] 131/231/331 SGLang real-server launch contract (every profile)")
 if workload in {"127", "128", "129", "227", "228", "229", "327", "328", "329"}:
     runner = Path("run_benchmark.sh").read_text(encoding="utf-8", errors="replace")
     if "scripts/tiny_kv_server.py --host" in runner:
@@ -760,10 +760,10 @@ if workload in {"127", "128", "129", "227", "228", "229", "327", "328", "329"}:
     print("[PASS] 127-129/227-229/327-329 vLLM smoke-vs-real launch contract")
 if workload in {"130", "230", "330"} or "sglang-prompt-response" in repo:
     runner = Path("run_benchmark.sh").read_text(encoding="utf-8", errors="replace")
-    if "tiny_sglang_server.py" not in runner:
-        raise SystemExit("[FAIL] 130/230/330 smoke must be able to start scripts/tiny_sglang_server.py.")
+    if "tiny_sglang_server.py" in runner or "BENCHMARK_SERVER_KIND=stub" in runner:
+        raise SystemExit("[FAIL] 130/230/330 must start real SGLang on every profile, including smoke (no tiny_sglang_server.py).")
     if "sglang.launch_server" not in runner:
-        raise SystemExit("[FAIL] 130/230/330 baseline/extended must start python -m sglang.launch_server.")
+        raise SystemExit("[FAIL] 130/230/330 must start python -m sglang.launch_server.")
     if "prompt_response_client.py" not in runner:
         raise SystemExit("[FAIL] 130/230/330 must use scripts/prompt_response_client.py.")
     if workload in {"130", "330"} and "isolate_repo_python" not in runner:
@@ -780,10 +780,10 @@ if workload in {"130", "230", "330"} or "sglang-prompt-response" in repo:
         ensure = Path("scripts/ensure_setup.sh")
         if ensure.is_file():
             ensure_text = ensure.read_text(encoding="utf-8", errors="replace")
-            if "tiny_sglang_server.py" not in ensure_text or "smoke" not in ensure_text:
+            if "tiny_sglang_server.py" in ensure_text:
                 raise SystemExit(
-                    "[FAIL] 130/330 scripts/ensure_setup.sh must skip full SGLang "
-                    "compile checks when the profile is smoke."
+                    "[FAIL] 130/330 scripts/ensure_setup.sh must check the full SGLang "
+                    "install on every profile, including smoke."
                 )
     if workload == "330":
         if "--disable-cuda-graph" not in runner:
@@ -802,12 +802,12 @@ if workload in {"130", "230", "330"} or "sglang-prompt-response" in repo:
                     "[FAIL] 330 scripts/ensure_setup.sh must re-run setup when "
                     "import sglang or launch_server --help fails."
                 )
-            if "tiny_sglang_server.py" not in ensure_text or "smoke" not in ensure_text:
+            if "tiny_sglang_server.py" in ensure_text:
                 raise SystemExit(
-                    "[FAIL] 330 scripts/ensure_setup.sh must skip full SGLang "
-                    "compile checks when the profile is smoke."
+                    "[FAIL] 330 scripts/ensure_setup.sh must check the full SGLang "
+                    "install on every profile, including smoke."
                 )
-    print("[PASS] 130/230/330 SGLang sequential smoke-vs-real launch contract")
+    print("[PASS] 130/230/330 SGLang sequential real-server launch contract (every profile)")
 if workload in {"430", "431"} or ("ubu2604" in repo and "sglang" in repo and "nvidia" in repo):
     setup = Path("setup.sh").read_text(encoding="utf-8", errors="replace")
     for rel in (
@@ -841,8 +841,8 @@ if workload in {"130", "131", "230", "231", "330", "331", "430", "431"} or ("sgl
                 "[FAIL] 130/131/230/231/330/331/430/431 run_benchmark.sh must run scripts/prefetch_sglang_model.py "
                 "and pass the snapshot directory to sglang.launch_server."
             )
-        if "tiny_sglang_server.py" not in runner_text:
-            raise SystemExit("[FAIL] 130/131/230/231/330/331/430/431 smoke must still start scripts/tiny_sglang_server.py.")
+        if "tiny_sglang_server.py" in runner_text:
+            raise SystemExit("[FAIL] 130/131/230/231/330/331/430/431 must not start scripts/tiny_sglang_server.py on any profile.")
     if not Path("scripts/prefetch_sglang_model.py").is_file():
         raise SystemExit("[FAIL] 130/131/230/231/330/331/430/431 must keep overlay scripts/prefetch_sglang_model.py.")
     print("[PASS] SGLang shard prefetch contract")

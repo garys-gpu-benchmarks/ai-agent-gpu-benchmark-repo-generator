@@ -219,7 +219,7 @@ def _copy_template(source: Path, destination: Path) -> None:
 # at /opt/benchmarks.
 OPERATOR_TOOLS = (
     "user_scripts/get_benchmark_results.sh",
-    "user_scripts/show_ledger_runs.sh",
+    "user_scripts/list_runs.sh",
     "user_scripts/show_metrics.sh",
 )
 

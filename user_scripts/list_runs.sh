@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # ==============================================================================
-# show_ledger_runs.sh
+# list_runs.sh
 #
 # Prints one line per run recorded in the runtime ledger of a benchmark
 # machine: workload, profile, runtime and exit code, under a header line.
@@ -10,10 +10,10 @@
 # To copy the ledger and every workload's results as well, use
 # get_benchmark_results.sh (same options), which also prints this table.
 #
-# Usage:   ./show_ledger_runs.sh --host HOST [--port PORT] [options]   (remote)
-#          ./show_ledger_runs.sh [options] HOST [PORT]   (remote, positional)
-#          ./show_ledger_runs.sh [options]               (this machine)
-# Help:    ./show_ledger_runs.sh --help
+# Usage:   ./list_runs.sh --host HOST [--port PORT] [options]   (remote)
+#          ./list_runs.sh [options] HOST [PORT]   (remote, positional)
+#          ./list_runs.sh [options]               (this machine)
+# Help:    ./list_runs.sh --help
 #
 # Exit codes:
 #   0  the table was printed

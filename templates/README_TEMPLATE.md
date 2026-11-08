@@ -76,7 +76,7 @@ cd {{CI Install Root}}
 ./show_metrics.sh {{Workload Number}}                       # this workload's runs from the ledger
 ```
 
-The suite tools (`run_benchmark_suite.sh`, `get_benchmark_results.sh`, `show_ledger_runs.sh`, `show_metrics.sh`) are documented in [`{{CI Suite Tools Repo}}`](https://github.com/{{CI Owner}}/{{CI Suite Tools Repo}}).
+The suite tools (`run_benchmark_suite.sh`, `get_benchmark_results.sh`, `list_runs.sh`, `show_metrics.sh`) are documented in [`{{CI Suite Tools Repo}}`](https://github.com/{{CI Owner}}/{{CI Suite Tools Repo}}).
 
 [[GENERATE: readme.other_bundles]]
 

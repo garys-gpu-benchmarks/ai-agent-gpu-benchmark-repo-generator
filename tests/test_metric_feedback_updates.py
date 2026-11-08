@@ -666,7 +666,8 @@ class MetricFeedbackUpdateTests(unittest.TestCase):
             runner = source(component, "run_benchmark.sh")
             self.assertIn("prefetch_sglang_model.py", runner)
             self.assertIn("--model-path ${sglang_model_path}", runner)
-            self.assertIn("tiny_sglang_server.py", runner)
+            # Smoke starts the real server too (2026-11-07); no stub path is left.
+            self.assertNotIn("tiny_sglang_server.py", runner)
         module = load_module(
             "sglang-prompt-response-nvidia",
             "scripts/prefetch_sglang_model.py",

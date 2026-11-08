@@ -3,9 +3,8 @@
 # Description: Setup-on-demand guard for AMD SGLang run_benchmark.sh.
 # Execution: bash scripts/ensure_setup.sh [--profile smoke|baseline|extended]
 # Note: Reboot-driven setup must finish after reboot before run_benchmark.sh is rerun.
-# Smoke uses scripts/tiny_sglang_server.py and must not require import sglang.
-# Baseline/extended re-run setup when import sglang, import aiter, or
-# launch_server --help fails.
+# Every profile starts the real SGLang server, so every profile re-runs setup
+# when import sglang, import aiter, or launch_server --help fails.
 set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -22,13 +21,6 @@ while [[ $# -gt 0 ]]; do
     esac
 done
 PROFILE="${PROFILE:-smoke}"
-
-if [[ "${PROFILE}" == "smoke" ]] &&
-   [[ -x "${REPO_ROOT}/.venv/bin/python" ]] &&
-   [[ -f "${REPO_ROOT}/scripts/tiny_sglang_server.py" ]]; then
-    printf '[PASS] Smoke profile: venv and tiny_sglang_server.py present; skipping SGLang compile checks.\n'
-    exit 0
-fi
 
 if [[ -f .setup_state ]]; then
     if [[ ! -x "${REPO_ROOT}/.venv/bin/python" ]]; then

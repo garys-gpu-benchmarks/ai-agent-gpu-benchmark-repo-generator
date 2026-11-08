@@ -108,6 +108,7 @@ DOC_LEFTOVERS=(
   docs/SIBLING_WORKLOAD_NOTES.md
   docs/nvidia-sglang-install-contract.md
   docs/amd-developer-cloud-getting-started.md
+  docs/runpod-getting-started.md
   docs/IMPLEMENTATION_COMPONENTS.md
   docs/ARCHITECTURE.md
   docs/machine-checkable-contracts.md

@@ -122,7 +122,7 @@ class EmitterTests(unittest.TestCase):
                         "tests/fixtures/sample-workload/schemas/benchmark_specification.schema.json"):
                 self.assertTrue((shared / rel).is_file(), rel)
             suite = Path(tmp) / "gpu-bench-suite"
-            for rel in ("scripts/run_benchmark_suite.sh", "scripts/get_benchmark_results.sh", "scripts/show_ledger_runs.sh",
+            for rel in ("scripts/run_benchmark_suite.sh", "scripts/get_benchmark_results.sh", "scripts/list_runs.sh",
                         "scripts/show_metrics.sh", "README.md"):
                 self.assertTrue((suite / rel).is_file(), rel)
             for path in list(shared.rglob("*")) + list(suite.rglob("*")):

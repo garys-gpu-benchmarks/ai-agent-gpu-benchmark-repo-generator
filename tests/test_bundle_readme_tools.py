@@ -75,7 +75,7 @@ class BundleReadmeToolsTests(unittest.TestCase):
         for script in PUBLISH:
             with self.subTest(script=script.name):
                 self.assertEqual(shipped_scripts(script.read_text(encoding="utf-8")),
-                                 {"run_benchmark_suite.sh", "show_metrics.sh", "get_benchmark_results.sh", "show_ledger_runs.sh"})
+                                 {"run_benchmark_suite.sh", "show_metrics.sh", "get_benchmark_results.sh", "list_runs.sh"})
 
     def test_readme_explains_every_shipped_script(self) -> None:
         for script in PUBLISH:

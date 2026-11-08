@@ -6,7 +6,7 @@
 # Description: Emit the two persistent, suite-level repositories from their
 #   templates and config/ci_contract.yaml:
 #     <output-root>/shared-workflows/   reusable GitHub workflows (published once, tagged)
-#     <output-root>/gpu-bench-suite/    operator scripts from user_scripts/ (run_benchmark_suite.sh, show_metrics.sh, show_ledger_runs.sh, get_benchmark_results.sh)
+#     <output-root>/gpu-bench-suite/    operator scripts from user_scripts/ (run_benchmark_suite.sh, show_metrics.sh, list_runs.sh, get_benchmark_results.sh)
 #   publish_benchmarks_to_github.sh runs this with --output-root set to the
 #   publish folder that holds the run folder (Publishing/Publish_<YYYYMMDD>_<NN>).
 # Execution: python3 scripts/emit_shared_workflows.py --output-root <DIR> [--update] [--check]
