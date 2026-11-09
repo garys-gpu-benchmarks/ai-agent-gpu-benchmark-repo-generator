@@ -1,8 +1,0 @@
-common.sh*
-dir.txt
-hipcc_host_gcc.sh*
-reboot_resume.sh*
-remote_reboot_wait.sh*
-rocm_install.sh*
-rocm_install_24_04.sh*
-rocm_install_26_04.sh*

@@ -13,7 +13,7 @@ Instead of manually assembling setup scripts, SPEC files, PRDs, CI workflows, an
 
 - **Single Excel Row → Full Repository Generation** — Generates an entire benchmark repo from one spreadsheet row plus one AI agent prompt.
 - **Optimized for AI Coding Agents** — Designed for Claude Code, Copilot, Cursor, and similar agents to ensure consistent output.
-- **Starter Benchmark Library** — `BenchmarkSpecDefinitions.xlsx` defines 32 AMD Ubuntu 24.04, 32 NVIDIA Ubuntu 24.04, 32 AMD Ubuntu 26.04, and 32 NVIDIA Ubuntu 26.04 workloads ready to generate. Workloads 101–132 and 201–232 describe the `TEMPLATE_00_72` collectors. `implementation_components/` supplies reusable implementation assets selected from `config/implementation_packs.yaml` by Workload Number and GPU Vendor; users do not select components in the workbook. Generated repositories are created as siblings of this generator, not as pre-built folders in this tree.
+- **Starter Benchmark Library** — `BenchmarkSpecDefinitions.xlsx` defines 32 AMD Ubuntu 24.04, 32 NVIDIA Ubuntu 24.04, 32 AMD Ubuntu 26.04, and 32 NVIDIA Ubuntu 26.04 workloads ready to generate. `implementation_components/` supplies reusable implementation assets selected from `config/implementation_packs.yaml` by Workload Number and GPU Vendor; users do not select components in the workbook. Generated repositories are created as siblings of this generator, not as pre-built folders in this tree.
 - **Scales to Hundreds of Benchmarks** — A user can add rows to Excel and generate dozens or hundreds of repositories without manual coding.
 - **Batch Mode Generation** — Supports lists and ranges (e.g., "101 through 110") to generate multiple repositories from one prompt.
 - **Six Execution Domains** — GPU Compute, LLM Serving, Memory/Transfer, CPU/System, End-to-End Pipeline, Validation/Correctness.
@@ -57,6 +57,7 @@ Instead of manually assembling setup scripts, SPEC files, PRDs, CI workflows, an
 ## Requirements
 
 - An AI coding agent capable of following multi-file, multi-phase written instructions (agent-agnostics rules defined in `AGENTS.md`).
+- Git, and on Windows Git Bash (included with [Git for Windows](https://gitforwindows.org/)); the generator runs its commands in bash.
 - Python 3.12+ locally, for the extraction/validation scripts. From this directory: `pip install -e "config[dev]"` (or `pip install jsonschema openpyxl PyYAML`).
 - `BenchmarkSpecDefinitions.xlsx` populated with your workload matrix (a starter copy is included). Author smoke/baseline/extended values on the `Parameters_SmokeBaselineExtend` sheet; `Workload_Definitions` command columns are generated from that sheet. Do not extract historical `_1_0` / `_1_1` copies; those belong in `archive/` only.
 - A local or remote Ubuntu 24.04 or Ubuntu 26.04 target with an MI300X or an H100 GPU, for workloads that need real hardware to install/run against.
@@ -68,40 +69,45 @@ If you are starting from scratch and need a GPU machine, first follow the [`AMD 
 Steps to generate your first benchmark repository:
 
 1. **Prerequisites**:
-   - Git
-   - An AI Coding Agent
-   - An Ubuntu target for benchmark execution
-   - Optional remote Ubuntu validation VM
+   - Git and Python 3.12+; on Windows, Git Bash (included with Git for Windows)
+   - An AI coding agent: Cursor, or another one such as Claude Code or GitHub Copilot
+   - Optional but recommended: a GPU server with SSH key access as root, matching the workloads' platform: 101–132 AMD MI300X on Ubuntu 24.04, 201–232 NVIDIA H100 or newer on Ubuntu 24.04, 301–332 AMD MI300X on Ubuntu 26.04, 401–432 NVIDIA H100 or newer on Ubuntu 26.04. A freshly installed server works best.
 
-2. **Set up your project root**:
+2. **Check that you can log in to the server** (skip without a server):
 
-   ```text
-   mkdir my_project_root && cd my_project_root
+   ```bash
+   ssh -i /path/to/.ssh/<your-key> root@<server-address>     # Windows example: /c/Users/<you>/.ssh/<your-key>
    ```
 
-3. **Clone the repository generator into project root directory**:
+   You should get a root prompt without a password, and the login banner should show the workload's Ubuntu version. Add `-p <port>` if SSH is not on port 22 (Runpod usually needs this).
 
-   ```text
-   git clone https://github.com/garys-gpu-benchmarks/ai-agent-gpu-benchmark-repo-generator.git ai-agent-gpu-benchmark-repo-generator
-   cd ai-agent-gpu-benchmark-repo-generator
+3. **Create a workspace and clone the generator into it**:
+
+   ```bash
+   mkdir -p ~/gpu-bench/workspace
+   cd ~/gpu-bench/workspace
+   git clone https://github.com/garys-gpu-benchmarks/ai-agent-gpu-benchmark-repo-generator.git
+   pip install jsonschema openpyxl PyYAML
    ```
 
-4. **(OPTIONAL) Create a remote VM when the prompt includes an IP address**: On a VM provider (e.g., DigitalOcean, RunPod, AWS, Azure, or GCP), create a freshly installed Ubuntu server, configure access, and include its IPv4 address in the SSH command in the prompt. An IPv4 address makes remote validation mandatory: the AI Coding Agent must load every generated repository onto that VM, install it there, and run its self-check and smoke benchmark there before completion. This VM is not used by the generated repository at runtime.
+   Generated repositories are written in `workspace/`, next to the generator. Use a dedicated folder like this one: generation also copies the operator tools (`get_benchmark_results.sh`, `list_runs.sh`, `show_metrics.sh`) to the folder above it (`~/gpu-bench/`).
 
-5. **Choose workloads and submit a prompt**: Open `BenchmarkSpecDefinitions.xlsx`, select one or more workload numbers, attach `ai-agent-gpu-benchmark-repo-generator/docs/AI_AGENT_INSTRUCTIONS.md` to your AI Coding Agent, and submit one of the supported prompt forms below.
+4. **Open the workspace in your AI coding agent**: open `workspace`, the folder that *contains* `ai-agent-gpu-benchmark-repo-generator`, not the generator folder itself. In Cursor, use **File → Open Folder** and Agent mode; on Windows, make Git Bash the default terminal.
+
+5. **Choose workloads and submit a prompt**: Pick workload numbers from `BenchmarkSpecDefinitions.xlsx` and submit this prompt, with your own key path and server address. Keep the backquotes around the `ssh` command.
 
    ```text
    @ai-agent-gpu-benchmark-repo-generator/docs/AI_AGENT_INSTRUCTIONS.md
    Generate workload <WORKLOAD_NUMBER>.
-   Remotely access Ubuntu VM with `ssh -i /path/to/.ssh/<amd_ssh_key> root@<REMOTE_HOST_IP>`
+   Remotely access Ubuntu VM with `ssh -i /path/to/.ssh/<your-key> root@<server-address>`
    ```
 
-  Example 1: one workload with mandatory remote validation:
+   Example 1: one workload with remote validation:
 
    ```text
    @ai-agent-gpu-benchmark-repo-generator/docs/AI_AGENT_INSTRUCTIONS.md
    Generate workload 101.
-   Remotely access Ubuntu VM with `ssh -i /path/to/.ssh/<amd_ssh_key> root@<REMOTE_HOST_IP>`
+   Remotely access Ubuntu VM with `ssh -i /path/to/.ssh/<your-key> root@<server-address>`
    ```
 
    Example 2: one workload without remote validation:
@@ -118,23 +124,24 @@ Steps to generate your first benchmark repository:
    Generate workloads 121, 122.
    ```
 
-   Example 4: inclusive workload range:
+   Example 4: a whole platform (inclusive range):
 
    ```text
    @ai-agent-gpu-benchmark-repo-generator/docs/AI_AGENT_INSTRUCTIONS.md
-   Generate workloads 101 through 104.
+   Generate workloads 101 through 132.
+   Remotely access Ubuntu VM with `ssh -i /path/to/.ssh/<your-key> root@<server-address>`
    ```
 
    Workload lists may also use `and`, hyphen ranges, `to` ranges, or `ALL`. The agent validates the requested workloads against the workbook before generation.
 
-6. **Agent records the submitted prompt and generates repositories sequentially**: The agent validates the selected workloads, creates one `AI_AGENT_PROMPT_SUBMITTED_<WORKLOADS>_<UTC_TIMESTAMP>.md` in `my_project_root/`, then creates and fully finishes each sibling repository one at a time with `create_generated_repo.py --workload <N>` before creating the next directory. If the supplied SSH command contains an IPv4 address, "fully finishes" includes loading the repository onto that VM, installing it there, and running its self-check and smoke benchmark there. 
+6. **Let it run**: The agent saves your prompt as `AI_AGENT_PROMPT_SUBMITTED_<WORKLOADS>_<UTC_TIMESTAMP>.md` in `workspace/`, runs `scripts/generation_host_preflight.py`, then starts `scripts/run_from_prompt.py`, which calls `scripts/create_one_workload.py` for each workload in order. Each repository is fully finished before the next one starts. With an SSH command in the prompt, "finished" includes loading the repository onto that server under `/opt/benchmarks/<repo>`, installing it, and passing its self-check and smoke test there. Most workloads take one to ten minutes each; all 32 of a platform typically take 90 minutes or longer. The agent runs on your computer, so keep it awake and online until it finishes.
 
-7. **Execute the output**: Once completed, copy the repository (ie, `101-sys-bench-amd-rocm-stack-validation-ubu2404/`) to the Ubuntu target for benchmark execution, or, once published, clone its whole platform bundle there (see [On a GPU host](#on-a-gpu-host)). Enter the generated repository and run:
+7. **Use the output**: With a server in the prompt, every workload is already installed and smoke-tested in `/opt/benchmarks`, and the suite tools (`run_benchmark_suite.sh`, `list_runs.sh`, `show_metrics.sh`, `get_benchmark_results.sh`) are installed beside them (see [On a GPU host](#on-a-gpu-host)). Otherwise, copy a generated repository (for example `101-sys-bench-amd-rocm-stack-validation-ubu2404/`) to a matching GPU host, or once published, clone its platform bundle there. Inside a repository:
 
     ```bash
-    bash setup.sh
     bash run_benchmark.sh --help
-    bash run_benchmark.sh --smoke
+    bash run_benchmark.sh --smoke      # installs on first use, then runs the smoke profile
+    bash show_metrics.sh 101           # this workload's runs from the runtime ledger
     ```
 
 See [`docs/AI_AGENT_INSTRUCTIONS.md`](docs/AI_AGENT_INSTRUCTIONS.md) for the authoritative agent instructions and [`docs/generation-workflow.md`](docs/generation-workflow.md) for what the agent does at each phase.
@@ -153,24 +160,30 @@ Generating benchmark repos by hand doesn't scale past a handful of workloads, an
 
 ## What this repository generates
 
-For each selected workload, the agent creates a sibling repository under `my_project_root` using the workload number and exact repository name from the validated benchmark definition:
+For each selected workload, the agent creates a sibling repository in the workspace (the folder that holds the generator), using the workload number and exact repository name from the validated benchmark definition:
 
 ```text
-my_project_root/
-├── ai-agent-gpu-benchmark-repo-generator/
-├── AI_AGENT_PROMPT_SUBMITTED_101_20260805_080015.md
-└── 101_sys-bench-rocm-stack-validation/
-    ├── benchmark_specification.json
-    ├── docs/PRD.md
-    ├── docs/GENERATION_REPORT.md
-    ├── SPEC.md
-    ├── README.md
-    ├── setup.sh
-    ├── run_benchmark.sh
-    ├── scripts/
-    ├── config/
-    ├── results/
-    └── ai-agent-gpu-benchmark-repo-generator_copy/   # during generation only; removed once the workload passes
+gpu-bench/
+├── get_benchmark_results.sh          # operator tools, copied one level above the workspace
+├── list_runs.sh
+├── show_metrics.sh
+└── workspace/
+    ├── ai-agent-gpu-benchmark-repo-generator/
+    ├── AI_AGENT_PROMPT_SUBMITTED_101_20260805_080015.md
+    └── 101-sys-bench-amd-rocm-stack-validation-ubu2404/
+        ├── benchmark_specification.json
+        ├── docs/PRD.md
+        ├── docs/GENERATION_REPORT.md
+        ├── SPEC.md
+        ├── README.md
+        ├── setup.sh
+        ├── run_benchmark.sh
+        ├── show_metrics.sh
+        ├── list_runs.sh
+        ├── scripts/
+        ├── config/
+        ├── results/
+        └── ai-agent-gpu-benchmark-repo-generator_copy/   # during generation only; removed once the workload passes
 ```
 
 ## Continuous Integration
@@ -290,15 +303,15 @@ The first four are the suite tools: `scripts/emit_shared_workflows.py` emits the
 
 `show_metrics.sh` prints one row per run in fixed 7-character metric columns, with an Exit column (ledger exit code) after Idx, at most 93 characters wide. Two sheets of `BenchmarkSpecDefinitions.xlsx` supply its text: `Metric_Short_Labels` (one row per workload metric; the column headings, at most 7 characters) and `Workload_Short_Names` (one row per workload; the Name column, at most 12 characters, for example `RAG Sweep` for "RAG Pipeline Sweep"). After changing either, run `python3 scripts/generate_show_metrics.py`; it checks both sheets against `Workload_Definitions` (metric keys from the `Metrics` column, full workload names, no short name used twice in a batch, one short name per full name) and rewrites the two tables in the script. `--check` reports drift without writing (CI runs it), and `--add-missing` adds rows for new metrics and workloads, marked `auto: review`.
 
-Generating a workload (`scripts/create_generated_repo.py`) also regenerates `show_metrics.sh` from the sheet and puts a copy of `get_benchmark_results.sh`, `list_runs.sh` and `show_metrics.sh` in the project folder, one level above the folder that holds the generator and the workloads (for example `Project347_.../get_benchmark_results.sh` next to `Project347_.../TEMPLATE_00_105/`). Run it from there; it writes `DIRECTORIES/` and `RUNTIME_LEDGERS/` beside itself. An existing copy that differs is kept. It is never copied into a workload; none of the user scripts belong in `scripts/`, because everything in `scripts/` is copied into every workload. When a workload is loaded onto the VM, `scripts/create_one_workload.py` installs `user_scripts/show_metrics.sh`, `run_benchmark_suite.sh`, `get_benchmark_results.sh` and `list_runs.sh` at `/opt/benchmarks/` (run without `--host` there, `get_benchmark_results.sh` and `list_runs.sh` read that machine). A published bundle does the same: `scripts/publish_benchmarks_to_github.sh` copies all four, so `git clone ... /opt/benchmarks` leaves them there.
+Generating a workload (`scripts/create_generated_repo.py`) also regenerates `show_metrics.sh` from the sheet and puts a copy of `get_benchmark_results.sh`, `list_runs.sh` and `show_metrics.sh` in the project folder, one level above the folder that holds the generator and the workloads (for example `Project347_.../get_benchmark_results.sh` next to `Project347_.../TEMPLATE_00_105/`). Run it from there; it writes `DIRECTORIES/` and `RUNTIME_LEDGERS/` beside itself. An existing copy that differs is kept. Of these, only `show_metrics.sh` and `list_runs.sh` are also copied into each workload, at its top level next to `run_benchmark.sh` (`WORKLOAD_TOOLS`); none of the user scripts belong in `scripts/`, because everything in `scripts/` is copied into every workload. When a workload is loaded onto the VM, `scripts/create_one_workload.py` installs `user_scripts/show_metrics.sh`, `run_benchmark_suite.sh`, `get_benchmark_results.sh` and `list_runs.sh` at `/opt/benchmarks/` (run without `--host` there, `get_benchmark_results.sh` and `list_runs.sh` read that machine). A published bundle does the same: `scripts/publish_benchmarks_to_github.sh` copies all four, so `git clone ... /opt/benchmarks` leaves them there.
 
 ## Limitations and prerequisites
 
 - An AI Coding Agent capable of following multi-file, multi-phase instructions.
-- Python 3.12 or newer for local extraction and validation tooling.
+- Git and Python 3.12 or newer for local extraction and validation tooling; on Windows, Git Bash.
 - A populated `BenchmarkSpecDefinitions.xlsx` workload matrix.
-- Ubuntu 24.04 (workloads 101–232) or Ubuntu 26.04 (workloads 301–332) for benchmark installation and execution.
-- AMD Instinct MI300X hardware and a compatible ROCm installation for GPU workloads.
+- Ubuntu 24.04 (workloads 101–132 and 201–232) or Ubuntu 26.04 (workloads 301–332 and 401–432) for benchmark installation and execution.
+- An AMD Instinct MI300X (AMD workloads; `setup.sh` installs ROCm) or an NVIDIA data-center GPU with 80+ GB of memory, H100 or newer (NVIDIA workloads; `setup.sh` installs CUDA).
 - A local or cloud-hosted validation machine; cloud providers may charge for compute, storage, networking, and related services.
 - The generated repositories are local-runtime repositories. When the prompt contains an IPv4 address, the specified remote VM is mandatory for generation-time loading, installation, self-check, and smoke-test validation.
 

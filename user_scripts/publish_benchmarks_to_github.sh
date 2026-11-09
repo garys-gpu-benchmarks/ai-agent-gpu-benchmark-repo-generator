@@ -925,21 +925,24 @@ for d in [1-4][0-9][0-9]-*/; do
   if [[ -d "${d}/.git" ]] && ! in_list "${d}" _logs/ready.txt; then bad="${bad} ${d}"; fi
 done
 [[ -z "${bad}" ]] || stop "these copies have an old .git folder although this run has not prepared them yet:${bad}. Delete those folders from ${PUB} so they are copied fresh, and run again."
-# Every workload ships show_metrics.sh at its top level. Replace each copy with
-# the generator's master, so all workloads carry the same, current version
-# (workloads generated before TEMPLATE_00_119 get it here for the first time).
-WORKLOAD_METRICS="${GEN}/${GENREPO}/user_scripts/show_metrics.sh"
-[[ -f "${WORKLOAD_METRICS}" ]] || stop "${GENREPO}/user_scripts/show_metrics.sh is missing from the run folder; every workload ships a copy"
-refreshed=0
-for d in [1-4][0-9][0-9]-*/; do
-  d=${d%/}
-  if ! cmp -s <(tr -d '\r' <"${WORKLOAD_METRICS}") "${d}/show_metrics.sh" 2>/dev/null; then
-    tr -d '\r' <"${WORKLOAD_METRICS}" >"${d}/show_metrics.sh" || stop "cannot write ${d}/show_metrics.sh"
-    chmod +x "${d}/show_metrics.sh"
-    refreshed=$((refreshed + 1))
-  fi
+# Every workload ships show_metrics.sh and list_runs.sh at its top level. Replace
+# each copy with the generator's master, so all workloads carry the same, current
+# version (workloads generated before TEMPLATE_00_119 get show_metrics.sh here for
+# the first time, and before TEMPLATE_00_128 list_runs.sh).
+for WORKLOAD_TOOL in show_metrics.sh list_runs.sh; do
+  WORKLOAD_TOOL_SRC="${GEN}/${GENREPO}/user_scripts/${WORKLOAD_TOOL}"
+  [[ -f "${WORKLOAD_TOOL_SRC}" ]] || stop "${GENREPO}/user_scripts/${WORKLOAD_TOOL} is missing from the run folder; every workload ships a copy"
+  refreshed=0
+  for d in [1-4][0-9][0-9]-*/; do
+    d=${d%/}
+    if ! cmp -s <(tr -d '\r' <"${WORKLOAD_TOOL_SRC}") "${d}/${WORKLOAD_TOOL}" 2>/dev/null; then
+      tr -d '\r' <"${WORKLOAD_TOOL_SRC}" >"${d}/${WORKLOAD_TOOL}" || stop "cannot write ${d}/${WORKLOAD_TOOL}"
+      chmod +x "${d}/${WORKLOAD_TOOL}"
+      refreshed=$((refreshed + 1))
+    fi
+  done
+  echo "${WORKLOAD_TOOL} in each workload: ${refreshed} updated, $((copies - refreshed)) already current"
 done
-echo "show_metrics.sh in each workload: ${refreshed} updated, $((copies - refreshed)) already current"
 
 
 # ==============================================================================

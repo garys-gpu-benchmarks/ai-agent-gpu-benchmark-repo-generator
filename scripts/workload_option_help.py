@@ -366,8 +366,10 @@ HELP_HEADER_FIELDS = (
 )
 HELP_HEADER_LABEL_WIDTH = 24
 HELP_HEADER_WIDTH = 100
-# The help page starts with one blank line before "Usage:".
-_USAGE_WITHOUT_BLANK = re.compile(r"(cat <<'USAGE'\n)(Usage: bash run_benchmark\.sh \[OPTIONS\])")
+# The help page starts with "Usage:" on its first line (no blank line above it),
+# as GNU tools, argparse and git do. Runners that still open with blank lines
+# (TEMPLATE_00_127 and earlier, or an overlay) have them removed.
+_USAGE_LEADING_BLANKS = re.compile(r"(cat <<'USAGE'\n)(?:[ \t]*\n)+(Usage: bash run_benchmark\.sh \[OPTIONS\])")
 _HELP_HEADER_SLOT = re.compile(
     r"(Usage: bash run_benchmark\.sh \[OPTIONS\]\n\n)(.*?)(\nProfiles \(default)", re.DOTALL
 )
@@ -401,8 +403,8 @@ def help_header_lines(fields: dict[str, str]) -> list[str]:
 
 def replace_help_header(text: str, fields: dict[str, str]) -> str:
     """Put the workbook header block between the Usage line and Profiles in usage(),
-    and start the help page with a blank line before "Usage:"."""
-    text = _USAGE_WITHOUT_BLANK.sub(lambda m: m.group(1) + "\n" + m.group(2), text, count=1)
+    and start the help page with "Usage:" on its first line."""
+    text = _USAGE_LEADING_BLANKS.sub(lambda m: m.group(1) + m.group(2), text, count=1)
     lines = help_header_lines(fields)
     if not lines or not _HELP_HEADER_SLOT.search(text):
         return text

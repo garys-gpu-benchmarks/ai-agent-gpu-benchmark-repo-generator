@@ -363,6 +363,7 @@ def layout(fields: dict[str, str], repo: Path | None) -> str:
         ("setup.sh", "installs dependencies and builds the benchmark", True),
         ("run_benchmark.sh", "runs one profile, parses, validates", True),
         ("show_metrics.sh", "prints this workload's ledger rows", True),
+        ("list_runs.sh", "prints every run in the ledger", True),
         ("SPEC.md", "engineering specification", exists("SPEC.md")),
         ("benchmark_specification.json", "workload definition", True),
         ("config/", "profile values and thresholds", exists("config")),

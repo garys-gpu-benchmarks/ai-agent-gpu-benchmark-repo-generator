@@ -60,10 +60,22 @@ class WorkloadOptionHelpTests(unittest.TestCase):
         )
         updated = replace_help_header(text, self.HEADER)
         self.assertNotIn("Every profile starts a server.", updated)
-        self.assertIn("cat <<'USAGE'\n\nUsage: bash run_benchmark.sh [OPTIONS]\n\nWorkload Name:          System Config Verification\n", updated)
+        self.assertIn("cat <<'USAGE'\nUsage: bash run_benchmark.sh [OPTIONS]\n\nWorkload Name:          System Config Verification\n", updated)
         self.assertNotIn("Validation Objective:", updated)
         self.assertIn("dpkg-query\n\nProfiles (default: --smoke):", updated)
         self.assertEqual(replace_help_header(updated, self.HEADER), updated)  # idempotent
+
+    def test_help_page_has_no_leading_blank_line(self) -> None:
+        # TEMPLATE_00_127 and earlier opened the page with a blank line; the
+        # first printed line is now "Usage:" (GNU / argparse / git convention).
+        for blanks in ("", "\n", "\n\n", "  \n"):
+            text = (
+                f"usage() {{\n  cat <<'USAGE'\n{blanks}Usage: bash run_benchmark.sh [OPTIONS]\n\n"
+                "Old prose.\n\nProfiles (default: --smoke):\n  --smoke                       Run smoke profile\nUSAGE\n}\n"
+            )
+            updated = replace_help_header(text, self.HEADER)
+            self.assertIn("cat <<'USAGE'\nUsage: bash run_benchmark.sh [OPTIONS]\n", updated, repr(blanks))
+            self.assertEqual(replace_help_header(updated, self.HEADER), updated)
 
     def test_shared_value_is_printed_once_and_notes_are_omitted(self) -> None:
         lines = option_help_lines(STREAM)

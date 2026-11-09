@@ -98,15 +98,14 @@ The ledger call should be nonfatal if ledger storage itself is unavailable; it m
 1. Define a `usage()` function and wire `--help` to it. Do not implement help as `sed -n '1,20p' "$0"` or any other fixed line-range print of the file header.
 2. Handle `--help` and `--specification` before `scripts/ensure_setup.sh` and before workload option parsing that can start setup, install, or benchmark work. `--specification` prints this workload's `benchmark_specification.json` fields as a two-column table and exits 0.
 3. Copy and customize `scripts/templates/run_benchmark_help_skeleton.sh`. Keep the script-header `Options:` field as a compact comma-separated inventory.
-4. Print this shape. The page starts with one blank line. The three header lines come from the workbook row (`Workload Name`, `Main Goal`, `Command Tools Executed`); each value ends with a period, labels fill a 24-column field, and long values wrap at 100 columns with continuation lines under the value. `scripts/workload_option_help.py` (`help_header_lines`, `replace_help_header`) writes them at generation time, in template runners and in overlay runners:
+4. Print this shape. The first line printed is "Usage:"; there is no blank line above it. The three header lines come from the workbook row (`Workload Name`, `Main Goal`, `Command Tools Executed`); no value ends with a period, labels fill a 24-column field, and long values wrap at 100 columns with continuation lines under the value. `scripts/workload_option_help.py` (`help_header_lines`, `replace_help_header`) writes them at generation time, in template runners and in overlay runners:
 
 ```text
-
 Usage: bash run_benchmark.sh [OPTIONS]
 
-Workload Name:          <Workload Name>.
-Main Goal:              <Main Goal>.
-Command Tools Executed: <Command Tools Executed>.
+Workload Name:          <Workload Name>
+Main Goal:              <Main Goal>
+Command Tools Executed: <Command Tools Executed>
 
 Profiles (default: --smoke):
   --smoke                       Run smoke profile

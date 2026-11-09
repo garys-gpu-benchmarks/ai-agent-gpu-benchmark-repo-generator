@@ -252,11 +252,12 @@ def refresh_show_metrics(source_root: Path) -> bool:
     return True
 
 
-# Every workload repository carries a copy of show_metrics.sh at its top level,
-# next to run_benchmark.sh, so a single downloaded repository can show its own
-# runs (`./show_metrics.sh 101`). The master copy stays in user_scripts/; this
-# copy is always replaced, and the publish script refreshes it again.
-WORKLOAD_TOOLS = ("user_scripts/show_metrics.sh",)
+# Every workload repository carries copies of show_metrics.sh and list_runs.sh
+# at its top level, next to run_benchmark.sh, so a single downloaded repository
+# can show its own runs (`./show_metrics.sh 101`) and the ledger's run table
+# (`./list_runs.sh`). The master copies stay in user_scripts/; these copies are
+# always replaced, and the publish script refreshes them again.
+WORKLOAD_TOOLS = ("user_scripts/show_metrics.sh", "user_scripts/list_runs.sh")
 
 
 def install_workload_tools(source_root: Path, repo_root: Path) -> list[Path]:

@@ -104,6 +104,7 @@ required=(
   setup.sh
   run_benchmark.sh
   show_metrics.sh
+  list_runs.sh
   .github/CODE_OF_CONDUCT.md
   .github/CONTRIBUTING.md
   .github/SECURITY.md
@@ -308,10 +309,10 @@ if [[ -d .git ]]; then
 fi
 
 if [[ "${MODE}" == "published" ]]; then
-  if bash -n setup.sh && bash -n run_benchmark.sh && bash -n show_metrics.sh; then
-    pass "setup.sh, run_benchmark.sh and show_metrics.sh parse with bash -n"
+  if bash -n setup.sh && bash -n run_benchmark.sh && bash -n show_metrics.sh && bash -n list_runs.sh; then
+    pass "setup.sh, run_benchmark.sh, show_metrics.sh and list_runs.sh parse with bash -n"
   else
-    err "setup.sh, run_benchmark.sh or show_metrics.sh failed bash -n"
+    err "setup.sh, run_benchmark.sh, show_metrics.sh or list_runs.sh failed bash -n"
   fi
   if python3 -m compileall -q scripts >/dev/null 2>&1; then
     pass "Python files under scripts/ compile"

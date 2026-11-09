@@ -2,8 +2,8 @@
 # File: tests/test_operator_tools.py
 # Description: create_generated_repo.install_operator_tools puts get_benchmark_results.sh and
 #              show_metrics.sh in the project folder (the parent of the folder holding the
-#              workloads), keeps an existing copy that differs, and never puts them inside
-#              a workload.
+#              workloads) and keeps an existing copy that differs. install_workload_tools
+#              puts show_metrics.sh and list_runs.sh at the top of each workload.
 from __future__ import annotations
 
 import contextlib
@@ -18,7 +18,7 @@ from unittest.mock import patch
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "scripts"))
 
-from create_generated_repo import OPERATOR_TOOLS, install_operator_tools  # noqa: E402
+from create_generated_repo import OPERATOR_TOOLS, WORKLOAD_TOOLS, install_operator_tools, install_workload_tools  # noqa: E402
 from init_generated_repo import SHARED_DIRS  # noqa: E402
 import create_one_workload  # noqa: E402
 
@@ -103,6 +103,23 @@ class RemoteShowMetricsInstallTests(unittest.TestCase):
         self.assertIn('tr -d \'\\r\' <"${METRICS_SCRIPT}" >show_metrics.sh', publish)
         self.assertIn("for f in run_benchmark_suite.sh show_metrics.sh", publish)
         self.assertNotIn("write_bundle_run_sh", publish)
+
+    def test_workload_gets_show_metrics_and_list_runs(self):
+        # TEMPLATE_00_128: list_runs.sh joins show_metrics.sh at the top of every workload.
+        self.assertEqual(WORKLOAD_TOOLS, ("user_scripts/show_metrics.sh", "user_scripts/list_runs.sh"))
+        with tempfile.TemporaryDirectory() as tmp:
+            repo = Path(tmp) / "107-sys-bench-amd-stream-ddr5-bandwidth-ubu2404"
+            repo.mkdir()
+            with contextlib.redirect_stdout(io.StringIO()):
+                installed = install_workload_tools(ROOT, repo)
+            self.assertEqual([path.name for path in installed], ["show_metrics.sh", "list_runs.sh"])
+            for rel in WORKLOAD_TOOLS:
+                dst = repo / Path(rel).name
+                self.assertEqual(dst.read_bytes(), (ROOT / rel).read_bytes().replace(b"\r\n", b"\n"))
+                if os.name != "nt":
+                    self.assertTrue(os.access(dst, os.X_OK))
+        publish = (ROOT / "user_scripts" / "publish_benchmarks_to_github.sh").read_text(encoding="utf-8")
+        self.assertIn("for WORKLOAD_TOOL in show_metrics.sh list_runs.sh; do", publish)
 
 
 if __name__ == "__main__":
