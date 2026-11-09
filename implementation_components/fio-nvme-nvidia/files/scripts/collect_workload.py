@@ -7,6 +7,7 @@ import argparse
 import csv
 import io
 import json
+import os
 import shutil
 import subprocess
 from pathlib import Path
@@ -38,6 +39,100 @@ def percentile(mapping: dict, key: str, default: float) -> float:
         if str(item_key).startswith(key.split(".")[0]):
             return float(item_value)
     return default
+
+
+
+# A write pattern on a raw block device destroys its data. The sweep includes
+# write and randwrite on baseline and extended, so a /dev/ target is refused when
+# it (or a partition on it) is mounted, and a write sweep on an unmounted device
+# needs FIO_ALLOW_DEVICE_WRITE=1. A regular file (the default
+# data/fio_target.bin) is never refused.
+WRITE_MODES = {"write", "randwrite", "readwrite", "randrw", "rw", "trim", "randtrim", "trimwrite"}
+
+
+def _quiet(command: list[str]) -> str:
+    try:
+        done = subprocess.run(command, check=False, capture_output=True, text=True, timeout=20)
+    except (OSError, subprocess.TimeoutExpired):
+        return ""
+    return (done.stdout or "").strip() if done.returncode == 0 else ""
+
+
+def check_target(filename: Path, rws: list[str]) -> None:
+    if not str(filename).startswith("/dev/"):
+        return
+    mounts = [line.strip() for line in _quiet(["lsblk", "-nro", "MOUNTPOINT", str(filename)]).splitlines() if line.strip()]
+    # lsblk cannot see a device node that is missing from this namespace; the
+    # mount table still names it (and its partitions: sda1, nvme0n1p1).
+    device = str(filename)
+    for line in _quiet(["findmnt", "-rn", "-o", "SOURCE,TARGET"]).splitlines():
+        parts = line.split(" ", 1)
+        if len(parts) != 2:
+            continue
+        source, target = parts
+        rest = source[len(device):] if source.startswith(device) else None
+        if rest is not None and (rest == "" or rest.isdigit() or (rest.startswith("p") and rest[1:].isdigit())):
+            mounts.append(target)
+    mounts = sorted(set(mounts))
+    if mounts:
+        raise SystemExit(
+            f"[FAIL] fio target {filename} holds a mounted filesystem ({', '.join(mounts)}); refusing to run fio on it. "
+            "Point filename at a file on that filesystem instead."
+        )
+    writes = sorted({rw for rw in rws if str(rw).strip().lower() in WRITE_MODES})
+    if writes and os.environ.get("FIO_ALLOW_DEVICE_WRITE", "").strip() != "1":
+        raise SystemExit(
+            f"[FAIL] fio target {filename} is a raw block device and this profile writes to it ({', '.join(writes)}), "
+            "which ERASES its data. Set FIO_ALLOW_DEVICE_WRITE=1 to confirm the device is disposable, "
+            "or point filename at a file on a mounted filesystem."
+        )
+
+
+def describe_target(filename: Path) -> dict[str, str]:
+    """Name the filesystem and block device behind the fio target."""
+    info = {"path": str(filename)}
+    if str(filename).startswith("/dev/"):
+        info.update(source=str(filename), fstype="raw block device", mountpoint="")
+        device = str(filename)
+    else:
+        probe = filename.parent if filename.parent.exists() else Path(".")
+        info["path"] = str(probe.resolve() / filename.name)
+        fields = _quiet(["findmnt", "-n", "-o", "SOURCE,FSTYPE,TARGET", "--target", str(probe)]).split()
+        info.update(source=fields[0] if fields else "", fstype=fields[1] if len(fields) > 1 else "",
+                    mountpoint=fields[2] if len(fields) > 2 else "")
+        device = info["source"] if info["source"].startswith("/dev/") else ""
+    if device:
+        # sysfs names the whole disk behind a partition and its model, even where
+        # lsblk cannot open the device node (containers).
+        name = Path(device).name
+        block = Path("/sys/class/block") / name
+        disk = name
+        if (block / "partition").exists():
+            disk = block.resolve().parent.name
+        sys_disk = Path("/sys/block") / disk
+
+        def read(path: Path) -> str:
+            try:
+                return " ".join(path.read_text(encoding="utf-8", errors="replace").split())
+            except OSError:
+                return ""
+
+        info["disk"] = f"/dev/{disk}"
+        details = []
+        model = read(sys_disk / "device" / "model")
+        if model:
+            details.append(f"model {model}")
+        rota = read(sys_disk / "queue" / "rotational")
+        if rota in {"0", "1"}:
+            details.append("rotational" if rota == "1" else "non-rotational")
+        sectors = read(sys_disk / "size")
+        if sectors.isdigit():
+            details.append(f"{int(sectors) * 512 / 1e9:.0f} GB")
+        info["disk_details"] = ", ".join(details) or "not readable from sysfs"
+    else:
+        info["disk"] = ""
+        info["disk_details"] = "no block device (for example a container overlay)"
+    return info
 
 
 def run_fio(filename: Path, rw: str, block_size: str, io_depth: str, num_jobs: str, size: str, runtime: str, engine: str, direct: str, ramp_time: str = "0") -> dict:
@@ -114,6 +209,11 @@ def main() -> int:
     ramp_time = str(pv(params, "warmup_duration_sec", args.profile, "0") or "0")
     filename = Path(str(pv(params, "filename", args.profile, "data/fio_target.bin")))
     Path(args.run_dir).mkdir(parents=True, exist_ok=True)
+    check_target(filename, rws)
+    target = describe_target(filename)
+    target_text = "; ".join(f"{key}={value}" for key, value in target.items())
+    (Path(args.run_dir) / "fio_target.txt").write_text(target_text + chr(10), encoding="utf-8")
+    print(f"[INFO] fio target: {target_text}", flush=True)
     header = [
         "sample_index", "status", "rw", "block_size", "io_depth", "num_jobs",
         "iops_mean", "iops_p95", "iops_p99", "bandwidth_mb_s", "clat_p50_us",

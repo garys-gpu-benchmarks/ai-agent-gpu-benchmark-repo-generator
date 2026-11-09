@@ -76,7 +76,7 @@ def clamp_problem_n(problem_n: int) -> int:
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="Collect NVIDIA cuSOLVER Linpack samples.")
+    parser = argparse.ArgumentParser(description="Collect NVIDIA cuSOLVER FP64 dense LU samples.")
     parser.add_argument("--run-dir", required=True)
     parser.add_argument("--raw-file", required=True)
     parser.add_argument("--profile", default="smoke")

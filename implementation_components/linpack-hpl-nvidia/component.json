@@ -1,6 +1,6 @@
 {
   "component_id": "linpack-hpl-nvidia",
-  "description": "NVIDIA 220/420 single-GPU FP64 Linpack via cuSOLVER GETRF/GETRS. size_t host allocations. Clamps N>=65536 to 32768. Residual must pass. Does not invent 10 TFLOPS.",
+  "description": "NVIDIA 220/420 single-GPU FP64 dense LU solve via cuSOLVER GETRF/GETRS. size_t host allocations. Clamps N>=65536 to 32768. Residual must pass. Does not invent 10 TFLOPS.",
   "overlay": [
     "src/nvhpl.cu",
     "scripts/build.sh",
@@ -10,7 +10,7 @@
     {
       "field": "Workload Name",
       "operator": "equals",
-      "value": "NVIDIA HPL FP64 (High Performance Linpack)"
+      "value": "cuSOLVER FP64 Dense LU Solve (single GPU)"
     },
     {
       "field": "GPU Vendor",

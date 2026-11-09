@@ -32,7 +32,7 @@ Each task exists as AMD/NVIDIA × Ubuntu 24.04/26.04. One generator (`init_gener
 | 2. Do not copy `AGENTS.md` / `*TEMPLATE.md` onto the workload root | yes | yes | yes | yes |
 | 3. Clone-safe GitHub Actions (no generation-time `self_check`) | yes | yes | yes | yes |
 | 4a. `scripts/lib/hipcc_host_gcc.sh` sourced from `common.sh` | yes (GCC 13 pin if `hipcc` is used) | harmless (no `hipcc`; flags unused) | **required** for HIP `build.sh` (Clang 24 still uses the GCC 15 host pin) | harmless |
-| 4b. rocHPL `linpack-rochpl-amd` overlay (`size_t nn` + clamp N>=65536 to 32768, 16 repeats) | yes (120) | no (NVIDIA Linpack is a different tree) | yes (320) | no |
+| 4b. rocSOLVER dense LU `linpack-rochpl-amd` overlay (`size_t nn` + clamp N>=65536 to 32768, 16 repeats) | yes (120) | no (NVIDIA Linpack is a different tree) | yes (320) | no |
 | 5. CI callers → `shared-workflows@v1` (Dependabot lives in `shared-workflows`) | yes | yes | yes | yes |
 | `prepare_github_publish.sh --dry-run` / `--apply` | yes | yes | yes | yes |
 

@@ -398,7 +398,9 @@ def main() -> int:
         # headline_point names the bandwidth sample (for example "at 1024 MiB H2D").
         # Latency metrics are taken at the minimum transfer size, so the tag would
         # mislabel them.
-        if point and point not in shown and not _is_latency_metric(description, label):
+        # A per-case key (<metric>__<case>, for example iops_mean__randread_4k_qd8)
+        # names its own sweep point, so the first_case tag would mislabel it.
+        if point and point not in shown and not _is_latency_metric(description, label) and "__" not in str(label):
             shown = f"{shown} [{point}]"
         if str(value) == "NOT FOUND":
             unresolved += 1

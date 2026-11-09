@@ -140,6 +140,13 @@ MAX_CONCURRENCY="${CONCURRENCY:-$(yaml_get max_concurrency)}"
 # default of 2 against max_concurrency 8 (131/331) served requests in pairs, so
 # TTFT p50 was ~85 s of queue wait instead of SGLang latency.
 MAX_RUNNING_REQUESTS="$(enable_default "$(yaml_get max_running_requests)" "$(enable_default "${MAX_CONCURRENCY}" "2")")"
+# The x31 labels say latency is client-observed from send. That has no queue
+# wait only while every in-flight request is also running on the server.
+if [[ "${MAX_CONCURRENCY}" =~ ^[0-9]+$ && "${MAX_RUNNING_REQUESTS}" =~ ^[0-9]+$ ]] \
+  && (( MAX_CONCURRENCY > MAX_RUNNING_REQUESTS )); then
+  printf '[WARN] max_concurrency %s > max_running_requests %s: requests will queue in the server, so E2E latency and TTFT include queue wait.\n' \
+    "${MAX_CONCURRENCY}" "${MAX_RUNNING_REQUESTS}" >&2
+fi
 REQUEST_RATE="$(enable_default "$(yaml_get request_rate)" "inf")"
 NUM_PROMPTS="${NUM_PROMPTS:-$(yaml_get num_prompts)}"
 BACKEND="$(enable_default "$(yaml_get backend)" "sglang")"

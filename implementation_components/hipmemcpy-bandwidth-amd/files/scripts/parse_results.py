@@ -9,8 +9,10 @@
 # direction. This adds bandwidth_<direction>_gbps (bandwidth at each
 # direction's max transfer_size_bytes) and latency_<direction>_us (time per
 # copy at each direction's min transfer_size_bytes; the time per 1 GB copy is
-# not a latency). Numbered metrics use H2D at that max size for bandwidth_gbps,
-# H2D at the min size for latency_us, and headline_transfer_bytes for the size.
+# not a latency). Numbered metrics (TEMPLATE_00_129, as 214/414) are the six
+# per-direction keys. bandwidth_gbps, latency_us (H2D) and headline_transfer_bytes
+# stay in summary.json; headline_point names the size only, because it tags the
+# D2H and D2D bandwidth lines too.
 from __future__ import annotations
 
 import argparse
@@ -315,7 +317,7 @@ def add_h2d_headline(rows, metrics_summary):
     metrics_summary["headline_transfer_bytes"] = int(max_size)
     mib = max_size / (1024.0 * 1024.0)
     mib_text = str(int(mib)) if float(mib).is_integer() else f"{mib:.3g}"
-    metrics_summary["headline_point"] = f"at {mib_text} MiB H2D"
+    metrics_summary["headline_point"] = f"at {mib_text} MiB"
     for row in h2d:
         size = to_number(row.get("transfer_size_bytes", ""))
         if size == max_size:

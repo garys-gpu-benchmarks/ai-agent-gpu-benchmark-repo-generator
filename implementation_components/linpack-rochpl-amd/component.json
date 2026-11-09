@@ -1,6 +1,6 @@
 {
   "component_id": "linpack-rochpl-amd",
-  "description": "Single-GPU rocSOLVER FP64 Linpack with 64-bit host allocations. Clamp N>=65536 to 32768. At N=32768 honor up to 6 timed repeats for smoke/baseline and 16 for extended. Never run N=65536.",
+  "description": "Single-GPU rocSOLVER FP64 dense LU solve (not upstream rocHPL) with 64-bit host allocations. Clamp N>=65536 to 32768. At N=32768 honor up to 6 timed repeats for smoke/baseline and 16 for extended. Never run N=65536.",
   "overlay": [
     "src/rochpl.cpp",
     "scripts/collect_workload.py",
@@ -12,7 +12,7 @@
     {
       "field": "Workload Name",
       "operator": "equals",
-      "value": "rocHPL FP64 (High Performance Linpack)"
+      "value": "rocSOLVER FP64 Dense LU Solve (single GPU)"
     },
     {
       "field": "GPU Vendor",

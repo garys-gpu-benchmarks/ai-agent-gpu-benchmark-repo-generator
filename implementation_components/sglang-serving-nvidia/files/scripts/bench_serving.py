@@ -161,19 +161,46 @@ def main() -> int:
     # and that wait landed in TTFT and end-to-end latency.
     raw_warmups = str(args.warmup_requests).strip()
     warmups = concurrency if raw_warmups == "" else max(0, int(float(raw_warmups)))
+    # One round did not always absorb the first-run compilation: on a fresh 231 the
+    # 66.5 s warm-up round was followed by a 4,921 ms timed TTFT p50 (53 ms on the
+    # next smoke). Rounds repeat until the slowest warm-up TTFT is at or under
+    # SGLANG_WARMUP_SETTLE_TTFT_MS (default 1000), at most SGLANG_WARMUP_MAX_ROUNDS
+    # (default 4). A warm server settles in round 1, so this costs nothing there.
+    # Each round uses new seeds (negative, so never a timed seed); prompts differ
+    # from the second word on, so the prefix cache cannot answer a later round.
     if warmups:
-        began = time.perf_counter()
-        try:
-            with ThreadPoolExecutor(max_workers=warmups) as pool:
-                for fut in as_completed([
-                    pool.submit(one_request, url, args.model_name, int(args.input_len),
-                                min(int(args.output_len), 32), -1 - index)
-                    for index in range(warmups)
-                ]):
-                    fut.result()
-            print(f"[INFO] warm-up: {warmups} untimed request(s) in {time.perf_counter() - began:.1f} s", flush=True)
-        except Exception as exc:  # noqa: BLE001 - a failed warm-up must not stop the timed run
-            print(f"[WARN] warm-up failed ({type(exc).__name__}: {exc}); timing anyway", flush=True)
+        max_rounds = max(1, int(float(os.environ.get("SGLANG_WARMUP_MAX_ROUNDS", "") or 4)))
+        settle_ms = float(os.environ.get("SGLANG_WARMUP_SETTLE_TTFT_MS", "") or 1000)
+        settled = False
+        for round_index in range(max_rounds):
+            began = time.perf_counter()
+            try:
+                with ThreadPoolExecutor(max_workers=warmups) as pool:
+                    records = [fut.result() for fut in as_completed([
+                        pool.submit(one_request, url, args.model_name, int(args.input_len),
+                                    min(int(args.output_len), 32), -1 - round_index * warmups - index)
+                        for index in range(warmups)
+                    ])]
+            except Exception as exc:  # noqa: BLE001 - a failed warm-up must not stop the timed run
+                print(f"[WARN] warm-up failed ({type(exc).__name__}: {exc}); timing anyway", flush=True)
+                settled = True
+                break
+            ttfts = [r["ttft_ms"] for r in records if isinstance(r.get("ttft_ms"), (int, float))]
+            worst = max(ttfts) if ttfts else None
+            worst_text = f"{worst:.0f} ms" if worst is not None else "not measured"
+            print(
+                f"[INFO] warm-up: {warmups} untimed request(s) in {time.perf_counter() - began:.1f} s "
+                f"(round {round_index + 1} of at most {max_rounds}, slowest TTFT {worst_text})",
+                flush=True,
+            )
+            if worst is None or worst <= settle_ms:
+                settled = True
+                break
+        if not settled:
+            print(
+                f"[WARN] warm-up TTFT still above {settle_ms:.0f} ms after {max_rounds} round(s); timing anyway",
+                flush=True,
+            )
     results = []
     wall_start = time.perf_counter()
     with ThreadPoolExecutor(max_workers=concurrency) as pool:

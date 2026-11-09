@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # File: scripts/collect_workload.py
 # Description: Build and run mpirun-wrapped bin/rochpl, a single-GPU rocSOLVER
-#              LU (dgetrf/dgetrs) Linpack, not upstream rocHPL. Cap timed repeats at large N.
+#              LU (dgetrf/dgetrs) dense solve, not upstream rocHPL. Cap timed repeats at large N.
 from __future__ import annotations
 
 import argparse

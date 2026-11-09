@@ -125,7 +125,7 @@ parameters:
         workload_name: PyTorch Microkernel Suite
         meaning: Defined by the workload description.
       '120':
-        workload_name: rocHPL FP64 (High Performance Linpack)
+        workload_name: rocSOLVER FP64 Dense LU Solve (single GPU)
         meaning: Defined by the workload description.
       '121':
         workload_name: ResNet-50 FP16 Training Step (PyTorch)
@@ -183,7 +183,7 @@ parameters:
         workload_name: PyTorch Microkernel Suite
         meaning: Defined by the workload description.
       '220':
-        workload_name: NVIDIA HPL FP64 (High Performance Linpack)
+        workload_name: cuSOLVER FP64 Dense LU Solve (single GPU)
         meaning: Defined by the workload description.
       '221':
         workload_name: ResNet-50 FP16 Training Step (PyTorch)
@@ -237,7 +237,7 @@ parameters:
         workload_name: PyTorch Microkernel Suite
         meaning: Defined by the workload description.
       '320':
-        workload_name: rocHPL FP64 (High Performance Linpack)
+        workload_name: rocSOLVER FP64 Dense LU Solve (single GPU)
         meaning: Defined by the workload description.
       '321':
         workload_name: ResNet-50 FP16 Training Step (PyTorch)
@@ -295,7 +295,7 @@ parameters:
         workload_name: PyTorch Microkernel Suite
         meaning: Defined by the workload description.
       '420':
-        workload_name: NVIDIA HPL FP64 (High Performance Linpack)
+        workload_name: cuSOLVER FP64 Dense LU Solve (single GPU)
         meaning: Defined by the workload description.
       '421':
         workload_name: ResNet-50 FP16 Training Step (PyTorch)
@@ -400,7 +400,7 @@ parameters:
         workload_name: PyTorch Microkernel Suite
         meaning: Defined by the workload description.
       '120':
-        workload_name: rocHPL FP64 (High Performance Linpack)
+        workload_name: rocSOLVER FP64 Dense LU Solve (single GPU)
         meaning: Defined by the workload description.
       '121':
         workload_name: ResNet-50 FP16 Training Step (PyTorch)
@@ -439,7 +439,7 @@ parameters:
         workload_name: PyTorch Microkernel Suite
         meaning: Defined by the workload description.
       '220':
-        workload_name: NVIDIA HPL FP64 (High Performance Linpack)
+        workload_name: cuSOLVER FP64 Dense LU Solve (single GPU)
         meaning: Defined by the workload description.
       '221':
         workload_name: ResNet-50 FP16 Training Step (PyTorch)
@@ -479,7 +479,7 @@ parameters:
         workload_name: PyTorch Microkernel Suite
         meaning: Defined by the workload description.
       '320':
-        workload_name: rocHPL FP64 (High Performance Linpack)
+        workload_name: rocSOLVER FP64 Dense LU Solve (single GPU)
         meaning: Defined by the workload description.
       '321':
         workload_name: ResNet-50 FP16 Training Step (PyTorch)
@@ -518,7 +518,7 @@ parameters:
         workload_name: PyTorch Microkernel Suite
         meaning: Defined by the workload description.
       '420':
-        workload_name: NVIDIA HPL FP64 (High Performance Linpack)
+        workload_name: cuSOLVER FP64 Dense LU Solve (single GPU)
         meaning: Defined by the workload description.
       '421':
         workload_name: ResNet-50 FP16 Training Step (PyTorch)
@@ -4692,16 +4692,16 @@ parameters:
     - 420
     workload_specific_overrides:
       '120':
-        workload_name: rocHPL FP64 (High Performance Linpack)
+        workload_name: rocSOLVER FP64 Dense LU Solve (single GPU)
         meaning: Defined by the workload description.
       '220':
-        workload_name: NVIDIA HPL FP64 (High Performance Linpack)
+        workload_name: cuSOLVER FP64 Dense LU Solve (single GPU)
         meaning: Defined by the workload description.
       '320':
-        workload_name: rocHPL FP64 (High Performance Linpack)
+        workload_name: rocSOLVER FP64 Dense LU Solve (single GPU)
         meaning: Defined by the workload description.
       '420':
-        workload_name: NVIDIA HPL FP64 (High Performance Linpack)
+        workload_name: cuSOLVER FP64 Dense LU Solve (single GPU)
         meaning: Defined by the workload description.
     cli_config_key: workload-specific
     interaction_precedence: workload-specific interaction rules

@@ -227,7 +227,7 @@ fetch_rows() {
 # ------------------------------------------------------------------------------
 short_label_table() {
   # BEGIN GENERATED SHORT LABELS
-  # 162 labels from the Metric_Short_Labels sheet of BenchmarkSpecDefinitions.xlsx
+  # 160 labels from the Metric_Short_Labels sheet of BenchmarkSpecDefinitions.xlsx
   # (scripts/generate_show_metrics.py in the repository generator)
   cat <<'EOF'
 rocm_package_mismatch_count                              PkgMis
@@ -256,6 +256,7 @@ failure_count                                            Fails
 iops_mean                                                IOPS
 bandwidth_mb_s                                           BW_MB/s
 clat_p50_us                                              Lat50us
+iops_mean__randread_4k_qd8                               IOPSqd8
 copy_bandwidth_gb_s                                      CpyGB/s
 scale_bandwidth_gb_s                                     SclGB/s
 add_bandwidth_gb_s                                       AddGB/s
@@ -289,9 +290,12 @@ updates_sec                                              Upd/s
 payload_update_gb_s                                      UpdGB/s
 tlb_miss_rate                                            TLBMiss
 l3_miss_rate                                             L3Miss
-bandwidth_GBps                                           BW_GB/s
-latency_us                                               Lat_us
-headline_transfer_bytes                                  Bytes
+bandwidth_h2d_gbps                                       H2DGB/s
+bandwidth_d2h_gbps                                       D2HGB/s
+bandwidth_d2d_gbps                                       D2DGB/s
+latency_h2d_us                                           H2D_us
+latency_d2h_us                                           D2H_us
+latency_d2d_us                                           D2D_us
 bandwidth_gb_s_copy                                      CpyGB/s
 bandwidth_gb_s_mul                                       MulGB/s
 bandwidth_gb_s_add                                       AddGB/s
@@ -371,12 +375,6 @@ peak_gpu_temperature_c                                   PkTmp_C
 gpu_system_ecc_error_count                               ECCErr
 device_buffer_gib                                        Buf_GB
 fixed_pattern_fill_verify_pass_rate                      Pass%
-bandwidth_h2d_gbps                                       H2DGB/s
-bandwidth_d2h_gbps                                       D2HGB/s
-bandwidth_d2d_gbps                                       D2DGB/s
-latency_h2d_us                                           H2D_us
-latency_d2h_us                                           D2H_us
-latency_d2d_us                                           D2D_us
 pinned_vs_pageable_bandwidth_ratio                       PinRat
 norm_error_2                                             L2Err
 tflops_fwd                                               TFLOPS
@@ -426,7 +424,7 @@ workload_name_table() {
 117   rocBLAS GEMM
 118   MIOpen Conv
 119   Torch Kernel
-120   rocHPL FP64
+120   rocSOLVER LU
 121   ResNet50 Trn
 122   ResNet50 Inf
 123   BERT Infer
@@ -458,7 +456,7 @@ workload_name_table() {
 217   cuBLAS GEMM
 218   cuDNN Conv
 219   Torch Kernel
-220   NVIDIA HPL
+220   cuSOLVER LU
 221   ResNet50 Trn
 222   ResNet50 Inf
 223   BERT Infer
@@ -490,7 +488,7 @@ workload_name_table() {
 317   rocBLAS GEMM
 318   MIOpen Conv
 319   Torch Kernel
-320   rocHPL FP64
+320   rocSOLVER LU
 321   ResNet50 Trn
 322   ResNet50 Inf
 323   BERT Infer
@@ -522,7 +520,7 @@ workload_name_table() {
 417   cuBLAS GEMM
 418   cuDNN Conv
 419   Torch Kernel
-420   NVIDIA HPL
+420   cuSOLVER LU
 421   ResNet50 Trn
 422   ResNet50 Inf
 423   BERT Infer
