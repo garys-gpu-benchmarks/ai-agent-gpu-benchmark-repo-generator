@@ -472,14 +472,18 @@ def _to_definition(extraction: Extraction, source_file: Path) -> list[dict[str, 
     # Preserve the validator's stable contract when the matrix uses the newer
     # command-oriented column names introduced for agent readability.
     existing = {entry["field_name"]: entry for entry in entries}
+    # Each alias lists its source columns, current header first. The
+    # "(was ...)" headers were renamed in TEMPLATE_00_130; older workbooks
+    # still carry them, so both spellings are accepted.
     compatibility_aliases = {
-        "Installation and Execution Summary": "Command Execution Details and Purpose",
-        "Workload Command Line Executable": "Command Tools Executed",
-        "ROCm Version": "GPU Runtime Version (was ROCm Version)",
-        "rocBLAS Version": "BLAS Version (was rocBLAS version)",
+        "Installation and Execution Summary": ("Command Execution Details and Purpose",),
+        "Workload Command Line Executable": ("Command Tools Executed",),
+        "ROCm Version": ("GPU Runtime Version", "GPU Runtime Version (was ROCm Version)"),
+        "rocBLAS Version": ("BLAS Version", "BLAS Version (was rocBLAS version)"),
     }
-    for required_name, source_name in compatibility_aliases.items():
-        if required_name in existing or source_name not in existing:
+    for required_name, source_names in compatibility_aliases.items():
+        source_name = next((name for name in source_names if name in existing), None)
+        if required_name in existing or source_name is None:
             continue
         source_entry = existing[source_name]
         entries.append(

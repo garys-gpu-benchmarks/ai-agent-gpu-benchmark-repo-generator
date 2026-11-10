@@ -62,7 +62,7 @@ def _fields(number: str, repo: str, vendor: str, os_version: str, domain: str) -
         "Framework": "Bash, SQLite, Python, PyYAML, C (not C++), GCC"
         + (", vLLM, Mistral-7B-v0.3" if domain == "LLM Serving" else ""),
         "Python Version": "Python 3.14.8 (uv-managed CPython)",
-        "GPU Runtime Version (was ROCm Version)": "ROCm 10.1.0" if vendor == "AMD" else "CUDA 13.3 (nvcc 13.3.73)",
+        "GPU Runtime Version": "ROCm 10.1.0" if vendor == "AMD" else "CUDA 13.3 (nvcc 13.3.73)",
         "GPU Model": "MI300X" if vendor == "AMD" else "H100 SXM 80GB",
     }
     fields.update(fill_generated_docs.ci_fields(fields))

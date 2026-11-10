@@ -21,7 +21,7 @@ Live NVIDIA/CUDA/H100 support is intentionally deferred.
 - `docs/generation-workflow.md` contains the five-phase generation workflow.
 - `docs/ARCHITECTURE.md` contains the architecture and document map.
 - `docs/TEMPLATE_README.md` contains maintainer-facing template guidance.
-- `docs/CHANGELOG.md` contains release notes.
+- The root `CHANGELOG.md` contains release notes.
 - `BenchmarkSpecDefinitions.xlsx` is the benchmark definition source of truth.
 - `config/workload_parameters.yaml` is the generated shared-parameter catalog.
 - `scripts/create_generated_repo.py` creates one generated repository.

@@ -1,15 +1,15 @@
 # NVIDIA SGLang install contract
 
-Proven pins from the Ubuntu 26.04 / Python 3.14 / CUDA 13 H100 host. Do not mix these with the vLLM 2.13 stack or with the Ubuntu 24.04 / 230/231 recipe.
+Pins installed by `scripts/install_sglang_nvidia.sh` (identical in `sglang-prompt-response-nvidia` and `sglang-serving-nvidia`). Both Ubuntu releases use torch 2.13.0+cu130 and `sglang-kernel==0.4.6.post1`; they differ in the sglang version and the Python 3.14 patch. Keep each SGLang venv separate from the vLLM venvs.
 
 ## Ubuntu 26.04 (430 / 431)
 
 ```text
-torch==2.9.1+cu130
-torchvision==0.24.1+cu130
-torchaudio==2.9.1+cu130
+torch==2.13.0+cu130
+torchvision==0.28.0+cu130
+torchaudio==2.11.0+cu130
 sglang==0.5.10.post1 --no-deps
-sglang-kernel==0.4.1  --index-url https://docs.sglang.ai/whl/cu130/ --extra-index-url https://pypi.org/simple
+sglang-kernel==0.4.6.post1  --index-url https://docs.sglang.ai/whl/cu130/ --extra-index-url https://pypi.org/simple
 flashinfer-python==0.6.7.post3
 flashinfer-cubin==0.6.7.post3
 xgrammar==0.1.32
@@ -30,7 +30,7 @@ The overlay helper `scripts/install_sglang_nvidia.sh` selects this branch when `
 ```text
 torch==2.13.0+cu130
 torchvision==0.28.0+cu130
-torchaudio==2.13.0+cu130
+torchaudio==2.11.0+cu130
 sglang==0.5.19
 sglang-kernel==0.4.6.post1  --index-url https://docs.sglang.ai/whl/cu130/ --extra-index-url https://pypi.org/simple
 ```

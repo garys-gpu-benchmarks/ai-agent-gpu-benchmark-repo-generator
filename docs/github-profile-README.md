@@ -57,7 +57,7 @@ The first run takes much longer than later ones: it installs the ROCm or CUDA st
 
 > Use `git clone` exactly as shown. GitHub's **Download ZIP** leaves the workload folders empty.
 >
-> For the AI model workloads (x23–x31), if a model's Hugging Face license requires it, accept the license there and run `export HF_TOKEN=hf_...` first.
+> For the AI model workloads (x23–x32), if a model's Hugging Face license requires it, accept the license there and run `export HF_TOKEN=hf_...` first.
 
 ### After the install
 

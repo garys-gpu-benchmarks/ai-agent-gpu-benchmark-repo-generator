@@ -173,7 +173,7 @@ When the Pod's status turns green on the **Pods** page, it's running. If the fir
    ./run_benchmark_suite.sh -w 201,202,215 --smoke
    ```
 
-   For Ubuntu 26.04 (workloads 401–432), clone `bundle-nvidia-ubuntu-2604` instead and use 401, 402, and 415 in the last line. The first run of each workload installs it, so it takes longer than later runs. For the AI model workloads (x23–x31), if a model's Hugging Face license requires it, accept the license there and run `export HF_TOKEN=hf_...` first.
+   For Ubuntu 26.04 (workloads 401–432), clone `bundle-nvidia-ubuntu-2604` instead and use 401, 402, and 415 in the last line. The first run of each workload installs it, so it takes longer than later runs. For the AI model workloads (x23–x32), if a model's Hugging Face license requires it, accept the license there and run `export HF_TOKEN=hf_...` first.
 
 For the full list of suite commands (all profiles, ranges of workloads, a long run inside `tmux`), see "After the install" in the profile README, [`github-profile-README.md`](github-profile-README.md), or run `./run_benchmark_suite.sh --help`. Run long jobs inside `tmux` so they survive a dropped SSH connection.
 

@@ -270,7 +270,11 @@ def requirements(fields: dict[str, str]) -> str:
     bullets = [f"- {_value(fields, 'OS Version') or 'Ubuntu'}, root or sudo for `setup.sh`"]
     if not _is_cpu_only(fields):
         vendor = _value(fields, "GPU Vendor")
-        runtime = _runtime_display(_value(fields, "GPU Runtime Version (was ROCm Version)"))
+        runtime = _runtime_display(
+            _value(fields, "GPU Runtime Version")
+            or _value(fields, "GPU Runtime Version (was ROCm Version)")
+            or _value(fields, "ROCm Version")
+        )
         model = _value(fields, "GPU Model")
         gpu = f"- {vendor} GPU" + (f" with {runtime}" if runtime else "")
         if model:

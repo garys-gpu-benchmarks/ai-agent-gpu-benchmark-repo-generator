@@ -52,7 +52,8 @@ Mistral weights.
 Do not run 130 and 131 together, 230 and 231 together, 330 and 331
 together, or 430 and 431 together (shared port 30000). Sequential runs
 in one orchestrator are fine. On Ubuntu 26.04, 430/431 use torch
-2.9.1+cu130; do not share that venv with vLLM 2.13.
+2.13.0+cu130 with `sglang==0.5.10.post1 --no-deps`; do not share that venv with
+a vLLM venv.
 
 Ubuntu 26.04 / 327–331 extras: vLLM must install `uvloop`, `fastapi`, and
 `aiohttp` even when extra-deps pip is skipped. AITER comes from the AMD
@@ -70,10 +71,12 @@ The workbook Metrics field lists five items. 00_54 231 only persisted #1–#3.
 
 ## 124 / 224 — SDXL
 
-Smoke is a local tiny Euler denoiser (no Hugging Face download). Baseline and
-extended load `stabilityai/stable-diffusion-xl-base-1.0` through Diffusers.
-`guidance_scale` stays the workbook value `0.0` (CFG off). First baseline or
-extended run prefetches about 7 GB of weights into the repo `HF_HOME`.
+Every profile, smoke included, loads `stabilityai/stable-diffusion-xl-base-1.0`
+through Diffusers; `scripts/infer_sdxl.py --backend tiny` is a setup self-test only.
+`guidance_scale` stays the workbook value `0.0` (CFG off). The first run of any
+profile prefetches about 7 GB of weights into the shared `HF_HOME`
+(`$HOME/.cache/huggingface`), inside the published time (the clock starts before
+the prefetch).
 00_78 sets AMD `num_images` baseline/extended to **80 / 160** (15×512/30 was
 01:44 load-dominated; 7×1024/50 was 01:56).
 

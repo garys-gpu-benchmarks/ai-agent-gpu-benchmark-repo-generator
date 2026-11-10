@@ -141,8 +141,8 @@
            minute target. Smoke, baseline,
            and extended yaml must match the workbook `Parameters_SmokeBaselineExtend` sheet, not
            historical 00_50/00_51 timings. After generation,
-           `bash run_benchmark.sh --extended` uses that yaml. For 128/129/228/229,
-           yaml `dtype` must be `bfloat16` (vLLM 0.26 rejects `bf16`). For
+           `bash run_benchmark.sh --extended` uses that yaml. For x28/x29 (128/129,
+           228/229, 328/329, 428/429) yaml `dtype` must be `bfloat16` (vLLM rejects `bf16`). For
            119/219 run repository-local `scripts/gemm.py` and `scripts/conv2d.py`.
            For 130/230 use sequential `scripts/prompt_response_client.py`. For
            131/231 use concurrent `sglang.bench_serving` or `scripts/bench_serving.py`.
@@ -164,9 +164,9 @@
            `scripts/tiny_sglang_server.py`. Keep the
            00_54 `run_benchmark.sh` overlays for 131/227/228/229/230/231.
            For 124/224 keep the real-SDXL overlays (`scripts/infer_sdxl.py`,
-           `scripts/install_sdxl_python.sh`, `run_benchmark.sh`). Smoke may
-           use the tiny denoiser; baseline/extended must load
-           `stabilityai/stable-diffusion-xl-base-1.0`.
+           `scripts/install_sdxl_python.sh`, `run_benchmark.sh`). Every profile,
+           smoke included, must load
+           `stabilityai/stable-diffusion-xl-base-1.0`; `--backend tiny` is a setup self-test only.
            See `AGENTS.md` §20.2 / §20.25, `implementation_components/README.md`,
            and `docs/rocm-pytorch-install-contract.md`.
            Do not emit comma-joined `--rw` / `--working-set-size` overrides.

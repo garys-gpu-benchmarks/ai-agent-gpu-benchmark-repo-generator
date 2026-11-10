@@ -17,10 +17,10 @@ Keep the existing local-directory convention and use that **same** name on GitHu
 |---|---|---|
 | Local generation directory | `<Workload Number>-<Repo Base Name>` | `315-gpu-bench-amd-babelstream-hbm-bandwidth-ubu2604` |
 | GitHub repository name | same as the local directory | `315-gpu-bench-amd-babelstream-hbm-bandwidth-ubu2604` |
-| 101–132 / 201–232 | no `-ubu2604` suffix | `128_gpu-bench-amd-vllm-throughput-latency` |
-| 301–332 / 401–432 | `Repo Base Name` ends with `-ubu2604` | `315_…-ubu2604`, `415_…-ubu2604` |
+| 101–132 / 201–232 | `Repo Base Name` ends with `-ubu2404` | `128-gpu-bench-amd-vllm-throughput-latency-ubu2404` |
+| 301–332 / 401–432 | `Repo Base Name` ends with `-ubu2604` | `315-…-ubu2604`, `415-…-ubu2604` |
 
-The workbook `Repo Base Name` field stays unprefixed (`gpu-bench-amd-vllm-throughput-latency`). The published GitHub name always adds the leading workload number.
+The workbook `Repo Base Name` field stays unprefixed (`gpu-bench-amd-vllm-throughput-latency-ubu2404`). The published GitHub name always adds the leading workload number.
 
 ## Four flavors
 
@@ -80,7 +80,7 @@ cd /tmp/publish/<Workload Number>-<Repo Base Name>
 bash scripts/prepare_github_publish.sh --apply --github-owner=YOUR_GITHUB_USER
 bash scripts/check_github_publish_ready.sh --published
 # then git init / add / status / commit / push to github.com/<owner>/<Workload Number>-<Repo Base Name>
-# example: gh repo create 128_gpu-bench-amd-vllm-throughput-latency --public --source=. --remote=origin --push
+# example: gh repo create 128-gpu-bench-amd-vllm-throughput-latency-ubu2404 --public --source=. --remote=origin --push
 ```
 
 `prepare_github_publish.sh` stages: prune leftovers → sanitize secrets/paths → normalize LF/gitignore/CI → validate (`check_github_publish_ready.sh --published`) → optional `git init`. The secret scan excludes its own source so a clean repo no longer fails on the script's grep patterns.

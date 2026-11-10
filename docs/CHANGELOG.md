@@ -1,4 +1,6 @@
-# Changelog
+# Changelog (archived)
+
+> This file stopped at 2026-10-08. Current release notes are in the root [`CHANGELOG.md`](../CHANGELOG.md).
 
 ## 2026-10-08 — TEMPLATE_00_103 shared, versioned CI
 

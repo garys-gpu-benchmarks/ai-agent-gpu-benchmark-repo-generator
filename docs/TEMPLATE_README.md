@@ -97,7 +97,7 @@ If `.venv` is missing, setup creates it rather than installing Python packages g
 
 ## What Must Be Generated Per Workload
 
-The AI agent should create these files only after Phase 0 produces a schema-validated root-level `benchmark_specification.json`, and only inside a generated repository subdirectory named `<Workload Number>-<Repo Base Name>` at project root (e.g. `<project-root>/<workload-number>-<repo-name>/`, not `<project-root>/<template-directory>/<repo-name>/`). That same `<Workload Number>-<Repo Base Name>` string is the GitHub repository name (for example `128-gpu-bench-amd-vllm-throughput-latency`). The workbook `Repo Base Name` field stays unprefixed:
+The AI agent should create these files only after Phase 0 produces a schema-validated root-level `benchmark_specification.json`, and only inside a generated repository subdirectory named `<Workload Number>-<Repo Base Name>` at project root (e.g. `<project-root>/<workload-number>-<repo-name>/`, not `<project-root>/<template-directory>/<repo-name>/`). That same `<Workload Number>-<Repo Base Name>` string is the GitHub repository name (for example `128-gpu-bench-amd-vllm-throughput-latency-ubu2404`). The workbook `Repo Base Name` field stays unprefixed:
 
 - `<Workload Number>-<Repo Base Name>/benchmark_specification.json`
 - `<Workload Number>-<Repo Base Name>/docs/PRD.md`

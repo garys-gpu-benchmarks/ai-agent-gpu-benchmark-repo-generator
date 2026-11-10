@@ -2,7 +2,7 @@
 
 This generated workload is designed to be published as its own independent GitHub repository.
 
-GitHub repository name = local folder = `<Workload Number>-<Repo Base Name>` from `benchmark_specification.json` (for example `128-gpu-bench-amd-vllm-throughput-latency`). Keep that same leading workload number on GitHub. Do not publish the unprefixed `Repo Base Name` slug.
+GitHub repository name = local folder = `<Workload Number>-<Repo Base Name>` from `benchmark_specification.json` (for example `128-gpu-bench-amd-vllm-throughput-latency-ubu2404`). Keep that same leading workload number on GitHub. Do not publish the unprefixed `Repo Base Name` slug.
 
 ## Pre-publish check
 
