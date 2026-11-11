@@ -156,6 +156,20 @@ BENCHMARK_RUN_COMMAND+=" --guidance-scale ${GUIDANCE_SCALE} --seed ${SEED}"
 BENCHMARK_RUN_COMMAND+=" --prompt-len ${PROMPT_LEN} --batch-size ${BATCH_SIZE}"
 set_benchmark_run_command "${BENCHMARK_RUN_COMMAND}"
 
+# Fetch SDXL before the published clock starts, as the vLLM and SGLang runners
+# do (TEMPLATE_00_131). On 2026-11-10 a cold cache put the ~7 GB download inside
+# the first smoke (2:30-3:08 against 0:14-0:18 with the cache warm). The
+# prefetch also runs the pip check for diffusers and transformers. A failure
+# still stops the run: the pipeline below loads offline and needs these files.
+export HF_HOME="${HF_HOME:-${REPO_ROOT}/.cache/huggingface}"
+mkdir -p "${HF_HOME}"
+if [[ "${BACKEND}" == "sdxl" ]]; then
+  log_info "Fetching SDXL weights before the timed run (files already cached are not downloaded again)"
+  bash scripts/install_sdxl_python.sh --prefetch
+  export HF_HUB_OFFLINE=1
+fi
+mark_benchmark_measure_start
+
 HOSTNAME_VALUE="$(hostname -s 2>/dev/null || hostname)"
 RUN_DIR="${REPO_ROOT}/results/raw/$(benchmark_raw_run_dir_name "${REPO_NAME}" "${HOSTNAME_VALUE}")"
 mkdir -p "${RUN_DIR}"
@@ -180,18 +194,15 @@ chmod +x "${COMMAND_LOG}"
   echo "batch_size=${BATCH_SIZE}"
 } > "${RUN_DIR}/cli_options.env"
 export PYTHONUNBUFFERED=1
-export HF_HOME="${HF_HOME:-${REPO_ROOT}/.cache/huggingface}"
-mkdir -p "${HF_HOME}"
 cp run_benchmark.sh "${RUN_DIR}/script.sh"
 mask_environment "${RUN_DIR}/env_variables.txt"
 
 run_collection() {
   log_section "Collection"
   if [[ "${BACKEND}" == "sdxl" ]]; then
-    log_run "bash scripts/install_sdxl_python.sh --prefetch"
+    # Prefetched before mark_benchmark_measure_start (above); recorded here so
+    # commands_executed.sh still replays the whole run.
     echo "bash scripts/install_sdxl_python.sh --prefetch" >> "${COMMAND_LOG}"
-    bash scripts/install_sdxl_python.sh --prefetch
-    export HF_HUB_OFFLINE=1
   fi
   local collect_cmd
   printf -v collect_cmd '%q ' "${PYTHON_BIN}" scripts/infer_sdxl.py \

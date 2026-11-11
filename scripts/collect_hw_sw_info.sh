@@ -153,6 +153,11 @@ run_one() {
 
     bash -o pipefail -c "$cmd" >"$tmp" 2>&1
     rc=$?
+    # 141 = 128 + SIGPIPE: an earlier command in the pipe was stopped because a
+    # later one (head) already had all it needed, as in "cat /proc/cpuinfo | head".
+    # The output is complete, so this is not a failure. A missing command (127)
+    # or a real error from the first command still records FAILED.
+    [[ $rc -eq 141 ]] && rc=0
 
     {
         echo "$SEP"
@@ -296,7 +301,7 @@ COMMAND_DATA=$(cat <<'__COMMAND_DATA__'
 201	nVidia-only	software	Z3JlcCAtbTEgJ0hQTCAtICcgL3RtcC9ocGwtMi4zL0JVR1M=	blZpZGlhIEhQTCB2ZXJzaW9u
 202	nVidia-only	software	ZGNnbWkgLS12ZXJzaW9u	blZpZGlhIERDR00gbWFuYWdlbWVudCB0b29sIHZlcnNpb24=
 203	nVidia-only	software	ZHBrZyAtbCB8IGVncmVwIC1pICdeKGlpKVxzKyhjdWRhfG52aWRpYS1kcml2ZXJ8bnZpZGlhLXNtaXxudmlkaWEtY3VkYS10b29sa2l0fGxpYm5jY2x8bGliY3Vkbm58bGliY3VibGFzfGxpYmN1c3BhcnNlfGxpYmN1c29sdmVyfGxpYmN1ZmZ0fGxpYmN1cmFuZHxsaWJucHB8bnZpZGlhLWdkc3xjdWRhLWRyaXZlcnMpJw==	blZpZGlhIEluc3RhbGxlZCBDVURBICYgUGFja2FnZXMgTGlzdA==
-204	nVidia-only	software	bnZpZGlhLXNtaSAt	blZpZGlhIENVREEgR1BVIC8gUnVudGltZSBEZXRhaWxz
+204	nVidia-only	software	bnZpZGlhLXNtaSAtcSB8IGdyZXAgLUUgJ0RyaXZlciBWZXJzaW9ufENVREEgVmVyc2lvbic=	blZpZGlhIENVREEgR1BVIC8gUnVudGltZSBEZXRhaWxz
 __COMMAND_DATA__
 )
 

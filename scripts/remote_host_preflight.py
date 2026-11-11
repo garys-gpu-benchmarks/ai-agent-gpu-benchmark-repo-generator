@@ -77,17 +77,37 @@ kv disk_free_gb_home "$(df -Pk "$HOME" 2>/dev/null | awk 'NR==2 {printf "%.0f", 
 kv hf_cache_gb "$(du -sk "${HF_HOME:-$HOME/.cache/huggingface}" 2>/dev/null | awk '{printf "%.1f", $1/1048576}')"
 kv pip_cache_gb "$(du -sk "$HOME/.cache/pip" 2>/dev/null | awk '{printf "%.1f", $1/1048576}')"
 if [ -f "$HOME/.cache/huggingface/token" ] || [ -n "${HF_TOKEN:-}" ]; then kv hf_token present; else kv hf_token missing; fi
+# 100 MB ranged read, 25 s cap. Prints "<http_code> <bytes> <bytes_per_s>". The
+# speed counts only for a 2xx answer that moved at least 1 MiB; anything else
+# (an error page, a redirect loop, no route) is 0 = not measured. TEMPLATE_00_131:
+# the pytorch probe used to time a short 4xx error page and report ~3 KB/s.
+probe_speed() {
+  set -- $(curl -sL -r 0-104857599 --max-time 25 -o /dev/null -w '%{http_code} %{size_download} %{speed_download}' "$1" 2>/dev/null) 0 0 0
+  case "$1" in 2??) ;; *) printf '%s %d 0' "$1" "${2%.*}"; return ;; esac
+  awk -v c="$1" -v n="$2" -v s="$3" 'BEGIN { if (n + 0 >= 1048576) printf "%s %d %s", c, n, s; else printf "%s %d 0", c, n }'
+}
 if command -v curl >/dev/null 2>&1; then
-  # 100 MB ranged reads, 25 s cap each. speed_download is bytes/s.
-  hf="$(curl -sL -r 0-104857599 --max-time 25 -o /dev/null -w '%{speed_download}' https://huggingface.co/google-bert/bert-base-uncased/resolve/main/model.safetensors 2>/dev/null)"
-  kv download_huggingface_bps "${hf:-0}"
-  whl="$(curl -s --max-time 15 https://download.pytorch.org/whl/cu130/torch/ 2>/dev/null | grep -o 'torch-[0-9][^"#<]*-cp312-cp312-manylinux[^"#<]*x86_64\.whl' | tail -n1)"
+  set -- $(probe_speed https://huggingface.co/google-bert/bert-base-uncased/resolve/main/model.safetensors)
+  kv download_huggingface_http "$1"; kv download_huggingface_bytes "$2"; kv download_huggingface_bps "$3"
+  # Take the wheel path from href, which is URL-encoded (%2B), not from the link
+  # text, whose literal "+" the download host does not accept.
+  idx="https://download.pytorch.org/whl/cu130/torch/"
+  href="$(curl -s --max-time 15 "$idx" 2>/dev/null | grep -o 'href="[^"]*torch-[0-9][^"]*-cp312-cp312-manylinux[^"]*x86_64\.whl' | tail -n1)"
+  href="${href#href=\"}"
+  case "$href" in
+    "") whl="" ;;
+    http*) whl="$href" ;;
+    /*) whl="https://download.pytorch.org${href}" ;;
+    *) whl="${idx}${href}" ;;
+  esac
+  whl="$(printf '%s' "$whl" | sed 's/+/%2B/g')"
+  kv download_pytorch_url "${whl:-none}"
   if [ -n "$whl" ]; then
-    pt="$(curl -sL -r 0-104857599 --max-time 25 -o /dev/null -w '%{speed_download}' "https://download.pytorch.org/whl/cu130/${whl}" 2>/dev/null)"
+    set -- $(probe_speed "$whl")
   else
-    pt=0
+    set -- none 0 0
   fi
-  kv download_pytorch_bps "${pt:-0}"
+  kv download_pytorch_http "$1"; kv download_pytorch_bytes "$2"; kv download_pytorch_bps "$3"
 else
   kv download_huggingface_bps 0
   kv download_pytorch_bps 0
@@ -217,7 +237,9 @@ def evaluate(values: dict[str, str], workloads: list[str], kernels: dict[str, st
     for key, label in (("download_huggingface_bps", "huggingface.co"), ("download_pytorch_bps", "download.pytorch.org")):
         speed = _float(values.get(key)) / 1e6
         if speed <= 0:
-            warnings.append(f"Download speed from {label} could not be measured.")
+            http = values.get(key.replace("_bps", "_http"), "")
+            why = f" (HTTP {http}, {values.get(key.replace('_bps', '_bytes'), '0')} bytes)" if http else ""
+            warnings.append(f"Download speed from {label} could not be measured{why}; the batch estimate ignores it.")
         elif speed < SLOW_DOWNLOAD_MB_S:
             warnings.append(f"Download from {label} is {speed:.1f} MB/s (below {SLOW_DOWNLOAD_MB_S:.0f} MB/s). Model and wheel installs will be slow.")
     if ssh_call_s > SLOW_SSH_CALL_S:

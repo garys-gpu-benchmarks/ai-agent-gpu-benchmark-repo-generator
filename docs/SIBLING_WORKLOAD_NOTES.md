@@ -75,8 +75,9 @@ Every profile, smoke included, loads `stabilityai/stable-diffusion-xl-base-1.0`
 through Diffusers; `scripts/infer_sdxl.py --backend tiny` is a setup self-test only.
 `guidance_scale` stays the workbook value `0.0` (CFG off). The first run of any
 profile prefetches about 7 GB of weights into the shared `HF_HOME`
-(`$HOME/.cache/huggingface`), inside the published time (the clock starts before
-the prefetch).
+(`$HOME/.cache/huggingface`) before the published clock starts (TEMPLATE_00_131;
+earlier templates timed the download, so their first-run x24 times are not
+comparable).
 00_78 sets AMD `num_images` baseline/extended to **80 / 160** (15×512/30 was
 01:44 load-dominated; 7×1024/50 was 01:56).
 

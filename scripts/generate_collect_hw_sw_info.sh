@@ -330,6 +330,11 @@ run_one() {
 
     bash -o pipefail -c "$cmd" >"$tmp" 2>&1
     rc=$?
+    # 141 = 128 + SIGPIPE: an earlier command in the pipe was stopped because a
+    # later one (head) already had all it needed, as in "cat /proc/cpuinfo | head".
+    # The output is complete, so this is not a failure. A missing command (127)
+    # or a real error from the first command still records FAILED.
+    [[ $rc -eq 141 ]] && rc=0
 
     {
         echo "$SEP"
