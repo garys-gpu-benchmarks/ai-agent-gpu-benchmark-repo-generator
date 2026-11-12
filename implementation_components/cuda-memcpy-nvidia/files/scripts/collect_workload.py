@@ -146,7 +146,7 @@ def main() -> int:
         # A direction left out of yaml direction stays blank (not measured).
         if row["transfer_size_bytes"] == largest:
             for d in directions:
-                row[f"bandwidth_{d.lower()}_gbps"] = metrics[main_kind[d]]["bandwidth_gb_s"]
+                row[f"bandwidth_{d.lower()}_gb_s"] = metrics[main_kind[d]]["bandwidth_gb_s"]
         else:
             row["pinned_vs_pageable_host_memory_bandwidth_gb_s"] = ""
             row["pinned_vs_pageable_bandwidth_ratio"] = ""
@@ -154,8 +154,8 @@ def main() -> int:
             for d in directions:
                 row[f"latency_{d.lower()}_us"] = metrics[main_kind[d]]["latency_us"]
     header = [
-        "sample_index", "status", "transfer_size_bytes", "bandwidth_h2d_gbps",
-        "bandwidth_d2h_gbps", "bandwidth_d2d_gbps", "latency_h2d_us",
+        "sample_index", "status", "transfer_size_bytes", "bandwidth_h2d_gb_s",
+        "bandwidth_d2h_gb_s", "bandwidth_d2d_gb_s", "latency_h2d_us",
         "latency_d2h_us", "latency_d2d_us",
         "pinned_vs_pageable_host_memory_bandwidth_gb_s", "pinned_vs_pageable_bandwidth_ratio", "error_message",
     ]

@@ -85,19 +85,110 @@ def normalize_ssh_command(ssh: str) -> str:
     return "".join(out)
 
 
+def _stream_to_log(
+    argv: list[str],
+    *,
+    cwd: Path | None,
+    timeout: int | None,
+    env: dict[str, str],
+    log_path: Path,
+    label: str,
+    heartbeat_s: float,
+) -> subprocess.CompletedProcess[str]:
+    """Run argv, append its output to log_path as it arrives, and print a heartbeat.
+
+    The console gets one line every heartbeat_s seconds instead of the output itself:
+    a ROCm or CUDA setup log is larger than the 1 MB console capture (TEMPLATE_00_134).
+    The returned CompletedProcess still holds the full stdout and stderr.
+    """
+    import threading
+    import time
+
+    log_path.parent.mkdir(parents=True, exist_ok=True)
+    out: list[str] = []
+    err: list[str] = []
+    last = [""]
+    lock = threading.Lock()
+    proc = subprocess.Popen(
+        argv,
+        cwd=str(cwd) if cwd else None,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        env=env,
+    )
+
+    def pump(stream, sink: list[str], prefix: str) -> None:
+        for line in iter(stream.readline, ""):
+            sink.append(line)
+            with lock:
+                with log_path.open("a", encoding="utf-8", newline="\n") as handle:
+                    handle.write(prefix + line if line.endswith("\n") else prefix + line + "\n")
+                if line.strip():
+                    last[0] = line.strip()
+        stream.close()
+
+    readers = [
+        threading.Thread(target=pump, args=(proc.stdout, out, ""), daemon=True),
+        threading.Thread(target=pump, args=(proc.stderr, err, "[stderr] "), daemon=True),
+    ]
+    for reader in readers:
+        reader.start()
+    started = time.monotonic()
+    next_beat = started + heartbeat_s
+    while True:
+        try:
+            proc.wait(timeout=1.0)
+            break
+        except subprocess.TimeoutExpired:
+            pass
+        now = time.monotonic()
+        if timeout is not None and now - started > timeout:
+            proc.kill()
+            proc.wait()
+            for reader in readers:
+                reader.join(timeout=5)
+            raise subprocess.TimeoutExpired(argv, timeout, output="".join(out), stderr="".join(err))
+        if now >= next_beat:
+            elapsed = int(now - started)
+            print(f"[{label}] still running {elapsed // 60}m{elapsed % 60:02d}s; last: {last[0][:100]}", flush=True)
+            next_beat = now + heartbeat_s
+    for reader in readers:
+        reader.join(timeout=30)
+    return subprocess.CompletedProcess(argv, proc.returncode, "".join(out), "".join(err))
+
+
 def run_host_bash(
     command: str,
     *,
     cwd: Path | None = None,
     timeout: int | None = None,
     check: bool = False,
+    stream_log: Path | None = None,
+    heartbeat_label: str = "remote",
+    heartbeat_s: float = 60.0,
 ) -> subprocess.CompletedProcess[str]:
+    """Run a Git Bash command and return its output.
+
+    With stream_log, the output is also appended to that file as it arrives and the
+    console gets a heartbeat line every heartbeat_s seconds (TEMPLATE_00_134).
+    """
     bash = resolve_host_bash()
     env = os.environ.copy()
     # Git Bash rewrites /opt/... into C:/Program Files/Git/opt/... before ssh.
     if os.name == "nt":
         env["MSYS_NO_PATHCONV"] = "1"
         env["MSYS2_ARG_CONV_EXCL"] = "*"
+    if stream_log is not None:
+        result = _stream_to_log(
+            [bash, "-lc", command], cwd=cwd, timeout=timeout, env=env,
+            log_path=Path(stream_log), label=heartbeat_label, heartbeat_s=heartbeat_s,
+        )
+        if check and result.returncode != 0:
+            raise subprocess.CalledProcessError(result.returncode, result.args, result.stdout, result.stderr)
+        return result
     return subprocess.run(
         [bash, "-lc", command],
         cwd=str(cwd) if cwd else None,

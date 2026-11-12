@@ -19,21 +19,28 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Callable
 
-# Per-workload create time (seconds, passing attempt) from the reference runs:
-# amd-24.04 Project410 (118), nvidia-24.04 Project411 (118),
-# amd-26.04 Project412 (118), nvidia-26.04 Project408 (117, 64.247.201.37).
+# Per-workload create time (seconds, passing attempt) from the TEMPLATE_00_131 batches
+# (2026-11-10, no retries): amd-24.04 Project475, nvidia-24.04 Project476,
+# amd-26.04 Project477, nvidia-26.04 Project478. Updated by hand, never by a batch, so
+# one slow VM cannot become the reference (TEMPLATE_00_134). The TEMPLATE_00_133 AMD
+# x01 times (30 and 35 min: slow apt mirror and reboot) were left out on purpose.
 REFERENCE_SECONDS: dict[str, dict[str, int]] = {
-    "amd-24.04": {"01": 473, "02": 49, "03": 290, "04": 70, "05": 108, "06": 67, "07": 47, "08": 40, "09": 107, "10": 69, "11": 58, "12": 103, "13": 75, "14": 57, "15": 56, "16": 56, "17": 312, "18": 119, "19": 109, "20": 61, "21": 127, "22": 146, "23": 136, "24": 182, "25": 147, "26": 144, "27": 390, "28": 213, "29": 209, "30": 395, "31": 410, "32": 235},
-    "nvidia-24.04": {"01": 404, "02": 64, "03": 76, "04": 79, "05": 143, "06": 82, "07": 55, "08": 55, "09": 67, "10": 69, "11": 95, "12": 136, "13": 76, "14": 112, "15": 79, "16": 91, "17": 73, "18": 86, "19": 195, "20": 86, "21": 184, "22": 145, "23": 167, "24": 210, "25": 136, "26": 166, "27": 361, "28": 280, "29": 269, "30": 463, "31": 358, "32": 232},
-    "amd-26.04": {"01": 381, "02": 38, "03": 272, "04": 57, "05": 94, "06": 65, "07": 42, "08": 31, "09": 77, "10": 46, "11": 58, "12": 105, "13": 42, "14": 58, "15": 46, "16": 44, "17": 310, "18": 99, "19": 104, "20": 51, "21": 112, "22": 129, "23": 128, "24": 172, "25": 126, "26": 133, "27": 340, "28": 181, "29": 278, "30": 357, "31": 349, "32": 237},
-    "nvidia-26.04": {"01": 919, "02": 93, "03": 126, "04": 119, "05": 151, "06": 123, "07": 109, "08": 102, "09": 81, "10": 74, "11": 95, "12": 125, "13": 79, "14": 128, "15": 123, "16": 165, "17": 122, "18": 106, "19": 181, "20": 96, "21": 182, "22": 188, "23": 180, "24": 234, "25": 201, "26": 156, "27": 356, "28": 276, "29": 265, "30": 551, "31": 469, "32": 287},
+    "amd-24.04": {"01": 331, "02": 79, "03": 292, "04": 149, "05": 129, "06": 106, "07": 73, "08": 63, "09": 69, "10": 83, "11": 64, "12": 125, "13": 63, "14": 74, "15": 78, "16": 63, "17": 318, "18": 126, "19": 123, "20": 79, "21": 130, "22": 126, "23": 156, "24": 152, "25": 131, "26": 144, "27": 393, "28": 346, "29": 331, "30": 586, "31": 569, "32": 356},
+    "nvidia-24.04": {"01": 94, "02": 87, "03": 81, "04": 101, "05": 134, "06": 121, "07": 76, "08": 78, "09": 76, "10": 71, "11": 101, "12": 124, "13": 82, "14": 135, "15": 92, "16": 95, "17": 91, "18": 100, "19": 130, "20": 78, "21": 144, "22": 124, "23": 138, "24": 169, "25": 151, "26": 146, "27": 302, "28": 257, "29": 248, "30": 419, "31": 375, "32": 154},
+    "amd-26.04": {"01": 412, "02": 63, "03": 279, "04": 136, "05": 112, "06": 96, "07": 61, "08": 55, "09": 57, "10": 49, "11": 61, "12": 98, "13": 61, "14": 64, "15": 56, "16": 74, "17": 307, "18": 136, "19": 105, "20": 56, "21": 117, "22": 130, "23": 110, "24": 131, "25": 117, "26": 126, "27": 355, "28": 311, "29": 303, "30": 546, "31": 502, "32": 331},
+    "nvidia-26.04": {"01": 116, "02": 102, "03": 101, "04": 108, "05": 193, "06": 120, "07": 83, "08": 96, "09": 116, "10": 101, "11": 94, "12": 155, "13": 100, "14": 135, "15": 94, "16": 103, "17": 84, "18": 100, "19": 148, "20": 79, "21": 162, "22": 152, "23": 166, "24": 200, "25": 155, "26": 155, "27": 379, "28": 308, "29": 294, "30": 636, "31": 637, "32": 184},
 }
-# Workloads whose time is mostly package and model downloads.
-DOWNLOAD_HEAVY = {"01"} | {f"{n:02d}" for n in range(21, 33)}
-# Assumed speeds of the reference hosts. They were not measured at the time;
-# every preflight now records its own numbers in the batch manifest, so these
-# can be replaced with measured values later.
-REFERENCE_DOWNLOAD_MB_S = 100.0
+# Download speed (MB/s, slowest of huggingface.co and download.pytorch.org) that the
+# same batches' preflight measured. The estimate scales against these, not an assumed 100.
+REFERENCE_DOWNLOAD_MB_S_BY_PLATFORM: dict[str, float] = {
+    "amd-24.04": 48.8, "nvidia-24.04": 71.2, "amd-26.04": 63.6, "nvidia-26.04": 59.0,
+}
+# Model workloads. Only a share of their time is download: the host bootstrap prefetches
+# the models in the background. Fitted from TEMPLATE_00_131 vs 133, where the download
+# speed fell 2-3x: NVIDIA x21-x32 did not change and AMD grew 17-20% (about 15%).
+DOWNLOAD_HEAVY = {f"{n:02d}" for n in range(21, 33)}
+DOWNLOAD_SHARE: dict[str, float] = {"amd": 0.15, "nvidia": 0.05}
+# x01 is apt and the ROCm or CUDA install, not Hugging Face: it is not scaled by the probe.
 REFERENCE_SSH_CALL_S = 1.0
 # Warning thresholds.
 SLOW_DOWNLOAD_MB_S = 30.0
@@ -61,6 +68,13 @@ elif command -v amd-smi >/dev/null 2>&1 || command -v rocminfo >/dev/null 2>&1 |
 else
   kv vendor none
 fi
+# PCI vendor IDs of display (0x03) and processing-accelerator (0x12) devices. Works
+# before ROCm or CUDA userspace exists and needs no lspci (TEMPLATE_00_134).
+pci=""; for d in /sys/bus/pci/devices/*; do
+  c="$(cat "$d/class" 2>/dev/null)"
+  case "$c" in 0x03*|0x12*) pci="$pci $(cat "$d/vendor" 2>/dev/null)" ;; esac
+done
+kv pci_gpu_vendors "$(printf '%s\n' $pci | sort -u | tr '\n' ' ' | sed 's/ *$//')"
 nv=""; for c in /usr/local/cuda/bin/nvcc /usr/local/cuda-*/bin/nvcc; do [ -x "$c" ] && nv="$("$c" --version 2>/dev/null | sed -n 's/.*release \([0-9.]*\).*/\1/p' | head -n1)" && break; done
 kv nvcc "${nv:-missing}"
 if command -v dcgmi >/dev/null 2>&1; then kv dcgmi present; else kv dcgmi missing; fi
@@ -169,25 +183,87 @@ def workbook_values(workbook: Path, workloads: list[str], name: str) -> dict[str
     return found
 
 
-def platform_key(values: dict[str, str]) -> str:
-    vendor = values.get("vendor", "")
+PCI_VENDORS = {"0x1002": "amd", "0x10de": "nvidia"}
+
+
+def series_vendor(workloads: list[str]) -> str:
+    """Vendor the workload numbers call for: 1xx/3xx AMD, 2xx/4xx NVIDIA ("" if mixed or other)."""
+    found = set()
+    for workload in workloads:
+        text = str(workload).strip()
+        if text[:1] in {"1", "3"} and len(text) == 3:
+            found.add("amd")
+        elif text[:1] in {"2", "4"} and len(text) == 3:
+            found.add("nvidia")
+        else:
+            return ""
+    return found.pop() if len(found) == 1 else ""
+
+
+def resolve_vendor(values: dict[str, str], workloads: list[str]) -> tuple[str, str, list[str], list[str]]:
+    """Return (vendor, source, warnings, notes) for the batch (TEMPLATE_00_134).
+
+    The tool probe wins when it finds nvidia-smi, amd-smi, rocminfo or /dev/kfd. On a
+    fresh AMD image none of those exist yet (workload x01 installs ROCm), so the probe
+    says "none"; then the PCI vendor ID, and last the workload series, decide. Before,
+    that case warned "GPU workloads will fail" and estimated against the NVIDIA table.
+    """
+    probe = values.get("vendor", "")
+    expected = series_vendor(workloads)
+    pci = {PCI_VENDORS[v] for v in values.get("pci_gpu_vendors", "").split() if v in PCI_VENDORS}
+    warnings: list[str] = []
+    notes: list[str] = []
+    if probe in {"amd", "nvidia"}:
+        vendor, source = probe, "tools"
+    elif len(pci) == 1:
+        vendor, source = next(iter(pci)), "pci"
+    elif expected:
+        vendor, source = expected, "workload series"
+    else:
+        vendor, source = "none", "none"
+    if probe not in {"amd", "nvidia"} and not pci and "pci_gpu_vendors" in values:
+        warnings.append("No GPU tools and no AMD or NVIDIA PCI device are visible on the VM. "
+                        "Unless workload x01 setup finds the GPU, GPU workloads will fail.")
+    if expected and vendor in {"amd", "nvidia"} and vendor != expected:
+        span = f"{workloads[0]}-{workloads[-1]}" if len(workloads) > 1 else str(workloads[0])
+        names = {"amd": "AMD", "nvidia": "NVIDIA"}
+        warnings.append(f"The VM has an {names[vendor]} GPU ({source}), but workloads {span} are {names[expected]} workloads.")
+    if probe not in {"amd", "nvidia"} and vendor == "amd":
+        notes.append("ROCm is not installed yet; workload x01 setup installs it (5-35 minutes, mostly the apt mirror and one reboot).")
+    if probe not in {"amd", "nvidia"} and vendor == "nvidia":
+        warnings.append("nvidia-smi is missing. The NVIDIA driver must come from the host image; setup installs only the CUDA toolkit.")
+    return vendor, source, warnings, notes
+
+
+def platform_key(values: dict[str, str], workloads: list[str] | None = None) -> str:
+    vendor = values.get("vendor_resolved") or values.get("vendor", "")
+    if workloads is not None and not values.get("vendor_resolved"):
+        vendor = resolve_vendor(values, workloads)[0]
     os_id = values.get("os_version_id", "")
     key = f"{vendor}-{os_id}"
     return key if key in REFERENCE_SECONDS else ""
 
 
 def estimate_minutes(values: dict[str, str], workloads: list[str], ssh_call_s: float) -> dict[str, float]:
-    """Rough batch time: reference times, download-heavy workloads scaled by measured speed."""
-    key = platform_key(values)
+    """Rough batch time from measured per-workload reference times (TEMPLATE_00_134).
+
+    Only the download share of x21-x32 is scaled by the measured download speed, against
+    the speed measured on the reference host. x01 (apt and the ROCm or CUDA install) and
+    every other workload are scaled only by the SSH round-trip time.
+    """
+    key = platform_key(values, workloads)
     table = REFERENCE_SECONDS.get(key) or REFERENCE_SECONDS["nvidia-26.04"]
+    vendor = key.split("-", 1)[0] if key else "nvidia"
+    reference_mb_s = REFERENCE_DOWNLOAD_MB_S_BY_PLATFORM.get(key or "nvidia-26.04", 59.0)
     speeds = [
         _float(values.get("download_huggingface_bps")) / 1e6,
         _float(values.get("download_pytorch_bps")) / 1e6,
     ]
     measured = [s for s in speeds if s > 0]
     download_mb_s = min(measured) if measured else 0.0
-    download_factor = REFERENCE_DOWNLOAD_MB_S / download_mb_s if download_mb_s else 2.0
-    download_factor = max(0.5, min(download_factor, 6.0))
+    download_factor = reference_mb_s / download_mb_s if download_mb_s else 1.0
+    download_factor = max(0.5, min(download_factor, 4.0))
+    share = DOWNLOAD_SHARE.get(vendor, 0.15)
     ssh_factor = 1.0 if ssh_call_s <= 0 else max(1.0, min(0.7 + 0.3 * ssh_call_s / REFERENCE_SSH_CALL_S, 2.5))
     reference = 0.0
     estimate = 0.0
@@ -195,11 +271,16 @@ def estimate_minutes(values: dict[str, str], workloads: list[str], ssh_call_s: f
         suffix = f"{int(workload) % 100:02d}" if str(workload).isdigit() else ""
         base = float(table.get(suffix, 150))
         reference += base
-        estimate += base * (download_factor if suffix in DOWNLOAD_HEAVY else ssh_factor)
+        if suffix in DOWNLOAD_HEAVY:
+            estimate += base * ((1.0 - share) * ssh_factor + share * download_factor)
+        else:
+            estimate += base * ssh_factor
     return {
         "reference_minutes": round(reference / 60.0, 1),
         "estimated_minutes": round(estimate / 60.0, 1),
         "download_factor": round(download_factor, 2),
+        "download_share": share,
+        "reference_download_mb_s": reference_mb_s,
         "ssh_factor": round(ssh_factor, 2),
         "download_mb_s": round(download_mb_s, 1),
         "reference_platform": key or "nvidia-26.04 (fallback)",
@@ -218,13 +299,15 @@ def evaluate(values: dict[str, str], workloads: list[str], kernels: dict[str, st
             f"{', '.join(mismatched)}. A container cannot change its host kernel; system-config records "
             "kernel_release_mismatch_count=1 and continues."
         )
-    vendor = values.get("vendor", "")
+    vendor, source, vendor_warnings, vendor_notes = resolve_vendor(values, workloads)
+    values["vendor_resolved"] = vendor
+    values["vendor_source"] = source
+    warnings.extend(vendor_warnings)
+    notes.extend(vendor_notes)
     if vendor == "nvidia" and values.get("nvcc", "missing") == "missing":
         notes.append("No CUDA toolkit on the VM. The host bootstrap installs it once before workload 1 (15-30 minutes on a cold host).")
     if vendor == "nvidia" and values.get("dcgmi") == "missing":
         notes.append("DCGM is not installed. The host bootstrap installs it once before workload 1.")
-    if vendor == "none":
-        warnings.append("No nvidia-smi, amd-smi, rocminfo or /dev/kfd on the VM. GPU workloads will fail.")
     bind = values.get("numactl_bind", "")
     if bind.startswith("rc=") and not bind.startswith("rc=0"):
         warnings.append(f"numactl cannot bind on this host ({bind}). GUPS and STREAM run unbound.")
@@ -297,7 +380,8 @@ def run_preflight(
         print(
             "[INFO] remote host: "
             f"Ubuntu {values.get('os_version_id', '?')}, kernel {values.get('kernel', '?')}, "
-            f"{values.get('vendor', '?')} {values.get('gpu', '')} x{values.get('gpu_count', '?')}, "
+            f"{values.get('vendor_resolved') or values.get('vendor', '?')} (from {values.get('vendor_source', 'tools')}) "
+            f"{values.get('gpu', '')} x{values.get('gpu_count', '?')}, "
             f"nvcc {values.get('nvcc', '?')}, disk free {values.get('disk_free_gb_opt', '?')} GB",
             flush=True,
         )
@@ -308,7 +392,8 @@ def run_preflight(
         )
         print(
             f"[INFO] estimated batch time {estimate['estimated_minutes']} min "
-            f"(reference {estimate['reference_minutes']} min on {estimate['reference_platform']}). Rough.",
+            f"(reference {estimate['reference_minutes']} min on {estimate['reference_platform']} "
+            f"at {estimate['reference_download_mb_s']} MB/s). Rough; a slow apt mirror is not predicted.",
             flush=True,
         )
         for note in notes:

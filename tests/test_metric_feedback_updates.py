@@ -477,7 +477,7 @@ class MetricFeedbackUpdateTests(unittest.TestCase):
                 self.assertEqual(collector.BANDWIDTH_ITERATION_FLOOR, 10)
         nvidia = source("cuda-memcpy-nvidia", "scripts/collect_workload.py")
         self.assertIn('row["pinned_vs_pageable_bandwidth_ratio"] = ""', nvidia)
-        self.assertIn('"bandwidth_h2d_gbps"', nvidia)
+        self.assertIn('"bandwidth_h2d_gb_s"', nvidia)
         ledger_path = ROOT / "scripts" / "update_runtime_ledger.py"
         spec = importlib.util.spec_from_file_location("ledger_feedback", ledger_path)
         ledger = importlib.util.module_from_spec(spec)

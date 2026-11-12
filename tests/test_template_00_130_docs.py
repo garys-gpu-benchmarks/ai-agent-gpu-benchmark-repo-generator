@@ -139,7 +139,7 @@ class WorkbookCudaRuntimeTests(unittest.TestCase):
         for wl in range(401, 433):
             self.assertEqual(_runtime_display(runtime[wl]), f"CUDA {cuda[4]}", wl)
         helper = (ROOT / "scripts/lib/nvidia_cuda_toolkit.sh").read_text(encoding="utf-8")
-        self.assertIn("24.04 (CUDA 12.8)", helper)
+        self.assertIn("24.04 (CUDA 13.3)", helper)
 
 
 NET_SEQ = "113.1"
@@ -217,7 +217,7 @@ class RenamedHeaderTests(unittest.TestCase):
         sys.path.insert(0, str(ROOT / "scripts"))
         from readme_sections import requirements
 
-        expected = {101: "AMD GPU with ROCm 10.1.0", 228: "NVIDIA GPU with CUDA 12.8", 428: "NVIDIA GPU with CUDA 13.3"}
+        expected = {101: "AMD GPU with ROCm 10.1.0", 228: "NVIDIA GPU with CUDA 13.3", 428: "NVIDIA GPU with CUDA 13.3"}
         for workload, gpu_line in expected.items():
             with tempfile.TemporaryDirectory() as tmp:
                 out = Path(tmp) / "spec.json"

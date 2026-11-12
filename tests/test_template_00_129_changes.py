@@ -94,7 +94,7 @@ class MemcpyParserTest(unittest.TestCase):
         parser.add_peak_direction_bandwidth(rows, summary)
         parser.add_min_size_direction_latency(rows, summary)
         parser.add_h2d_headline(rows, summary)
-        self.assertEqual(summary["bandwidth_d2d_gbps"], 1990.0)  # max size, not the 16 MiB peak
+        self.assertEqual(summary["bandwidth_d2d_gb_s"], 1990.0)  # max size, not the 16 MiB peak
         self.assertEqual(summary["latency_d2h_us"], 10.0)
         self.assertEqual(summary["headline_point"], "at 1024 MiB")
         self.assertEqual(summary["headline_transfer_bytes"], 1 << 30)

@@ -10,7 +10,7 @@ REPO_NAME="$(basename "${REPO_ROOT}")"
 cd "${REPO_ROOT}"
 # FlashInfer JIT looks up ninja on PATH. setup.sh installs it into .venv,
 # and this script otherwise replaces PATH with CUDA bins only.
-export PATH="${REPO_ROOT}/.venv/bin:/usr/local/cuda/bin:/usr/local/cuda-12.6/bin:${PATH}"
+export PATH="${REPO_ROOT}/.venv/bin:/usr/local/cuda/bin:/usr/local/cuda-13.3/bin:${PATH}"
 # shellcheck disable=SC1091
 source scripts/lib/common.sh
 capture_benchmark_run_command_submitted "$@"

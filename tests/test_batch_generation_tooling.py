@@ -155,8 +155,21 @@ class PreflightFindsPython(unittest.TestCase):
             code = preflight.main()
         return code, out.getvalue()
 
+    def test_reruns_preflight_with_the_python_that_works(self) -> None:
+        # TEMPLATE_00_134: the first command no longer exits 1 when another Python works.
+        with mock.patch.dict(os.environ, {preflight.REEXEC_MARKER: ""}), \
+                mock.patch.object(preflight.subprocess, "run", return_value=mock.Mock(returncode=0)) as run:
+            code, text = self.run_main(["/c/Python/python.exe"], [["/usr/bin/python3"], ["/c/Python/python.exe"]])
+        self.assertEqual(code, 0)
+        self.assertIn("re-running preflight with /c/Python/python.exe", text)
+        argv = run.call_args.args[0]
+        self.assertEqual(argv[0], "/c/Python/python.exe")
+        self.assertEqual(run.call_args.kwargs["env"][preflight.REEXEC_MARKER], "1")
+
     def test_prints_the_start_command_with_the_python_that_works(self) -> None:
-        code, text = self.run_main(["/c/Python/python.exe"], [["/usr/bin/python3"], ["/c/Python/python.exe"]])
+        # Inside the re-run (marker set) it never re-runs again; it prints the command.
+        with mock.patch.dict(os.environ, {preflight.REEXEC_MARKER: "1"}):
+            code, text = self.run_main(["/c/Python/python.exe"], [["/usr/bin/python3"], ["/c/Python/python.exe"]])
         self.assertEqual(code, 1)
         self.assertIn("[FAIL] PyYAML is not importable on", text)
         self.assertIn("[INFO] /c/Python/python.exe passes preflight. Start generation from the generator directory with exactly:", text)

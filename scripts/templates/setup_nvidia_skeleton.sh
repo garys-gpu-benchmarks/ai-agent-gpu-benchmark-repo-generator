@@ -15,7 +15,7 @@ fi
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_NAME="$(basename "${REPO_ROOT}")"
 cd "${REPO_ROOT}"
-export PATH="/usr/local/cuda/bin:/usr/local/cuda-13.3/bin:/usr/local/cuda-12.8/bin:/usr/local/cuda-12.6/bin:${PATH}"
+export PATH="/usr/local/cuda/bin:/usr/local/cuda-13.3/bin:${PATH}"
 export CUDA_HOME="${CUDA_HOME:-/usr/local/cuda}"
 export LD_LIBRARY_PATH="${CUDA_HOME}/lib64:${CUDA_HOME}/targets/x86_64-linux/lib:${LD_LIBRARY_PATH:-}"
 
@@ -179,12 +179,12 @@ apt_install \
   python3 python3-venv "python${PY_VER}-venv" python3-dev "python${PY_VER}-dev" python3-pip \
   build-essential g++ gcc make cmake sqlite3 jq pkg-config pciutils numactl libnuma-dev \
   curl ca-certificates ripgrep stress-ng lmbench
-# cuDNN is selected after nvcc is on PATH. Ubuntu 26.04's only nvcc is CUDA
+# cuDNN is selected after nvcc is on PATH. Both Ubuntu releases install CUDA
 # 13.3, and scripts/build.sh then links the venv cu13 wheel. Installing
 # libcudnn9-cuda-12 here made that build exit before compile.
 
 # One CUDA toolkit per Ubuntu release, from NVIDIA's CUDA apt repository:
-# 24.04 -> 12.8, 26.04 -> 13.3 (scripts/lib/nvidia_cuda_toolkit.sh). This skeleton
+# 24.04 -> 13.3, 26.04 -> 13.3 (scripts/lib/nvidia_cuda_toolkit.sh). This skeleton
 # and the vLLM/SGLang overlays call the same function, so a later workload cannot
 # move /usr/local/cuda under an earlier one ("nvcc release changed ... since
 # setup"). Ubuntu's nvidia-cuda-toolkit is never installed: it pulls
@@ -316,15 +316,12 @@ if [[ -f scripts/lib/nvcc_glibc_throw.sh ]]; then
   nvcc_glibc_prepare
 fi
 if [[ -f src/cudnn_conv.cu ]]; then
-  # Same nvcc choice as scripts/build.sh. CUDA 12 links the system
-  # libcudnn9-cuda-12 packages. CUDA 13 links the venv wheel and refuses
-  # the CUDA 12 system library.
-  build_nvcc=""
-  if [[ -x /usr/local/cuda-12.8/bin/nvcc ]]; then
-    build_nvcc=/usr/local/cuda-12.8/bin/nvcc
-  elif [[ -x /usr/local/cuda-12.6/bin/nvcc ]]; then
-    build_nvcc=/usr/local/cuda-12.6/bin/nvcc
-  else
+  # Same nvcc as scripts/build.sh: the toolkit install_nvidia_cuda_toolkit just
+  # installed, never a leftover CUDA 12 nvcc (24.04 images and hosts set up by
+  # TEMPLATE_00_132 carry 12.6 or 12.8). CUDA 13 links the venv wheel and refuses the CUDA 12 system
+  # library; any other major links the matching system libcudnn9 packages.
+  build_nvcc="/usr/local/cuda-${NVIDIA_CUDA_VERSION}/bin/nvcc"
+  if [[ ! -x "${build_nvcc}" ]]; then
     build_nvcc="$(command -v nvcc || true)"
   fi
   nvcc_major="$(${build_nvcc} --version 2>/dev/null | sed -n 's/.*release \([0-9][0-9]*\)\..*/\1/p' | head -n 1)"
@@ -336,7 +333,7 @@ if [[ -f src/cudnn_conv.cu ]]; then
       "${REPO_ROOT}/.venv/bin/python" -m pip install "${CUDNN_CU13_SPEC}"
     fi
   else
-    apt_install libcudnn9-cuda-12 libcudnn9-headers-cuda-12 libcudnn9-dev-cuda-12
+    apt_install "libcudnn9-cuda-${nvcc_major}" "libcudnn9-headers-cuda-${nvcc_major}" "libcudnn9-dev-cuda-${nvcc_major}"
   fi
 fi
 if [[ -f scripts/build.sh ]]; then

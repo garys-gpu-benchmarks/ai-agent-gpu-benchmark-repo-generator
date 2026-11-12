@@ -38,7 +38,7 @@ Each task exists as AMD/NVIDIA × Ubuntu 24.04/26.04. One generator (`init_gener
 
 NVIDIA compile uses `nvcc` / CUDA, not `hipcc`. The hipcc helper is still copied into NVIDIA repos because `scripts/lib/` is shared; it does not change CUDA setup.
 
-Ubuntu 26.04 and Ubuntu 24.04 README Prerequisites must name ROCm 10.1.0 for AMD workloads. NVIDIA stays CUDA 13.3 on Ubuntu 26.04 and CUDA 12.8 on Ubuntu 24.04. The README template pulls those from the workbook fields; do not hard-code one OS into all four flavors.
+Ubuntu 26.04 and Ubuntu 24.04 README Prerequisites must name ROCm 10.1.0 for AMD workloads. NVIDIA is CUDA 13.3 on both Ubuntu 26.04 and Ubuntu 24.04 (24.04 was CUDA 12.8 until TEMPLATE_00_133). The README template pulls those from the workbook fields; do not hard-code one OS into all four flavors.
 
 ## The five steps, then dry-run
 

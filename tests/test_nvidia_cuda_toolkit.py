@@ -131,8 +131,8 @@ class ToolkitChoiceTest(unittest.TestCase):
         finally:
             host.close()
 
-    def test_ubuntu_2404_uses_cuda_12_8(self) -> None:
-        self.check("24.04", "12.8 ubuntu2404 datacenter-gpu-manager-4-cuda12")
+    def test_ubuntu_2404_uses_cuda_13_3(self) -> None:
+        self.check("24.04", "13.3 ubuntu2404 datacenter-gpu-manager-4-cuda13")
 
     def test_ubuntu_2604_uses_cuda_13_3(self) -> None:
         self.check("26.04", "13.3 ubuntu2604 datacenter-gpu-manager-4-cuda13")
@@ -154,16 +154,16 @@ class InstallTest(unittest.TestCase):
     def tearDown(self) -> None:
         self.host.close()
 
-    SLIM_12_8 = ("apt-get install -y -o Dpkg::Options::=--force-unsafe-io cuda-compiler-12-8 "
-                 "cuda-libraries-dev-12-8 cuda-command-line-tools-12-8 cuda-nvml-dev-12-8")
+    SLIM_13_3 = ("apt-get install -y -o Dpkg::Options::=--force-unsafe-io cuda-compiler-13-3 "
+                 "cuda-libraries-dev-13-3 cuda-command-line-tools-13-3 cuda-nvml-dev-13-3")
 
-    def test_fresh_2404_adds_the_repository_then_installs_the_cuda_12_8_packages(self) -> None:
+    def test_fresh_2404_adds_the_repository_then_installs_the_cuda_13_3_packages(self) -> None:
         result = self.host.run('install_nvidia_cuda_toolkit; echo "ver=${NVIDIA_CUDA_VERSION}"')
         self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertIn("ver=12.8", result.stdout)
+        self.assertIn("ver=13.3", result.stdout)
         log = self.host.log()
         self.assertIn("compute/cuda/repos/ubuntu2404/x86_64/cuda-keyring_1.1-1_all.deb", log)
-        self.assertIn(self.SLIM_12_8, log)
+        self.assertIn(self.SLIM_13_3, log)
         self.assertNotIn("nvidia-cuda-toolkit", log)
         self.assertNotIn("install -y -o Dpkg::Options::=--force-unsafe-io cuda-toolkit-", log)
         self.assertLess(log.index("dpkg -i"), log.index("apt-get install"))
@@ -188,15 +188,15 @@ class InstallTest(unittest.TestCase):
         (self.host.state / "no_slim").touch()
         result = self.host.run("install_nvidia_cuda_toolkit")
         self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertIn("installing the full cuda-toolkit-12-8", result.stdout)
+        self.assertIn("installing the full cuda-toolkit-13-3", result.stdout)
         log = self.host.log()
-        self.assertIn("apt-get install -y -o Dpkg::Options::=--force-unsafe-io cuda-toolkit-12-8", log)
+        self.assertIn("apt-get install -y -o Dpkg::Options::=--force-unsafe-io cuda-toolkit-13-3", log)
         self.assertNotIn("dpkg -i", log)
 
     def test_versioned_nvcc_already_present_installs_nothing(self) -> None:
-        nvcc = self.host.prefix / "cuda-12.8" / "bin" / "nvcc"
+        nvcc = self.host.prefix / "cuda-13.3" / "bin" / "nvcc"
         nvcc.parent.mkdir(parents=True)
-        nvcc.write_text('#!/bin/bash\necho "Cuda compilation tools, release 12.8, V12.8.93"\n', encoding="utf-8")
+        nvcc.write_text('#!/bin/bash\necho "Cuda compilation tools, release 13.3, V13.3.73"\n', encoding="utf-8")
         nvcc.chmod(0o755)
         result = self.host.run("install_nvidia_cuda_toolkit")
         self.assertEqual(result.returncode, 0, result.stderr)
@@ -208,7 +208,7 @@ class InstallTest(unittest.TestCase):
         stale.chmod(0o755)
         result = self.host.run("install_nvidia_cuda_toolkit")
         self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertIn(self.SLIM_12_8, self.host.log())
+        self.assertIn(self.SLIM_13_3, self.host.log())
 
     def test_inconsistent_dpkg_after_the_install_fails(self) -> None:
         (self.host.state / "audit_after_install").write_text(
@@ -221,8 +221,8 @@ class InstallTest(unittest.TestCase):
         (self.host.state / "apt_fail").touch()
         result = self.host.run("install_nvidia_cuda_toolkit")
         self.assertNotEqual(result.returncode, 0)
-        self.assertIn("apt-get install cuda-compiler-12-8 cuda-libraries-dev-12-8 "
-                      "cuda-command-line-tools-12-8 cuda-nvml-dev-12-8 failed", result.stderr)
+        self.assertIn("apt-get install cuda-compiler-13-3 cuda-libraries-dev-13-3 "
+                      "cuda-command-line-tools-13-3 cuda-nvml-dev-13-3 failed", result.stderr)
 
 
 class DriverPinTest(unittest.TestCase):

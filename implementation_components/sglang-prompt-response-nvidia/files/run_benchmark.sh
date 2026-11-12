@@ -8,7 +8,7 @@ set -euo pipefail
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_NAME="$(basename "${REPO_ROOT}")"
 cd "${REPO_ROOT}"
-export PATH="/usr/local/cuda/bin:/usr/local/cuda-12.6/bin:${PATH}"
+export PATH="/usr/local/cuda/bin:/usr/local/cuda-13.3/bin:${PATH}"
 # shellcheck disable=SC1091
 source scripts/lib/common.sh
 # shellcheck disable=SC1091

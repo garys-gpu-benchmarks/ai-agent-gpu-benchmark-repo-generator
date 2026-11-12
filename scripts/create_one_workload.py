@@ -29,6 +29,27 @@ REMOTE_OK = "REMOTE_OK"
 # The operator's batch loop runs the same trees from this directory.
 REMOTE_ROOT = "/opt/benchmarks"
 
+# Full remote setup and smoke output for the batch, written as it arrives. The console
+# gets a heartbeat and the last lines of a failure instead (TEMPLATE_00_134). main() sets it.
+BATCH_LOG_NAME = "batch_remote_output.log"
+BATCH_LOG: Path | None = None
+# Lines of output kept on a failed attempt in the manifest and shown on the console.
+TAIL_LINES = 40
+# Per repository: output_tail and transient_retry of the latest remote_validate call.
+LAST_REMOTE: dict[str, dict[str, object]] = {}
+
+# Output that marks a failure as temporary. Apt exit 100 alone is not enough: a missing
+# package is also exit 100, and that must be recorded at once (TEMPLATE_00_134).
+TRANSIENT_PATTERNS = (
+    ("apt/dpkg lock", re.compile(r"could not get lock|unable to acquire the dpkg frontend lock|"
+                                 r"unable to lock the administration directory|waiting for cache lock", re.I)),
+    ("dpkg interrupted", re.compile(r"dpkg was interrupted", re.I)),
+    ("package mirror", re.compile(r"hash sum mismatch|failed to fetch|temporary failure resolving|"
+                                  r"could not resolve|connection timed out|503\s+service unavailable|"
+                                  r"unable to connect to", re.I)),
+)
+RESUME_SERVICE_LINE = "Auto-resume service enabled"
+
 
 def utc_now() -> str:
     return datetime.now(timezone.utc).replace(microsecond=0).strftime("%Y-%m-%dT%H:%M:%SZ")
@@ -117,6 +138,8 @@ def record(
     finished: str,
     note: str,
     return_code: int | None = None,
+    output_tail: list[str] | None = None,
+    transient_retry: str = "",
 ) -> None:
     path = project_root / "batch_generation_manifest.json"
     batch: dict = {"schema_version": "1.0.0", "repositories": []}
@@ -146,16 +169,20 @@ def record(
                     "reason": row.get("reason", ""),
                 }
             )
-    attempts.append(
-        {
-            "status": status,
-            "return_code": code,
-            "start": started,
-            "end": finished,
-            "total_time": _duration(started, finished),
-            "reason": note[:300] if note else "",
-        }
-    )
+    attempt: dict[str, object] = {
+        "status": status,
+        "return_code": code,
+        "start": started,
+        "end": finished,
+        "total_time": _duration(started, finished),
+        # Not truncated: a 300-character cap left workload 128's reason unreadable (TEMPLATE_00_134).
+        "reason": note or "",
+    }
+    if output_tail:
+        attempt["output_tail"] = list(output_tail)
+    if transient_retry:
+        attempt["transient_retry"] = transient_retry
+    attempts.append(attempt)
     entry: dict[str, object] = {
         "workload": workload,
         "status": status,
@@ -174,15 +201,88 @@ def record(
             else repo_name
         )
     if note:
-        entry["reason"] = note[:300]
+        entry["reason"] = note
     batch.setdefault("repositories", []).append(entry)
     path.write_text(json.dumps(batch, indent=2) + "\n", encoding="utf-8", newline="\n")
     print(f"[RECORD] {workload} {status} {_duration(started, finished)} (attempt {len(attempts)})", flush=True)
 
 
-def ssh_run(ssh: str, script: str, *, timeout: int = 7200) -> subprocess.CompletedProcess[str]:
+def ssh_run(ssh: str, script: str, *, timeout: int = 7200, stream_label: str = "") -> subprocess.CompletedProcess[str]:
+    """Run a script on the VM. With stream_label, append its output to BATCH_LOG as it arrives."""
     quoted = shlex.quote(script)
-    return run_host_bash(f"{normalize_ssh_command(ssh)} {quoted}", timeout=timeout)
+    command = f"{normalize_ssh_command(ssh)} {quoted}"
+    if stream_label and BATCH_LOG is not None:
+        BATCH_LOG.parent.mkdir(parents=True, exist_ok=True)
+        with BATCH_LOG.open("a", encoding="utf-8", newline="\n") as handle:
+            handle.write(f"\n===== {utc_now()} {stream_label} =====\n")
+        return run_host_bash(command, timeout=timeout, stream_log=BATCH_LOG, heartbeat_label=stream_label)
+    return run_host_bash(command, timeout=timeout)
+
+
+def ssh_probe(ssh: str, script: str, *, timeout: int = 60) -> subprocess.CompletedProcess[str]:
+    """A short status command that survives one SSH timeout or drop.
+
+    Workload 128 (TEMPLATE_00_133, 101-132) failed before setup started because a
+    60-second pgrep check timed out once. Wait for SSH, then ask once more.
+    """
+    try:
+        return ssh_run(ssh, script, timeout=timeout)
+    except (subprocess.TimeoutExpired, OSError) as exc:
+        print(f"[INFO] status check did not answer ({type(exc).__name__}); waiting for SSH and asking again", flush=True)
+        if not wait_for_ssh(ssh):
+            raise
+        return ssh_run(ssh, script, timeout=timeout)
+
+
+def tail_lines(text: str, count: int = TAIL_LINES) -> list[str]:
+    lines = [line.rstrip() for line in (text or "").splitlines() if line.strip()]
+    return lines[-count:]
+
+
+def remote_install_tail(ssh: str, name: str) -> list[str]:
+    """Last lines of the VM's results/install_status.txt (setup's own log), or [] if unreadable."""
+    try:
+        result = ssh_run(ssh, f"tail -n {TAIL_LINES} {REMOTE_ROOT}/{name}/results/install_status.txt 2>/dev/null || true", timeout=60)
+    except (subprocess.TimeoutExpired, OSError):
+        return []
+    return tail_lines(result.stdout or "")
+
+
+def classify_transient(output: str, install_tail: list[str]) -> str:
+    """Name the temporary cause of a failed setup or smoke, or return "" for a real failure.
+
+    Temporary: an apt/dpkg lock, an interrupted dpkg, a mirror, hash or DNS fetch failure,
+    or a setup log that ends right after the reboot-resume service was enabled (a reboot
+    in progress; workload 127 in TEMPLATE_00_133). An exit code alone is never enough.
+    """
+    text = (output or "") + "\n" + "\n".join(install_tail)
+    for reason, pattern in TRANSIENT_PATTERNS:
+        if pattern.search(text):
+            return reason
+    if install_tail and RESUME_SERVICE_LINE in install_tail[-1]:
+        return "setup stopped after enabling the reboot-resume service"
+    return ""
+
+
+def wait_remote_idle(ssh: str, name: str, *, timeout: int = 900) -> bool:
+    """Wait until no apt, dpkg or this repository's setup.sh is running on the VM."""
+    deadline = time.time() + timeout
+    script = (
+        "pgrep -x apt-get >/dev/null || pgrep -x apt >/dev/null || pgrep -x dpkg >/dev/null || "
+        f"pgrep -f unattended-upgr >/dev/null || (pgrep -af 'setup.sh' | grep -F '{REMOTE_ROOT}/{name}' | grep -v grep >/dev/null) "
+        "&& echo BUSY || echo IDLE"
+    )
+    while time.time() < deadline:
+        try:
+            result = ssh_run(ssh, script, timeout=60)
+            if "IDLE" in (result.stdout or ""):
+                return True
+        except (subprocess.TimeoutExpired, OSError):
+            if not wait_for_ssh(ssh):
+                return False
+        print("[INFO] waiting for apt, dpkg or setup.sh to finish on the VM before the retry", flush=True)
+        time.sleep(15)
+    return False
 
 
 def wait_for_ssh(ssh: str, *, timeout: int = 900) -> bool:
@@ -201,12 +301,12 @@ def wait_for_ssh(ssh: str, *, timeout: int = 900) -> bool:
 
 
 def remote_exists(ssh: str, name: str) -> bool:
-    result = ssh_run(ssh, f"test -d {REMOTE_ROOT}/{shlex.quote(name)} && echo EXISTS || true", timeout=60)
+    result = ssh_probe(ssh, f"test -d {REMOTE_ROOT}/{shlex.quote(name)} && echo EXISTS || true", timeout=60)
     return result.returncode == 0 and "EXISTS" in (result.stdout or "")
 
 
 def remote_setup_running(ssh: str, name: str) -> bool:
-    result = ssh_run(
+    result = ssh_probe(
         ssh,
         f"pgrep -af 'setup.sh' | grep -F '{REMOTE_ROOT}/{name}' | grep -v grep || true",
         timeout=60,
@@ -387,7 +487,7 @@ def _check_platform_policy(ssh: str, repo_dir: Path) -> int:
     if not spec.is_file():
         return 0
     fields = {str(item.get("field_name", "")): str(item.get("value", "") or "") for item in json.loads(spec.read_text(encoding="utf-8"))}
-    os_probe = ssh_run(ssh, ". /etc/os-release; echo \"$VERSION_ID\"", timeout=60)
+    os_probe = ssh_probe(ssh, ". /etc/os-release; echo \"$VERSION_ID\"", timeout=60)
     os_release = (os_probe.stdout or "").strip().splitlines()[-1] if os_probe.returncode == 0 else ""
     result = match_policy(fields, os_release=os_release)
     for warning in result.get("warnings") or []:
@@ -487,7 +587,7 @@ def remote_validate(ssh: str, repo_dir: Path, *, reuse: bool) -> int:
         return 1
     use_reuse = reuse and remote_exists(ssh, name)
     if use_reuse:
-        probe = ssh_run(
+        probe = ssh_probe(
             ssh,
             f"cat {REMOTE_ROOT}/{name}/.env_reuse_stamp 2>/dev/null || true; echo '---LOG---'; "
             f"cat {REMOTE_ROOT}/{name}/results/install_status.txt 2>/dev/null || true",
@@ -507,8 +607,21 @@ def remote_validate(ssh: str, repo_dir: Path, *, reuse: bool) -> int:
         copy_rc = remote_copy(ssh, repo_dir, reuse=True)
         if copy_rc != 0:
             return copy_rc
-    result = ssh_run(ssh, _remote_script(name, resume=False, stamp=env_reuse_stamp(repo_dir)), timeout=7200)
-    if result.returncode == 0 and REMOTE_OK in (result.stdout or ""):
+    label = name.split("-", 1)[0]
+    LAST_REMOTE[name] = {}
+
+    def passed(run: subprocess.CompletedProcess[str]) -> bool:
+        return run.returncode == 0 and REMOTE_OK in (run.stdout or "")
+
+    def run_script(resume: bool) -> subprocess.CompletedProcess[str]:
+        stage = "setup+smoke (resume)" if resume else "setup+smoke"
+        return ssh_run(
+            ssh, _remote_script(name, resume=resume, stamp=env_reuse_stamp(repo_dir)),
+            timeout=7200, stream_label=f"{label} {stage}",
+        )
+
+    result = run_script(resume=False)
+    if passed(result):
         print("[PASS] remote validation", flush=True)
         _sync_remote_env_stamp(ssh, repo_dir)
         return 0
@@ -517,13 +630,36 @@ def remote_validate(ssh: str, repo_dir: Path, *, reuse: bool) -> int:
         if not wait_for_ssh(ssh):
             print("[FAIL] SSH did not return after reboot", flush=True)
             return 1
-        result = ssh_run(ssh, _remote_script(name, resume=True, stamp=env_reuse_stamp(repo_dir)), timeout=7200)
-        if result.returncode == 0 and REMOTE_OK in (result.stdout or ""):
+        result = run_script(resume=True)
+        if passed(result):
             print("[PASS] remote validation after reboot resume", flush=True)
             _sync_remote_env_stamp(ssh, repo_dir)
             return 0
-    _emit(result.stdout or "")
-    _emit(result.stderr or "")
+    # One retry for a temporary cause (TEMPLATE_00_134). It runs here, beside the reboot
+    # resume, so a second setup.sh can never start while the first is alive; the resume
+    # script itself waits for a setup.sh that is still running.
+    install_tail = remote_install_tail(ssh, name)
+    reason = classify_transient(f"{result.stdout or ''}\n{result.stderr or ''}", install_tail)
+    if reason:
+        print(f"[INFO] {label}: temporary failure ({reason}); retrying once when the VM is idle", flush=True)
+        time.sleep(30)
+        if wait_for_ssh(ssh) and wait_remote_idle(ssh, name):
+            LAST_REMOTE[name]["transient_retry"] = reason
+            result = run_script(resume=True)
+            if passed(result):
+                print(f"[PASS] remote validation after retry ({reason})", flush=True)
+                _sync_remote_env_stamp(ssh, repo_dir)
+                return 0
+            install_tail = remote_install_tail(ssh, name)
+        else:
+            print("[WARN] the VM did not become idle; not retrying", flush=True)
+    output_tail = install_tail or tail_lines(f"{result.stdout or ''}\n{result.stderr or ''}")
+    LAST_REMOTE[name]["output_tail"] = output_tail
+    # The full output is in BATCH_LOG; printing all of it filled the 1 MB console capture.
+    for line in tail_lines(f"{result.stdout or ''}\n{result.stderr or ''}"):
+        _emit(f"  | {line}")
+    if BATCH_LOG is not None:
+        print(f"[INFO] full remote output: {BATCH_LOG}", flush=True)
     print("[FAIL] remote validation failed", flush=True)
     return result.returncode or 1
 
@@ -626,6 +762,7 @@ def process_one(workload: str, args: argparse.Namespace, template_root: Path, pr
         rc = remote_validate(ssh, repo, reuse=reuse)
         finished = utc_now()
         finish_template_copy(repo, args, rc)
+        remote = LAST_REMOTE.get(repo.name, {})
         record(
             project_root,
             workload,
@@ -635,12 +772,14 @@ def process_one(workload: str, args: argparse.Namespace, template_root: Path, pr
             finished,
             "" if rc == 0 else f"remote rc={rc}",
             return_code=rc,
+            output_tail=list(remote.get("output_tail") or []) if rc != 0 else None,
+            transient_retry=str(remote.get("transient_retry") or ""),
         )
         _stamp_generation_report(repo, started, finished)
         return rc
     except Exception as exc:
         finished = utc_now()
-        record(project_root, workload, repo_name, "failed", started, finished, str(exc)[:300], return_code=1)
+        record(project_root, workload, repo_name, "failed", started, finished, str(exc), return_code=1)
         print(f"[FAIL] {workload}: {exc}", flush=True)
         return 1
 
@@ -715,12 +854,14 @@ def host_prefetch_report(ssh: str, project_root: Path) -> None:
 
 
 def main() -> int:
-    global REMOTE_ROOT
+    global REMOTE_ROOT, BATCH_LOG
     _configure_stdio()
     args = parse_args()
     REMOTE_ROOT = normalize_remote_root(args.remote_root)
     template_root = Path(args.template_root).resolve()
     project_root = Path(args.project_root).resolve() if args.project_root else template_root.parent
+    BATCH_LOG = project_root / BATCH_LOG_NAME
+    print(f"[INFO] remote setup and smoke output is written to {BATCH_LOG}", flush=True)
     prompt = Path(args.prompt_file).resolve()
     workloads = [str(item) for item in (args.workload or []) + list(args.workloads)]
     if not workloads:

@@ -112,6 +112,29 @@ def find_working_python() -> tuple[list[str] | None, list[list[str]]]:
     return None, tried
 
 
+# Set on the re-run so a second interpreter never re-runs preflight again.
+REEXEC_MARKER = "GENERATION_PREFLIGHT_REEXEC"
+
+
+def rerun_with(working: list[str], this_python: str) -> int:
+    """Run this preflight again under `working` and return its exit code (TEMPLATE_00_134).
+
+    Called only when the launching interpreter's Python version or PyYAML is the sole
+    failure. Git Bash's python3 has no PyYAML, so the documented first command used to
+    exit 1 even though preflight had already found a working interpreter.
+    """
+    name = " ".join(_display_path(word) if index == 0 else word for index, word in enumerate(working))
+    print(f"[INFO] {this_python} lacks Python 3.10+ or PyYAML; re-running preflight with {name}", flush=True)
+    env = dict(os.environ)
+    env[REEXEC_MARKER] = "1"
+    try:
+        result = subprocess.run([*working, str(Path(__file__).resolve()), *sys.argv[1:]], env=env, check=False)
+    except OSError as exc:
+        print(f"[FAIL] Could not start {name}: {exc}")
+        return 1
+    return result.returncode
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="Check generation-host prerequisites")
     parser.add_argument("--template-root", default=".")
@@ -173,6 +196,8 @@ def main() -> int:
         for error in errors:
             print(f"[FAIL] {error}")
         working, tried = find_working_python()
+        if working and not errors and not os.environ.get(REEXEC_MARKER):
+            return rerun_with(working, this_python)
         if working:
             name = " ".join(_display_path(word) if index == 0 else word for index, word in enumerate(working))
             if errors:

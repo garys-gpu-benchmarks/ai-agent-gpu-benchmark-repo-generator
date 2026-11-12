@@ -2,8 +2,8 @@
 # File: scripts/lib/nvidia_cuda_toolkit.sh
 # Description: One CUDA toolkit per Ubuntu release for every NVIDIA setup.sh
 #              (scripts/templates/setup_nvidia_skeleton.sh and the vLLM/SGLang
-#              overlays). Ubuntu 24.04 uses CUDA 12.8 and Ubuntu 26.04 uses
-#              CUDA 13.3, both from NVIDIA's CUDA apt repository. Ubuntu's own
+#              overlays). Ubuntu 24.04 and Ubuntu 26.04 both use CUDA 13.3
+#              (TEMPLATE_00_133; 24.04 was 12.8), from NVIDIA's CUDA apt repository. Ubuntu's own
 #              nvidia-cuda-toolkit is never installed: it pulls
 #              libnvidia-compute-*, which collides with a host driver that is
 #              bind-mounted into a container ("Invalid cross-device link") and
@@ -41,7 +41,7 @@ nvidia_os_version_id() {
 # workload ("nvcc release changed from X to Y since setup").
 nvidia_cuda_version() {
   case "$(nvidia_os_version_id)" in
-    24.04*) printf '12.8\n' ;;
+    24.04*) printf '13.3\n' ;;
     26.04*) printf '13.3\n' ;;
     *) return 1 ;;
   esac
@@ -169,7 +169,7 @@ install_nvidia_cuda_toolkit() {
   local ver repo pkg nvcc_bin keyring_url keyring_deb current
   local -a pkgs
   if ! ver="$(nvidia_cuda_version)"; then
-    echo "[FAIL] No CUDA toolkit is defined for Ubuntu $(nvidia_os_version_id). Supported: 24.04 (CUDA 12.8), 26.04 (CUDA 13.3)." >&2
+    echo "[FAIL] No CUDA toolkit is defined for Ubuntu $(nvidia_os_version_id). Supported: 24.04 (CUDA 13.3), 26.04 (CUDA 13.3)." >&2
     return 1
   fi
   repo="$(nvidia_cuda_repo_id)"

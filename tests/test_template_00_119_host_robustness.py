@@ -181,9 +181,12 @@ class RemotePreflightTest(unittest.TestCase):
 
     def test_estimate_flags_a_slow_host(self) -> None:
         workloads = [str(n) for n in range(401, 433)]
-        estimate = self.mod.estimate_minutes(self.NOV3, workloads, ssh_call_s=2.0)
+        # TEMPLATE_00_134: reference times are the TEMPLATE_00_131 batches, and only 5% of
+        # NVIDIA x21-x32 is download (the host bootstrap prefetches models), so the slow
+        # download alone no longer flags the host; a slow SSH round trip still does.
+        estimate = self.mod.estimate_minutes(self.NOV3, workloads, ssh_call_s=4.0)
         self.assertEqual(estimate["reference_platform"], "nvidia-26.04")
-        self.assertAlmostEqual(estimate["reference_minutes"], 107.7, delta=1.0)
+        self.assertAlmostEqual(estimate["reference_minutes"], 94.3, delta=1.0)
         self.assertGreater(estimate["estimated_minutes"], 1.5 * estimate["reference_minutes"])
 
     def test_kernel_prefix_rule_matches_the_collector(self) -> None:

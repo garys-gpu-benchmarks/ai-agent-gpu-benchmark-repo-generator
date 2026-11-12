@@ -29,7 +29,7 @@ fi
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_NAME="$(basename "${REPO_ROOT}")"
 cd "${REPO_ROOT}"
-export PATH="/usr/local/cuda/bin:/usr/local/cuda-12.8/bin:${PATH}"
+export PATH="/usr/local/cuda/bin:/usr/local/cuda-13.3/bin:${PATH}"
 export CUDA_HOME="${CUDA_HOME:-/usr/local/cuda}"
 export LD_LIBRARY_PATH="${CUDA_HOME}/lib64:${LD_LIBRARY_PATH:-}"
 
@@ -143,7 +143,7 @@ apt_install \
   ca-certificates
 
 # Same toolkit as every other NVIDIA workload on this Ubuntu release
-# (24.04: CUDA 12.8, 26.04: CUDA 13.3). See scripts/lib/nvidia_cuda_toolkit.sh.
+# (CUDA 13.3 on both 24.04 and 26.04). See scripts/lib/nvidia_cuda_toolkit.sh.
 install_nvidia_cuda_toolkit
 export PATH="/usr/local/cuda/bin:/usr/local/cuda-${NVIDIA_CUDA_VERSION}/bin:${PATH}"
 if ! command -v nvcc >/dev/null 2>&1; then

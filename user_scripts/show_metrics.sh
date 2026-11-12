@@ -290,9 +290,9 @@ updates_sec                                              Upd/s
 payload_update_gb_s                                      UpdGB/s
 tlb_miss_rate                                            TLBMiss
 l3_miss_rate                                             L3Miss
-bandwidth_h2d_gbps                                       H2DGB/s
-bandwidth_d2h_gbps                                       D2HGB/s
-bandwidth_d2d_gbps                                       D2DGB/s
+bandwidth_h2d_gb_s                                       H2DGB/s
+bandwidth_d2h_gb_s                                       D2HGB/s
+bandwidth_d2d_gb_s                                       D2DGB/s
 latency_h2d_us                                           H2D_us
 latency_d2h_us                                           D2H_us
 latency_d2d_us                                           D2D_us

@@ -77,7 +77,7 @@ class PreflightDownloadProbeTests(unittest.TestCase):
         values, _ = self.run_probe("206 4096 3000.0", "000 0 0.0")
         self.assertEqual(values["download_huggingface_bps"], "0")
         self.assertEqual(values["download_pytorch_http"], "000")
-        self.assertEqual(rhp.estimate_minutes(values, ["101"], 0.5)["download_factor"], 2.0)
+        self.assertEqual(rhp.estimate_minutes(values, ["101"], 0.5)["download_factor"], 1.0)  # unmeasured: no scaling (TEMPLATE_00_134)
 
     def test_missing_index_entry_skips_the_wheel_probe(self) -> None:
         values, urls = self.run_probe("206 104857600 150000000.0", "206 104857600 41000000.0", index="<html></html>")

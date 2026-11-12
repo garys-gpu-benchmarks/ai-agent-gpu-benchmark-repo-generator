@@ -6,7 +6,7 @@
 # D2H, D2D and every swept transfer size into one number; small transfers
 # are latency-dominated, not bandwidth-representative, so the standard
 # "sustained bandwidth" figure is the value at the largest swept size, per
-# direction. This adds bandwidth_<direction>_gbps (bandwidth at each
+# direction. This adds bandwidth_<direction>_gb_s (bandwidth at each
 # direction's max transfer_size_bytes) and latency_<direction>_us (time per
 # copy at each direction's min transfer_size_bytes; the time per 1 GB copy is
 # not a latency). Numbered metrics (TEMPLATE_00_129, as 214/414) are the six
@@ -250,7 +250,7 @@ def add_peak_direction_bandwidth(rows, metrics_summary):
     sustained bandwidth. This isolates the standard sustained-bandwidth
     figure instead: for each direction, the mean bandwidth_gbps among rows
     at that direction's own max transfer_size_bytes (normally a single row).
-    Keys: bandwidth_h2d_gbps, bandwidth_d2h_gbps, bandwidth_d2d_gbps.
+    Keys: bandwidth_h2d_gb_s, bandwidth_d2h_gb_s, bandwidth_d2d_gb_s.
     """
     by_direction: dict[str, list[dict]] = {}
     for row in rows:
@@ -271,7 +271,7 @@ def add_peak_direction_bandwidth(rows, metrics_summary):
                 peak_values.append(bw)
         if peak_values:
             slug = re.sub(r"[^A-Za-z0-9]+", "_", direction).strip("_").lower()
-            metrics_summary[f"bandwidth_{slug}_gbps"] = statistics.mean(peak_values)
+            metrics_summary[f"bandwidth_{slug}_gb_s"] = statistics.mean(peak_values)
 
 def add_min_size_direction_latency(rows, metrics_summary):
     """Per-direction latency at the smallest swept transfer size.

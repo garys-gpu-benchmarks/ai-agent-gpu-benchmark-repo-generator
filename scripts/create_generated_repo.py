@@ -356,6 +356,9 @@ def main() -> int:
                 "BenchmarkSpecDefinitions.xlsx",
                 "--output",
                 "benchmark_specification.json",
+                # The JSON is written to the file above. Printing it too put about 1.2 MB
+                # into the batch console for 32 workloads (TEMPLATE_00_134).
+                "--quiet",
             ],
             discovery_root,
         )
@@ -410,6 +413,9 @@ def main() -> int:
                 "BenchmarkSpecDefinitions.xlsx",
                 "--output",
                 "benchmark_specification.json",
+                # The JSON is written to the file above. Printing it too put about 1.2 MB
+                # into the batch console for 32 workloads (TEMPLATE_00_134).
+                "--quiet",
             ],
             active_copy,
         )

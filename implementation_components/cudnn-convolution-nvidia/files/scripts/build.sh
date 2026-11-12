@@ -1,19 +1,15 @@
 #!/usr/bin/env bash
 # File: scripts/build.sh
 # Description: Compile overlay src/cudnn_conv.cu into bin/cudnn_conv.
-# Prefer CUDA 12 nvcc when it exists so Ubuntu 24.04 keeps linking the
-# CUDA 12 cuDNN. When the only nvcc is CUDA 13, link this repo's venv
-# cu13 cuDNN wheel. The wheel ships libcudnn.so.9 (no unversioned
+# Uses the toolkit setup.sh installed (/usr/local/cuda, CUDA 13.3 on both
+# Ubuntu releases), never a leftover CUDA 12 nvcc. CUDA 13 links this repo's
+# venv cu13 cuDNN wheel. The wheel ships libcudnn.so.9 (no unversioned
 # libcudnn.so) and its headers under nvidia/cudnn/include. Do not retarget
 # memcpy, NCCL, HPL, or ECC.
 set -euo pipefail
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "${REPO_ROOT}"
-if [[ -x /usr/local/cuda-12.8/bin/nvcc || -x /usr/local/cuda-12.6/bin/nvcc ]]; then
-  export PATH="/usr/local/cuda-12.8/bin:/usr/local/cuda-12.6/bin:/usr/local/cuda/bin:${PATH}"
-else
-  export PATH="/usr/local/cuda-13.3/bin:/usr/local/cuda-13.1/bin:/usr/local/cuda-13/bin:/usr/local/cuda/bin:${PATH}"
-fi
+export PATH="/usr/local/cuda/bin:/usr/local/cuda-13.3/bin:${PATH}"
 command -v nvcc >/dev/null || { echo "[FAIL] nvcc missing" >&2; exit 1; }
 # shellcheck disable=SC1091
 source "${REPO_ROOT}/scripts/lib/nvcc_glibc_throw.sh"
