@@ -55,6 +55,15 @@ cd /opt/benchmarks && ./run_benchmark_suite.sh --list
 
 The first run takes much longer than later ones: it installs the ROCm or CUDA stack and each workload's software. **On AMD, setup may restart the machine once.** If it does, log back in, wait a few minutes for setup to finish on its own, then run the same `./run_benchmark_suite.sh` line again.
 
+> **If the first `apt-get update` fails** with `Failed to fetch`, `Network is unreachable`, or `503 Service Unavailable` for the image's own Ubuntu mirror (seen on fresh AMD cloud images in November 2026), point apt at the official Ubuntu archive and run the block again:
+>
+> ```bash
+> sed -i -E 's#^(URIs:[[:space:]]*)https?://[^[:space:]]*/ubuntu/?$#\1http://archive.ubuntu.com/ubuntu/#' /etc/apt/sources.list.d/ubuntu.sources
+> apt-get update
+> ```
+>
+> Workload setup does the same switch by itself when the mirror fails, and keeps the original file under `/var/lib/gpu-benchmark-host/apt-sources-backup/`, but the `apt-get install -y git tmux` line runs before any setup.
+>
 > Use `git clone` exactly as shown. GitHub's **Download ZIP** leaves the workload folders empty.
 >
 > For the AI model workloads (x23–x32), if a model's Hugging Face license requires it, accept the license there and run `export HF_TOKEN=hf_...` first.
@@ -84,7 +93,7 @@ Swap the workload numbers for your platform (107 → 207, 307 or 407). Logs go t
 ```bash
 git clone https://github.com/garys-gpu-benchmarks/gpu-bench-suite && cd gpu-bench-suite
 GPU_HOST=203.0.113.10                              # replace with your GPU host's IP
-./get_benchmark_results.sh --host $GPU_HOST  # copy ledgers, raw and parsed results, suite logs
+./get_benchmark_results.sh --host $GPU_HOST  # copy ledgers, per-run results, suite logs
 ./show_metrics.sh 115 --host $GPU_HOST     # one workload's runs, per-profile means
 ```
 
@@ -186,9 +195,9 @@ Every one of the 128 repositories follows the same structure, so once you have r
 ├── scripts/              # parse_results.py, validate_results.py, ...
 ├── tests/                # correctness thresholds
 └── results/
-    ├── raw/              # per-run logs, metrics, artifacts
-    ├── parsed/           # SQLite + CSV
-    ├── benchmark.db      # all runs (SQLite)
+    ├── raw/              # one folder per run: logs, metrics, hardware/software inventory
+    ├── RESULTS_ACTUAL.md # latest run of each profile, readable
+    ├── benchmark.db      # latest run (SQLite)
     └── summary.json      # latest run summary
 ```
 
@@ -203,7 +212,7 @@ bash run_benchmark.sh --baseline                   # 3–5 min
 bash run_benchmark.sh --extended                   # 8–15 min
 ```
 
-Each run records latency, throughput or GFLOPS, and memory high-water marks under `results/raw/`, then persists SQLite and CSV under `results/parsed/` for cross-node aggregation.
+Each run records latency, throughput or GFLOPS, and memory high-water marks in its own folder under `results/raw/`, keeps the latest run in `results/summary.json` and `results/benchmark.db`, and refreshes the readable `results/RESULTS_ACTUAL.md`.
 
 ---
 

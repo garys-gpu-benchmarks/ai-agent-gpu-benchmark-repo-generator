@@ -16,6 +16,11 @@
 
 [[ -n "${_NVIDIA_CUDA_TOOLKIT_SH:-}" ]] && return 0
 _NVIDIA_CUDA_TOOLKIT_SH=1
+# Ubuntu mirror fallback (TEMPLATE_00_135), used by nvidia_apt_update_once.
+if [[ -f "$(dirname "${BASH_SOURCE[0]}")/apt_mirror_fallback.sh" ]]; then
+  # shellcheck disable=SC1091
+  source "$(dirname "${BASH_SOURCE[0]}")/apt_mirror_fallback.sh"
+fi
 
 NVIDIA_OS_RELEASE_FILE="${NVIDIA_OS_RELEASE_FILE:-/etc/os-release}"
 NVIDIA_ML_LIB="${NVIDIA_ML_LIB:-/usr/lib/x86_64-linux-gnu/libnvidia-ml.so.1}"
@@ -73,6 +78,11 @@ nvidia_apt_update_once() {
       log_status "STEP|SETUP apt index refreshed $(( (now - last) / 60 )) min ago on this host; skipping apt-get update"
       return 0
     fi
+  fi
+  # A cloud image's Ubuntu mirror can be unreachable; this checks it with one
+  # apt-get update and switches to archive.ubuntu.com if needed (0 = updated).
+  if declare -f ensure_ubuntu_apt_mirror >/dev/null 2>&1 && ensure_ubuntu_apt_mirror; then
+    return 0
   fi
   record_cmd "DEBIAN_FRONTEND=noninteractive apt-get update -y"
   DEBIAN_FRONTEND=noninteractive apt-get update -y || return 1
@@ -237,5 +247,30 @@ install_nvidia_cuda_toolkit() {
     fi
   fi
   export PATH="${NVIDIA_CUDA_PREFIX}/cuda-${ver}/bin:${PATH}"
+  nvidia_cuda_login_path || true
+  return 0
+}
+
+# Login shells find nvcc (TEMPLATE_00_135). Setup put CUDA in /usr/local/cuda but
+# not on root's PATH, so "nvcc --version" after ssh said "command not found" even
+# though every workload adds /usr/local/cuda/bin itself. Writes
+# /etc/profile.d/cuda-benchmark.sh once; it takes effect at the next login.
+# NVIDIA_PROFILE_D_FILE overrides the path (tests); with a test NVIDIA_CUDA_PREFIX
+# and no override nothing is written.
+nvidia_cuda_login_path() {
+  local file="${NVIDIA_PROFILE_D_FILE:-}"
+  if [[ -z "${file}" ]]; then
+    [[ "${NVIDIA_CUDA_PREFIX}" == "/usr/local" ]] || return 0
+    file="/etc/profile.d/cuda-benchmark.sh"
+  fi
+  local body
+  body="$(printf '%s\n' \
+    "# Written by GPU benchmark setup (scripts/lib/nvidia_cuda_toolkit.sh): put the" \
+    "# CUDA toolkit that setup installed on login shells' PATH." \
+    "case \":\${PATH}:\" in *:${NVIDIA_CUDA_PREFIX}/cuda/bin:*) ;; *) export PATH=\"${NVIDIA_CUDA_PREFIX}/cuda/bin:\${PATH}\" ;; esac")"
+  [[ -f "${file}" && "$(cat "${file}" 2>/dev/null)" == "${body}" ]] && return 0
+  [[ -w "$(dirname "${file}")" ]] || return 0
+  printf '%s\n' "${body}" > "${file}" || return 0
+  log_status "STEP|SETUP ${file}: ${NVIDIA_CUDA_PREFIX}/cuda/bin on login PATH (next login)"
   return 0
 }

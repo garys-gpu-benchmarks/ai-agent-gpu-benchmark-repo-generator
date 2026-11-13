@@ -1179,16 +1179,40 @@ def _refresh_workload_option_help(repo_root: Path, fields: dict[str, str]) -> No
         _write(path, updated)
 
 
+def collector_notice(repo_root: Path) -> str:
+    """What to say when no scripts/collect_workload.py was copied (TEMPLATE_00_136).
+
+    Warn only when something will actually miss it. Overlay runners for x24 and
+    x27-x31 call their own scripts, and an overlay collect_<name>.py gets a
+    collect_workload.py adapter later in apply_component_gaps.py.
+    """
+    collector = repo_root / "scripts" / "collect_workload.py"
+    if collector.is_file() and collector.stat().st_size > 0:
+        return ""
+    runner = repo_root / "run_benchmark.sh"
+    runner_text = runner.read_text(encoding="utf-8", errors="replace") if runner.is_file() else ""
+    named = sorted(
+        path.name for path in (repo_root / "scripts").glob("collect_*.py") if path.name != "collect_workload.py"
+    )
+    # apply_component_gaps.py writes the adapter whenever a collect_<name>.py exists, so say
+    # that first; 224 printed "no adapter needed" and then wrote one (TEMPLATE_00_137).
+    if named:
+        return f"[INFO] scripts/collect_workload.py will be an adapter to {', '.join(named)}."
+    if runner_text and "collect_workload.py" not in runner_text:
+        return "[INFO] run_benchmark.sh does not call scripts/collect_workload.py; no collector adapter needed."
+    return (
+        "[WARN] No scripts/collect_workload.py overlay was copied. "
+        "Implement the collector from the benchmark specification; "
+        "do not invent a generic collector in the template."
+    )
+
+
 def materialize_generated_harness(repo_root: Path) -> None:
     fields = _fields_of(repo_root)
     write_parser(repo_root)
     write_validator(repo_root)
     write_runner(repo_root, fields)
     _refresh_workload_option_help(repo_root, fields)
-    collector = repo_root / "scripts" / "collect_workload.py"
-    if not collector.is_file() or collector.stat().st_size == 0:
-        print(
-            "[WARN] No scripts/collect_workload.py overlay was copied. "
-            "Implement the collector from the benchmark specification; "
-            "do not invent a generic collector in the template."
-        )
+    notice = collector_notice(repo_root)
+    if notice:
+        print(notice)

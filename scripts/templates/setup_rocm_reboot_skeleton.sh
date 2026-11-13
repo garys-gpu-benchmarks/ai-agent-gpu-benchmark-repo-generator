@@ -72,6 +72,12 @@ REPO_NAME="$(basename "${REPO_ROOT}")"
 cd "${REPO_ROOT}"
 # shellcheck disable=SC1091
 source "${REPO_ROOT}/scripts/lib/keep_running_kernel.sh"
+# A cloud image's Ubuntu mirror can be unreachable (IPv6-only, 503); switch to
+# archive.ubuntu.com before the first apt step (TEMPLATE_00_135).
+# Runs once per 6 h per host; later setups and the post-reboot resume skip it.
+# shellcheck disable=SC1091
+source "${REPO_ROOT}/scripts/lib/apt_mirror_fallback.sh"
+ensure_ubuntu_apt_mirror || true
 if [[ -z "${SGLANG_SOURCE_DIR}" ]]; then
   SGLANG_SOURCE_DIR="${REPO_ROOT}/third_party/sglang"
 elif [[ "${SGLANG_SOURCE_DIR}" != "${REPO_ROOT}/"* ]]; then
@@ -620,7 +626,7 @@ cleanup_resume_service() {
   rm -f "${RUNTIME_STAGE_FILE}"
 }
 
-mkdir -p results/raw results/parsed tests/fixtures
+mkdir -p results/raw tests/fixtures
 if [[ ! -f "${STATUS_FILE}" || "${RESUME_FROM_SERVICE}" != 1 && ! -f "${RUNTIME_STAGE_FILE}" ]]; then
   : > "${STATUS_FILE}"
   : > "${COMMANDS_FILE}"

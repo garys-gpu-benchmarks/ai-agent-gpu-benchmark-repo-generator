@@ -196,7 +196,7 @@ class NcclSingleGpu(unittest.TestCase):
             calls = (root / "calls.txt").read_text(encoding="utf-8").splitlines()
             self.assertEqual(len(calls), 1)
             self.assertIn("1024", calls[0])
-            self.assertIn("na (requires at least two GPUs)", (root / "raw.csv").read_text(encoding="utf-8"))
+            self.assertIn("na (expected: needs at least two GPUs)", (root / "raw.csv").read_text(encoding="utf-8"))
 
 
 if __name__ == "__main__":

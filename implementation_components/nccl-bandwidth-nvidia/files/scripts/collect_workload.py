@@ -15,7 +15,7 @@ import yaml
 # One rank does not cross a GPU-to-GPU link. The binary still runs; the three
 # metrics are this text. A profile that asks for two or more GPUs and gets
 # fewer still fails.
-NA_SINGLE_GPU = "na (requires at least two GPUs)"
+NA_SINGLE_GPU = "na (expected: needs at least two GPUs)"
 
 
 def pv(params, key, profile, default=""):
@@ -86,7 +86,7 @@ def main() -> int:
         # smallest-message call to show NCCL initializes, not the sweep.
         sizes, iters, warmup, rounds = [min_bytes], 1, 0, 1
         print("[INFO] one GPU requested: one quick NCCL check, no size sweep; "
-              "every metric is na (requires at least two GPUs)", flush=True)
+              "every metric is na (expected: needs at least two GPUs)", flush=True)
     sweep_log = run_dir / "nccl_sweep.csv"
     sweep_log.write_text("round,collective,bytes,iterations,algbw_gb_s,busbw_gb_s,latency_us\n", encoding="utf-8")
     single_gpu_seen = False
@@ -96,7 +96,7 @@ def main() -> int:
             # spent 17-21 minutes of extended repeating the same na result.
             print(
                 f"[INFO] one GPU: stopped after round 1 of {rounds}; "
-                "every metric is na (requires at least two GPUs)",
+                "every metric is na (expected: needs at least two GPUs)",
                 flush=True,
             )
             break

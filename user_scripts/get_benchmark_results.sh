@@ -8,7 +8,7 @@
 #
 #   RUNTIME_LEDGERS/runtime_ledger_<first>_<last>_<time>.csv  (and .xlsx)
 #   DIRECTORIES/<workload>/results/raw/...
-#   DIRECTORIES/<workload>/results/parsed/...
+#   DIRECTORIES/<workload>/results/RESULTS_ACTUAL.md  (latest run per profile)
 #   DIRECTORIES/<workload>/results/runtime_ledger_<first>_<last>_<time>.csv
 #   DIRECTORIES/benchmark_suite_log/...         (run_benchmark_suite.sh logs)
 #
@@ -58,7 +58,8 @@ Usage: ${SCRIPT_NAME} --host HOST [--port PORT] [options]    remote machine
 Copies from the benchmark machine HOST (ssh port PORT, default 22), or from
 this machine when no host is given:
   - the runtime ledger, saved as a timestamped CSV (and an Excel copy)
-  - every workload's results/raw and results/parsed folders
+  - every workload's results/raw folder and its
+    results/RESULTS_ACTUAL.md (latest run per profile)
   - run_benchmark_suite.sh logs
 into RUNTIME_LEDGERS/ and DIRECTORIES/ under the output folder.
 
@@ -258,9 +259,9 @@ for d in [1-4][0-9][0-9]-*/; do
   [ -d "${d}" ] || continue
   d=${d%/}
   echo "${d}" >> "${tmp}/_meta/workloads.txt"
-  for sub in raw parsed; do
-    if [ -d "${d}/results/${sub}" ]; then paths+=("${d}/results/${sub}"); fi
-  done
+  if [ -d "${d}/results/raw" ]; then paths+=("${d}/results/raw"); fi
+  # The readable latest-run page (TEMPLATE_00_135); promote_results_reference.sh reads it.
+  if [ -f "${d}/results/RESULTS_ACTUAL.md" ]; then paths+=("${d}/results/RESULTS_ACTUAL.md"); fi
 done
 [ -d benchmark_suite_log ] && paths+=(benchmark_suite_log)
 echo "  workloads found:  $(wc -l < "${tmp}/_meta/workloads.txt")" >&2
@@ -355,18 +356,52 @@ convert_to_xlsx() {
   " >/dev/null 2>&1
 }
 
-# Prints workload, profile, runtime and exit code for every ledger row.
+# Ledger table: columns found by header name with a quote-aware CSV split, so
+# workload_name and failure_detail commas cannot shift them (TEMPLATE_00_135).
+# Works in mawk (the VMs) and gawk (Git Bash). Older ledgers show setup as -.
+LEDGER_TABLE_AWK=$(cat <<'AWK'
+function parse_csv(line, out,    n, i, c, field, inq) {
+  n = 0; field = ""; inq = 0
+  for (i = 1; i <= length(line); i++) {
+    c = substr(line, i, 1)
+    if (inq) {
+      if (c == "\"") {
+        if (substr(line, i + 1, 1) == "\"") { field = field "\""; i++ }
+        else inq = 0
+      } else field = field c
+    } else if (c == "\"") inq = 1
+    else if (c == ",") { out[++n] = field; field = "" }
+    else field = field c
+  }
+  out[++n] = field
+  return n
+}
+function get(f, name) { return (name in col) ? f[col[name]] : "" }
+function base(path) { sub(/\/+$/, "", path); sub(/^.*\//, "", path); return path }
+{ sub(/\r$/, "") }
+$0 == "" { next }
+!hdr { n = parse_csv($0, h); for (i = 1; i <= n; i++) col[h[i]] = i; hdr = 1
+       printf "%-60s %-9s %-8s %-9s %s\n", "workload", "profile", "setup", "benchmark", "exit_code"; next }
+{
+  parse_csv($0, f)
+  prof = get(f, "benchmark_profile"); code = get(f, "exit_code")
+  if (p != "" && prof != p) next
+  if (failed == "true" && code == "0") next
+  setup = get(f, "runtime_setup_mm_ss"); if (setup == "") setup = "-"
+  bench = get(f, "runtime_benchmark_mm_ss"); if (bench == "") bench = get(f, "total_runtime_mm_ss"); if (bench == "") bench = "-"
+  rows++; if (code == "0") passed++
+  printf "%-60s %-9s %-8s %-9s %s\n", base(get(f, "runtime_root_dir")), prof, setup, bench, code
+}
+END { if (summary == "true") printf "\nRuns in the ledger: %d   passed (exit code 0): %d   other: %d\n", rows, passed, rows - passed }
+AWK
+)
+
+# Prints workload, profile, setup and benchmark runtime and exit code for every
+# ledger row, then the pass count.
 show_ledger() {
-  local csv=$1 rows passed failed
-  rows=$(($(wc -l <"${csv}") - 1))
-  passed=$(tail -n +2 "${csv}" | awk -F, '$8 == "0"' | wc -l)
-  failed=$((rows - passed))
+  local csv=$1
   echo
-  echo "Runs in the ledger: ${rows}   passed (exit code 0): ${passed}   other: ${failed}"
-  echo
-  { echo "workload,profile,runtime,exit_code"
-    tail -n +2 "${csv}" | cut -d, -f4,5,7,8 | sed 's#^[^,]*/##'
-  } | awk -F, '{ printf "%-60s %-9s %-8s %s\n", $1, $2, $3, $4 }'
+  awk -v p="" -v failed="" -v summary=true "${LEDGER_TABLE_AWK}" "${csv}"
 }
 
 finish() {

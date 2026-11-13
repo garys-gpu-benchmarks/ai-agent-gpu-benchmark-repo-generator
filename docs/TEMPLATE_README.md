@@ -109,7 +109,7 @@ The AI agent should create these files only after Phase 0 produces a schema-vali
 - `<Workload Number>-<Repo Base Name>/requirements.txt`
 - workload-specific `<Workload Number>-<Repo Base Name>/scripts/` files
 - workload-specific `<Workload Number>-<Repo Base Name>/src/` files, if needed
-- `<Workload Number>-<Repo Base Name>/results/.gitkeep`, `<Workload Number>-<Repo Base Name>/results/raw/.gitkeep`, and `<Workload Number>-<Repo Base Name>/results/parsed/.gitkeep`
+- `<Workload Number>-<Repo Base Name>/results/.gitkeep`, and `<Workload Number>-<Repo Base Name>/results/raw/.gitkeep`
 - `<Workload Number>-<Repo Base Name>/tests/fixtures/.gitkeep`
 - `<Workload Number>-<Repo Base Name>/docs/CHANGELOG.md`
 - `<Workload Number>-<Repo Base Name>/docs/GENERATION_REPORT.md`

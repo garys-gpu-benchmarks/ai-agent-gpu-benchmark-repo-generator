@@ -85,4 +85,5 @@ vendors:
       BENCHMARK_INSTALL_LMBENCH:
         include: [lmbench]
       BENCHMARK_INSTALL_PERF:
-        include: [perf, linux perf, pmu]
+        # No bare "perf": it matched "iPerf3" (x08 installed Linux perf; TEMPLATE_00_137).
+        include: [linux perf, pmu]

@@ -19,6 +19,7 @@ from host_exec import normalize_remote_root, normalize_ssh_command, run_host_bas
 from framework_registry import resolve_flags
 from platform_policy import match_policy
 from remove_template_copy import remove_template_copy
+from results_markdown import REFERENCE_NAME, reference_from_actual, template_version_from_path
 from text_io import ensure_gitkeep
 
 TEMPLATE_COPY_SUFFIX = "_copy"
@@ -329,8 +330,8 @@ def _copy_excludes(repo_dir: Path, *, prefix: str) -> str:
 def remote_copy(ssh: str, repo_dir: Path, *, reuse: bool) -> int:
     name = repo_dir.name
     gitkeep = (
-        f"mkdir -p {REMOTE_ROOT}/{name}/results/raw {REMOTE_ROOT}/{name}/results/parsed {REMOTE_ROOT}/{name}/tests/fixtures && "
-        f"touch {REMOTE_ROOT}/{name}/results/raw/.gitkeep {REMOTE_ROOT}/{name}/results/parsed/.gitkeep "
+        f"mkdir -p {REMOTE_ROOT}/{name}/results/raw {REMOTE_ROOT}/{name}/tests/fixtures && "
+        f"touch {REMOTE_ROOT}/{name}/results/raw/.gitkeep "
         f"{REMOTE_ROOT}/{name}/tests/fixtures/.gitkeep"
     )
     if reuse:
@@ -467,9 +468,39 @@ export PYTHONDONTWRITEBYTECODE=1
 {{ find "$REPO" -type f \\( -name '*.sh' -o -name '*.py' -o -name '*.md' -o -name '*.yaml' -o -name '*.json' -o -name '*.txt' -o -name '*.toml' \\) ! -path '*/third_party/*' ! -path '*/.venv/*' ! -path '*/.cache/*' -print0 | xargs -0 grep -lZ $'\\r' || true; }} | xargs -0 -r sed -i 's/\\r$//'
 find "$REPO" -type f -name '*.sh' ! -path '*/.venv/*' -exec chmod +x {{}} +
 chmod +x "$REPO"/*.sh "$REPO"/scripts/*.sh "$REPO"/scripts/lib/*.sh 2>/dev/null || true
-mkdir -p "$REPO/results/raw" "$REPO/results/parsed" "$REPO/tests/fixtures"
-touch "$REPO/results/raw/.gitkeep" "$REPO/results/parsed/.gitkeep" "$REPO/tests/fixtures/.gitkeep"
+mkdir -p "$REPO/results/raw" "$REPO/tests/fixtures"
+touch "$REPO/results/raw/.gitkeep" "$REPO/tests/fixtures/.gitkeep"
+# Time setup.sh, which generation runs here before the smoke run, so the ledger's setup
+# columns and RESULTS_REFERENCE.md show it (TEMPLATE_00_136). The start file must survive
+# a ROCm reboot and the resume run. TEMPLATE_00_136 aged it with `find -mmin`, and 301's
+# timer restarted after the reboot (setup 00:06 for a 5.5 min install), so TEMPLATE_00_137
+# compares the stored number in bash and logs every decision. A start older than 6 h is
+# from an earlier attempt.
+SETUP_T="$REPO/results/.generation_setup"
+setup_now_ns="$(date +%s%N)"
+setup_saved_ns="$(cat "$SETUP_T.start" 2>/dev/null || true)"
+if [[ "$setup_saved_ns" =~ ^[0-9]+$ ]] && (( setup_now_ns - setup_saved_ns >= 0 && setup_now_ns - setup_saved_ns < 21600000000000 )); then
+  echo "[INFO] generation setup timer: keeping start $setup_saved_ns ($(( (setup_now_ns - setup_saved_ns) / 1000000000 )) s ago, from before a reboot or retry)"
+else
+  [ -n "$setup_saved_ns" ] && echo "[INFO] generation setup timer: replacing stale start '$setup_saved_ns'"
+  printf '%s\n' "$setup_now_ns" > "$SETUP_T.start"
+  echo "[INFO] generation setup timer: start $setup_now_ns"
+fi
 {setup}
+# A ROCm setup that needs a reboot schedules it 30 s ahead and exits 0 before setup is
+# complete. TEMPLATE_00_137 then deleted the start file (301: "setup.sh took 305 s",
+# connection closed, the resume logged a new start). Finish the timer only when setup is
+# complete; every setup.sh writes .setup_state last (TEMPLATE_00_138).
+if [ -f "$REPO/.setup_state" ]; then
+  date +%s%N > "$SETUP_T.end"
+  BENCHMARK_SEPARATE_SETUP_START_NS="$(cat "$SETUP_T.start")"
+  BENCHMARK_SEPARATE_SETUP_END_NS="$(cat "$SETUP_T.end")"
+  export BENCHMARK_SEPARATE_SETUP_START_NS BENCHMARK_SEPARATE_SETUP_END_NS
+  echo "[INFO] generation setup timer: setup.sh took $(( (BENCHMARK_SEPARATE_SETUP_END_NS - BENCHMARK_SEPARATE_SETUP_START_NS) / 1000000000 )) s"
+  rm -f "$SETUP_T.start" "$SETUP_T.end"
+else
+  echo "[INFO] generation setup timer: setup.sh returned before setup was complete (no .setup_state; a reboot is pending); keeping start $(cat "$SETUP_T.start") for the resumed run"
+fi
 printf '%s\\n' {quoted_stamp} > "$REPO/.env_reuse_stamp"
 if ! command -v rg >/dev/null 2>&1; then
   DEBIAN_FRONTEND=noninteractive apt-get update -y
@@ -725,6 +756,38 @@ def finish_template_copy(repo: Path, args: argparse.Namespace, rc: int) -> None:
         )
 
 
+def fetch_results_reference(ssh: str, repo: Path, template_root: Path) -> bool:
+    """Write the committed RESULTS_REFERENCE.md from the validation smoke run (TEMPLATE_00_135).
+
+    The smoke run on the VM refreshed results/RESULTS_ACTUAL.md there; its smoke section,
+    with a header naming the generator and the date, becomes the repository's reference
+    page. A missing page only warns: the workload has still passed.
+    """
+    name = repo.name
+    try:
+        result = ssh_run(ssh, f"cat {REMOTE_ROOT}/{shlex.quote(name)}/results/RESULTS_ACTUAL.md", timeout=60)
+    except (subprocess.TimeoutExpired, OSError) as exc:
+        print(f"[WARN] could not read RESULTS_ACTUAL.md from the VM: {exc}", flush=True)
+        return False
+    text = result.stdout or ""
+    if result.returncode != 0 or "<!-- profile:smoke -->" not in text:
+        print(f"[WARN] no smoke results page on the VM for {name}; {REFERENCE_NAME} not written", flush=True)
+        return False
+    try:
+        page = reference_from_actual(
+            text,
+            template_version=template_version_from_path(template_root),
+            generated=utc_now()[:10],
+            profiles=("smoke",),
+        )
+    except ValueError as exc:
+        print(f"[WARN] {REFERENCE_NAME} not written: {exc}", flush=True)
+        return False
+    (repo / REFERENCE_NAME).write_text(page, encoding="utf-8", newline="\n")
+    print(f"[INFO] wrote {REFERENCE_NAME} from the validation smoke run", flush=True)
+    return True
+
+
 def process_one(workload: str, args: argparse.Namespace, template_root: Path, project_root: Path, ssh: str) -> int:
     started = utc_now()
     repo_name = "unknown"
@@ -760,6 +823,8 @@ def process_one(workload: str, args: argparse.Namespace, template_root: Path, pr
         repo_name = workbook_name
         reuse = args.reuse_remote_env and not args.fresh_remote_env
         rc = remote_validate(ssh, repo, reuse=reuse)
+        if rc == 0 and ssh:
+            fetch_results_reference(ssh, repo, template_root)
         finished = utc_now()
         finish_template_copy(repo, args, rc)
         remote = LAST_REMOTE.get(repo.name, {})

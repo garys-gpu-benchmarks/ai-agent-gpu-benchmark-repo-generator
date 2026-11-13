@@ -27,8 +27,6 @@ results/*
 !results/.gitkeep
 !results/raw/
 !results/raw/.gitkeep
-!results/parsed/
-!results/parsed/.gitkeep
 !results/generation_manifest.json
 *.db
 *.sqlite

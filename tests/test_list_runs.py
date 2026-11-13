@@ -19,8 +19,9 @@ ROOT = Path(__file__).resolve().parents[1]
 SCRIPT = ROOT / "user_scripts" / "list_runs.sh"
 BASH = shutil.which("bash")
 
+# A pre-TEMPLATE_00_135 ledger: no setup column, benchmark from total_runtime_mm_ss.
 LEDGER = (
-    "a,b,c,repo,profile,f,runtime,exit_code\r\n"
+    "a,b,c,runtime_root_dir,benchmark_profile,start_datetime,total_runtime_mm_ss,exit_code\r\n"
     "1,2,3,/opt/benchmarks/101-sys-bench-a-ubu2404,smoke,x,00:01,0\r\n"
     "1,2,3,/opt/benchmarks/102-sys-bench-b-ubu2404,smoke,x,00:02,1\r\n"
     "1,2,3,/opt/benchmarks/101-sys-bench-a-ubu2404,baseline,x,03:10,0\r\n"
@@ -59,7 +60,7 @@ class ListRunsTests(unittest.TestCase):
         return subprocess.run([BASH, str(SCRIPT), *args], cwd=self.tmp, env=self.env,
                               capture_output=True, text=True, timeout=30)
 
-    HEADER = "workload                                                     profile   runtime  exit_code"
+    HEADER = "workload                                                     profile   setup    benchmark exit_code"
 
     def rows(self, stdout: str) -> list[list[str]]:
         # The whole output is the table: the header line first, nothing else.
@@ -72,19 +73,19 @@ class ListRunsTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(result.stderr, "")
         self.assertEqual(self.rows(result.stdout), [
-            ["101-sys-bench-a-ubu2404", "smoke", "00:01", "0"],
-            ["102-sys-bench-b-ubu2404", "smoke", "00:02", "1"],
-            ["101-sys-bench-a-ubu2404", "baseline", "03:10", "0"],
+            ["101-sys-bench-a-ubu2404", "smoke", "-", "00:01", "0"],
+            ["102-sys-bench-b-ubu2404", "smoke", "-", "00:02", "1"],
+            ["101-sys-bench-a-ubu2404", "baseline", "-", "03:10", "0"],
         ])
         self.assertFalse(self.log.exists(), "this machine must not use ssh")
         self.assertEqual(sorted(p.name for p in self.tmp.iterdir()), ["bin", "home", "runtime_ledger.csv"])
 
     def test_filters(self) -> None:
         result = self.run_script("-l", str(self.ledger), "--baseline")
-        self.assertEqual(self.rows(result.stdout), [["101-sys-bench-a-ubu2404", "baseline", "03:10", "0"]])
-        self.assertIn("101-sys-bench-a-ubu2404                                      baseline  03:10    0", result.stdout)
+        self.assertEqual(self.rows(result.stdout), [["101-sys-bench-a-ubu2404", "baseline", "-", "03:10", "0"]])
+        self.assertIn("101-sys-bench-a-ubu2404                                      baseline  -        03:10     0", result.stdout)
         result = self.run_script(f"--file={self.ledger}", "--failed")
-        self.assertEqual(self.rows(result.stdout), [["102-sys-bench-b-ubu2404", "smoke", "00:02", "1"]])
+        self.assertEqual(self.rows(result.stdout), [["102-sys-bench-b-ubu2404", "smoke", "-", "00:02", "1"]])
         result = self.run_script("--file", str(self.ledger), "--profile", "extended")
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(self.rows(result.stdout), [])  # just the header
@@ -93,10 +94,30 @@ class ListRunsTests(unittest.TestCase):
         result = self.run_script("--host", "203.0.113.10", "-p", "2222", "--file", str(self.ledger), "--failed")
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(result.stderr, "")
-        self.assertEqual(self.rows(result.stdout), [["102-sys-bench-b-ubu2404", "smoke", "00:02", "1"]])
+        self.assertEqual(self.rows(result.stdout), [["102-sys-bench-b-ubu2404", "smoke", "-", "00:02", "1"]])
         calls = self.log.read_text(encoding="utf-8")
         self.assertIn("root@203.0.113.10", calls)
         self.assertIn("2222", calls)
+
+    def test_new_ledger_columns_and_quoted_commas(self) -> None:
+        # TEMPLATE_00_135 header order; workload_name and failure_detail hold commas.
+        ledger = self.tmp / "new_ledger.csv"
+        ledger.write_text(
+            "table_index_number,run_id,workload_number,workload_name,benchmark_profile,result_status,"
+            "exit_code,metrics_na_count,failure_stage,failure_detail,start_script_datetime,"
+            "start_setup_datetime,start_benchmark_datetime,runtime_script_mm_ss,runtime_setup_mm_ss,"
+            "runtime_benchmark_mm_ss,runtime_root_dir\n"
+            '1,107_x,107,"Name, with comma",smoke,FAIL,1,0,setup,"apt failed, retry",a,b,,00:40,00:39,,'
+            "/opt/benchmarks/107-gpu-bench-x-ubu2404\n"
+            '2,107_y,107,"Name, with comma",smoke,PASS,0,0,ok,,a,b,c,05:00,01:00,03:50,'
+            "/opt/benchmarks/107-gpu-bench-x-ubu2404\n",
+            encoding="utf-8")
+        result = self.run_script("--file", str(ledger))
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(self.rows(result.stdout), [
+            ["107-gpu-bench-x-ubu2404", "smoke", "00:39", "-", "1"],
+            ["107-gpu-bench-x-ubu2404", "smoke", "01:00", "03:50", "0"],
+        ])
 
     def test_no_ledger(self) -> None:
         result = self.run_script("--file", str(self.tmp / "missing.csv"))

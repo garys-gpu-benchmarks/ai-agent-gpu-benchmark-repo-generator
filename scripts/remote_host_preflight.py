@@ -305,9 +305,9 @@ def evaluate(values: dict[str, str], workloads: list[str], kernels: dict[str, st
     warnings.extend(vendor_warnings)
     notes.extend(vendor_notes)
     if vendor == "nvidia" and values.get("nvcc", "missing") == "missing":
-        notes.append("No CUDA toolkit on the VM. The host bootstrap installs it once before workload 1 (15-30 minutes on a cold host).")
+        notes.append("No CUDA toolkit on the VM. The first NVIDIA workload's setup.sh installs it (a few minutes on a cold host).")
     if vendor == "nvidia" and values.get("dcgmi") == "missing":
-        notes.append("DCGM is not installed. The host bootstrap installs it once before workload 1.")
+        notes.append("DCGM is not installed. The first NVIDIA workload's setup.sh installs it.")
     bind = values.get("numactl_bind", "")
     if bind.startswith("rc=") and not bind.startswith("rc=0"):
         warnings.append(f"numactl cannot bind on this host ({bind}). GUPS and STREAM run unbound.")

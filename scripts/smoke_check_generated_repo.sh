@@ -87,7 +87,6 @@ required_paths=(
   "scripts/self_check_generated_repo.sh"
   "results/generation_manifest.json"
   "results/raw/.gitkeep"
-  "results/parsed/.gitkeep"
   "tests/fixtures/.gitkeep"
   ".gitattributes"
   ".claude/CLAUDE.md"

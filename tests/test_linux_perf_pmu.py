@@ -191,7 +191,7 @@ class LinuxPerfPmuCollectorTest(unittest.TestCase):
         done, rows, _, _ = self.run_collector("nopmu")
         self.assertEqual(done.returncode, 0, done.stderr)
         for key in METRICS[:4]:
-            self.assertEqual(rows[0][key], "na (hardware PMU counters not available on this host)")
+            self.assertEqual(rows[0][key], "na (expected: hardware PMU counters not available on this host)")
         self.assertGreater(float(rows[0]["context_switches_during_workload_switches_s"]), 0)
         self.assertAlmostEqual(float(rows[0]["stress_ng_bogo_ops_s"]), 2000.0)
         self.assertEqual(rows[0]["pmu_source"], "unavailable")
@@ -199,7 +199,7 @@ class LinuxPerfPmuCollectorTest(unittest.TestCase):
     def test_denied_reruns_workload_and_names_paranoid(self):
         done, rows, log, _ = self.run_collector("denied")
         self.assertEqual(done.returncode, 0, done.stderr)
-        self.assertTrue(rows[0]["instructions_per_cycle_ipc"].startswith("na (PMU access denied: perf_event_paranoid="))
+        self.assertTrue(rows[0]["instructions_per_cycle_ipc"].startswith("na (expected: PMU access denied, perf_event_paranoid="))
         self.assertEqual(log.count("--cpu 2"), 1)  # perf never started it; the bare rerun did
         self.assertAlmostEqual(float(rows[0]["stress_ng_bogo_ops_s"]), 2000.0)
 

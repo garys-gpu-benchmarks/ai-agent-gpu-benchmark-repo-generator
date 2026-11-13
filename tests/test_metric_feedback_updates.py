@@ -84,7 +84,7 @@ class MetricFeedbackUpdateTests(unittest.TestCase):
         self.assertIn('extras.extend(["-g", str(requested_gpus)])', amd)
         self.assertIn('collectives = ["all_reduce"]', nvidia)
         for text in (amd, nvidia):
-            self.assertIn('NA_SINGLE_GPU = "na (requires at least two GPUs)"', text)
+            self.assertIn('NA_SINGLE_GPU = "na (expected: needs at least two GPUs)"', text)
         self.assertIn("if requested_gpus >= 2 and used_gpus < 2:", amd)
         self.assertIn("if num_gpus >= 2 and used_gpus < 2:", nvidia)
         self.assertIn('["bin/nccl_bw"', nvidia)
@@ -246,7 +246,7 @@ class MetricFeedbackUpdateTests(unittest.TestCase):
 
     def test_remote_dram_names_the_missing_numa_node(self):
         collector = source("multichase-numa-amd", "scripts/collect_multichase.py")
-        self.assertIn('"na (requires a second NUMA node)"', collector)
+        self.assertIn('"na (expected: needs a second NUMA node)"', collector)
         harness = (ROOT / "scripts" / "materialize_generated_harness.py").read_text(encoding="utf-8")
         tree = ast.parse(harness)
         parser = ""
@@ -461,7 +461,7 @@ class MetricFeedbackUpdateTests(unittest.TestCase):
         collector = source("gups-amd", "scripts/collect_workload.py")
         self.assertIn("LLC-loads,LLC-load-misses", collector)
         self.assertIn('rate("llc-load-misses", "llc-loads")', collector)
-        self.assertIn("na (LLC load counters unavailable)", collector)
+        self.assertIn("na (expected: LLC load counters not exposed on this host)", collector)
         self.assertNotIn("cache-references,cache-misses", collector)
         self.assertIn('"l3_miss_rate": l3', collector)
 

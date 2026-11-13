@@ -52,9 +52,9 @@ required_paths=(
   "scripts/lib/rocm_install_26_04.sh"
   "scripts/lib/keep_running_kernel.sh"
   "scripts/lib/nvidia_cuda_toolkit.sh"
+  "scripts/lib/apt_mirror_fallback.sh"
   "results/generation_manifest.json"
   "results/raw/.gitkeep"
-  "results/parsed/.gitkeep"
   "tests/fixtures/.gitkeep"
   ".gitattributes"
   ".gitignore"
@@ -318,17 +318,33 @@ spec = importlib.util.spec_from_file_location(
 )
 module = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(module)
+# TEMPLATE_00_135 column order: outcome, six timing columns, repeat/suite, host versions.
 expected = [
     "table_index_number",
     "run_id",
     "workload_number",
-    "runtime_root_dir",
+    "workload_name",
     "benchmark_profile",
-    "start_datetime",
-    "total_runtime_mm_ss",
+    "result_status",
     "exit_code",
+    "metrics_na_count",
     "failure_stage",
     "failure_detail",
+    "start_script_datetime",
+    "start_setup_datetime",
+    "start_benchmark_datetime",
+    "runtime_script_mm_ss",
+    "runtime_setup_mm_ss",
+    "runtime_benchmark_mm_ss",
+    "workload_repeat_index",
+    "workload_repeat_total",
+    "suite_id",
+    "suite_repeat_index",
+    "suite_repeat_total",
+    "network_download_mb_s",
+    "gpu_driver_version",
+    "kernel_version",
+    "runtime_root_dir",
     "raw_run_dir",
     "hostname",
     "gpu_name",
@@ -336,16 +352,15 @@ expected = [
     "gpu_count",
     "os_version",
     "cpu_model",
-    "workload_name",
 ]
 expected.extend(module.metric_slot_column_names())
 expected.extend(["run_benchmark_command_submitted", "run_benchmark_command_fully_resolved"])
 expected.extend(module.parameter_slot_column_names())
-expected.extend(["parameters_set", "notes", "metrics_na_count", "result_status", "gpu_model_note"])
+expected.extend(["parameters_set", "notes", "gpu_model_note"])
 if list(module.LEDGER_COLUMNS) != expected:
     raise SystemExit("[FAIL] scripts/update_runtime_ledger.py LEDGER_COLUMNS order is incorrect.")
 if module.format_total_runtime_mm_ss("75") != "01:15":
-    raise SystemExit("[FAIL] total_runtime_mm_ss must store elapsed time as mm:ss.")
+    raise SystemExit("[FAIL] runtime_*_mm_ss columns must store elapsed time as mm:ss.")
 if module.infer_failure_stage(0, "validated run") != "ok":
     raise SystemExit("[FAIL] failure_stage must be ok when exit_code is 0.")
 if module.infer_failure_stage(1, "collection failed with status 1") != "collection":
@@ -468,7 +483,7 @@ if module.parse_gpu_name_text(amd_smi=amd_smi) != "AMD Instinct MI300X VF":
     raise SystemExit("[FAIL] gpu_name must parse amd-smi MARKET_NAME.")
 if module.parse_gpu_vram_text(rocm_mem=rocm_mem) != "205822885888":
     raise SystemExit("[FAIL] gpu_vram must parse VRAM Total Memory (B) only.")
-print("[PASS] runtime_ledger.csv column order, total_runtime_mm_ss format, and GPU field parsers")
+print("[PASS] runtime_ledger.csv column order, runtime_*_mm_ss format, and GPU field parsers")
 PY
 grep -Fq "scripts/ensure_setup.sh" run_benchmark.sh || {
     echo "[FAIL] run_benchmark.sh does not perform automatic setup-on-demand." >&2

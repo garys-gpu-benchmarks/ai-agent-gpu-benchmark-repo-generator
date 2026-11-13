@@ -17,6 +17,17 @@ set -euo pipefail
 
 LOG_LEVEL="${LOG_LEVEL:-INFO}"
 
+# When this run_benchmark.sh started, for the ledger's start_script_datetime and
+# runtime_script_mm_ss (TEMPLATE_00_135). Recorded once per process: a second source
+# in the same shell keeps it, and a child run_benchmark.sh (the next profile) gets
+# its own. Child scripts that source this file (setup.sh) cannot change the parent's.
+if [[ "${BENCHMARK_SCRIPT_START_PID:-}" != "$$" ]]; then
+  BENCHMARK_SCRIPT_START_NS="$(date +%s%N 2>/dev/null || true)"
+  [[ "${BENCHMARK_SCRIPT_START_NS}" =~ ^[0-9]+$ ]] || BENCHMARK_SCRIPT_START_NS="$(date +%s)000000000"
+  BENCHMARK_SCRIPT_START_PID="$$"
+  export BENCHMARK_SCRIPT_START_NS BENCHMARK_SCRIPT_START_PID
+fi
+
 # Keep Hugging Face snapshots and pip wheels on the overlay-root home when
 # the workload tree lives on a quotaed volume (this pod: /workspace ~35G).
 # Overlay run_benchmark.sh files use ${HF_HOME:-${REPO_ROOT}/.cache/...}, so
@@ -201,7 +212,13 @@ begin_benchmark_run() {
   BENCHMARK_START_NS="$(epoch_ns)"
   BENCHMARK_RUN_ACTIVE=1
   BENCHMARK_LEDGER_WRITTEN=0
+  # Setup starts here (ensure_setup.sh is the next step). mark_benchmark_measure_start
+  # moves BENCHMARK_START_* to the benchmark start but leaves this one, so the ledger
+  # can report setup and benchmark separately (TEMPLATE_00_135).
+  BENCHMARK_SETUP_START_NS="${BENCHMARK_START_NS}"
+  BENCHMARK_MEASURE_STARTED=0
   export BENCHMARK_PROFILE BENCHMARK_START_DATETIME BENCHMARK_START_NS BENCHMARK_RUN_ACTIVE BENCHMARK_LEDGER_WRITTEN
+  export BENCHMARK_SETUP_START_NS BENCHMARK_MEASURE_STARTED
   # Without errtrace, ERR is not inherited by functions. 102's validate_phase
   # then exits 1 under set -e and never writes a ledger row.
   set -E
@@ -213,7 +230,8 @@ mark_benchmark_measure_start() {
   # timestamp begin_benchmark_run recorded. The published elapsed time starts here.
   BENCHMARK_START_DATETIME="$(iso_utc_now)"
   BENCHMARK_START_NS="$(epoch_ns)"
-  export BENCHMARK_START_DATETIME BENCHMARK_START_NS
+  BENCHMARK_MEASURE_STARTED=1
+  export BENCHMARK_START_DATETIME BENCHMARK_START_NS BENCHMARK_MEASURE_STARTED
 }
 
 prefetch_vllm_model_weights() {

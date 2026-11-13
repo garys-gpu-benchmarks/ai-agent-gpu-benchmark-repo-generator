@@ -71,7 +71,6 @@ REQUIRED_PATHS = [
     "scripts/check_github_publish_ready.sh",
     "results/generation_manifest.json",
     "results/raw/.gitkeep",
-    "results/parsed/.gitkeep",
     "tests/fixtures/.gitkeep",
 ]
 

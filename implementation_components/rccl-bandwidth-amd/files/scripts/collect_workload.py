@@ -66,9 +66,9 @@ import re  # noqa: E402
 # largest-message bandwidth and smallest-message latency. Mixing unlike
 # collective algorithms into arithmetic means produced no interpretable result.
 # One rank does not cross a GPU-to-GPU link, so those three metrics are
-# "na (requires at least two GPUs)" after the binary runs. A profile that asks
+# "na (expected: needs at least two GPUs)" after the binary runs. A profile that asks
 # for two or more GPUs and initializes fewer still fails.
-NA_SINGLE_GPU = "na (requires at least two GPUs)"
+NA_SINGLE_GPU = "na (expected: needs at least two GPUs)"
 COLLECTIVES = ("all_reduce_perf",)
 
 
@@ -119,7 +119,7 @@ def main() -> int:
         min_bytes = str(pv(params, "min_bytes", args.profile, "") or "8")
         extras = ["-b", min_bytes, "-e", min_bytes, "-n", "1", "-w", "0"]
         print("[INFO] one GPU requested: one quick RCCL check, no size sweep; "
-              "every metric is na (requires at least two GPUs)", flush=True)
+              "every metric is na (expected: needs at least two GPUs)", flush=True)
     extras.extend(["-g", str(requested_gpus)])
     timeout = 3600
     rows = []

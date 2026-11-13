@@ -241,8 +241,8 @@ def pmu_unavailable_reason(perf: str | None, transcript: str) -> str:
         return f"na (expected: perf not installed for kernel {os.uname().release})"
     lowered = transcript.lower()
     if any(token in lowered for token in ("no permission", "not permitted", "access to performance monitoring")):
-        return f"na (PMU access denied: perf_event_paranoid={perf_paranoid()})"
-    return "na (hardware PMU counters not available on this host)"
+        return f"na (expected: PMU access denied, perf_event_paranoid={perf_paranoid()})"
+    return "na (expected: hardware PMU counters not available on this host)"
 
 
 def stress_ng_bogo_ops_s(text: str) -> float | None:

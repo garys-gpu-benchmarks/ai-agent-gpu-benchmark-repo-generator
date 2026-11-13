@@ -1,14 +1,17 @@
 #!/usr/bin/env python3
 # File: scripts/remote_host_bootstrap.py
 # Description: One-time host bootstrap before workload 1, timed on its own
-#              (TEMPLATE_00_119). Copies scripts/remote/ and two scripts/lib/
-#              helpers to the VM, runs host_bootstrap.sh in the foreground (CUDA
-#              toolkit and DCGM on NVIDIA), and leaves a Hugging Face prefetch of
+#              (TEMPLATE_00_119). Copies scripts/remote/ and three scripts/lib/
+#              helpers to the VM, runs host_bootstrap.sh in the foreground (Ubuntu
+#              mirror check and apt index; the NVIDIA CUDA toolkit and DCGM only with
+#              BENCHMARK_BOOTSTRAP_CUDA=1 since TEMPLATE_00_135, otherwise the first
+#              setup.sh installs them), and leaves a Hugging Face prefetch of
 #              this batch's models running in the background. Warnings only:
 #              nothing here stops generation.
 from __future__ import annotations
 
 import json
+import os
 import shlex
 import time
 from datetime import datetime, timezone
@@ -24,6 +27,7 @@ FILES = (
     "remote/host_prefetch.py",
     "lib/nvidia_cuda_toolkit.sh",
     "lib/keep_running_kernel.sh",
+    "lib/apt_mirror_fallback.sh",
 )
 
 SDXL_PATTERNS = ";".join(
@@ -140,8 +144,11 @@ def run_bootstrap(
             warnings.append("could not copy the bootstrap scripts to the VM; each setup.sh installs what it needs")
             report["status"] = "copy_failed"
         else:
+            # BENCHMARK_BOOTSTRAP_CUDA=1 on the generation host asks the VM bootstrap to
+            # install the NVIDIA CUDA toolkit and DCGM itself (TEMPLATE_00_119 behavior).
+            cuda_env = "BENCHMARK_BOOTSTRAP_CUDA=1 " if os.environ.get("BENCHMARK_BOOTSTRAP_CUDA") == "1" else ""
             command = (
-                f"bash {REMOTE_DIR}/remote/host_bootstrap.sh --vendor {shlex.quote(vendor)} "
+                f"{cuda_env}bash {REMOTE_DIR}/remote/host_bootstrap.sh --vendor {shlex.quote(vendor)} "
                 f"--models {shlex.quote(' '.join(models))}"
             )
             result = ssh_run(ssh, command, timeout=5400)

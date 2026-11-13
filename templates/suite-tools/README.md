@@ -8,7 +8,7 @@ Operator tools for the GPU benchmark suite under
 | Script | Runs on | What it does |
 |---|---|---|
 | [`run_benchmark_suite.sh`](run_benchmark_suite.sh) | the GPU host | Runs the workloads already installed under one folder (default `__SUITE_INSTALL_ROOT__`), one after another, for each requested profile, optionally repeated. One log file for the whole run and a pass/fail summary at the end. It discovers workloads from the folder, so the same script serves all four platforms, and it downloads nothing. |
-| [`get_benchmark_results.sh`](get_benchmark_results.sh) | your laptop (Git Bash on Windows) with `--host`, or the GPU host without it | With `--host`, over one SSH connection; without `--host`, from the machine it runs on. Copies the runtime ledger (CSV, plus an Excel copy on Windows), every workload's `results/raw` and `results/parsed`, and the suite logs, into `RUNTIME_LEDGERS/` and `DIRECTORIES/`. |
+| [`get_benchmark_results.sh`](get_benchmark_results.sh) | your laptop (Git Bash on Windows) with `--host`, or the GPU host without it | With `--host`, over one SSH connection; without `--host`, from the machine it runs on. Copies the runtime ledger (CSV, plus an Excel copy on Windows), every workload's `results/raw` and `results/RESULTS_ACTUAL.md`, and the suite logs, into `RUNTIME_LEDGERS/` and `DIRECTORIES/`. |
 | [`list_runs.sh`](list_runs.sh) | your laptop with `--host`, or the GPU host without it | Prints one line per run in the runtime ledger (workload, profile, runtime, exit code) under a header line, and nothing else. Copies nothing. `--smoke`, `--baseline`, `--extended` or `--failed` narrow the list; `--file` reads a saved ledger copy. |
 | [`show_metrics.sh`](show_metrics.sh) | your laptop or the GPU host | Prints one workload's runs from the runtime ledger (local file, or over SSH with `--host`) in fixed 7-character metric columns plus an Exit column, with per-profile means. Column headings and the 12-character workload names are generated from the `Metric_Short_Labels` and `Workload_Short_Names` sheets in the generator. |
 
@@ -49,7 +49,10 @@ git pull && git submodule update --init --recursive
 ```
 
 The first run of each workload builds its environment with `setup.sh`, which
-may ask for your `sudo` password and, for ROCm, may need one reboot. Logs go to
+may ask for your `sudo` password and, for ROCm, may need one reboot. If the
+image's own Ubuntu mirror is unreachable, setup switches apt to
+`archive.ubuntu.com` by itself (originals kept under
+`/var/lib/gpu-benchmark-host/apt-sources-backup/`). Logs go to
 `__SUITE_INSTALL_ROOT__/benchmark_suite_log/`.
 
 ## On your laptop

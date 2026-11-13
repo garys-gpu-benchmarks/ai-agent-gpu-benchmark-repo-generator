@@ -179,7 +179,7 @@ jobs:
           path: |
             results/summary.json
             results/environment.json
-            results/parsed/
+            results/RESULTS_ACTUAL.md
             results/install_status.txt
           if-no-files-found: warn
           retention-days: __RETENTION_DAYS__

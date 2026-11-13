@@ -142,12 +142,14 @@ class GetBenchmarkResultsOptionTests(unittest.TestCase):
         for workload in ("101-sys-bench-a-ubu2404", "102-sys-bench-b-ubu2404"):
             (root / workload / "results" / "raw" / "run1").mkdir(parents=True)
             (root / workload / "results" / "raw" / "run1" / "raw_output.txt").write_text(workload, encoding="utf-8")
+        # A parsed/ folder left by a pre-TEMPLATE_00_136 workload is not collected.
         (root / "101-sys-bench-a-ubu2404" / "results" / "parsed").mkdir()
+        (root / "101-sys-bench-a-ubu2404" / "results" / "parsed" / "run_1.json").write_text("{}", encoding="utf-8")
         (root / "benchmark_suite_log").mkdir()
         (root / "benchmark_suite_log" / "suite.log").write_text("log", encoding="utf-8")
         ledger = root / "ledger.csv"
         ledger.write_text(
-            "a,b,c,repo,profile,f,runtime,exit_code\n"
+            "a,b,c,runtime_root_dir,benchmark_profile,start_datetime,total_runtime_mm_ss,exit_code\n"
             "1,2,3,/opt/benchmarks/101-sys-bench-a-ubu2404,smoke,x,00:01,0\n"
             "1,2,3,/opt/benchmarks/102-sys-bench-b-ubu2404,smoke,x,00:02,1\n",
             encoding="utf-8",
@@ -158,13 +160,14 @@ class GetBenchmarkResultsOptionTests(unittest.TestCase):
         self.assertEqual(self.ssh_calls(), [], "local mode must not use ssh")
         self.assertIn("No --host given: collecting from this machine", result.stdout)
         self.assertIn("Runs in the ledger: 2   passed (exit code 0): 1   other: 1", result.stdout)
-        self.assertRegex(result.stdout, r"101-sys-bench-a-ubu2404\s+smoke\s+00:01\s+0")
+        self.assertRegex(result.stdout, r"101-sys-bench-a-ubu2404\s+smoke\s+-\s+00:01\s+0")
         self.assertIn("(this machine)", result.stdout)
         directories = out / "DIRECTORIES"
         for workload in ("101-sys-bench-a-ubu2404", "102-sys-bench-b-ubu2404"):
             self.assertEqual((directories / workload / "results" / "raw" / "run1" / "raw_output.txt").read_text(encoding="utf-8"), workload)
             self.assertEqual(len(list((directories / workload / "results").glob("runtime_ledger_101_102_*.csv"))), 1)
         self.assertTrue((directories / "benchmark_suite_log" / "suite.log").is_file())
+        self.assertFalse((directories / "101-sys-bench-a-ubu2404" / "results" / "parsed").exists())
         self.assertEqual(len(list((out / "RUNTIME_LEDGERS").glob("runtime_ledger_101_102_*.csv"))), 1)
         self.assertFalse((directories / "_meta").exists())
 

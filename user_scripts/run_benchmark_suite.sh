@@ -54,6 +54,7 @@ declare -a profiles=()
 declare -a workloads=()
 declare -a failed_runs=()
 runs_total=0
+suite_id=""
 runs_done=0
 runs_passed=0
 runs_failed=0
@@ -334,6 +335,21 @@ on_interrupt() {
   exit 130
 }
 
+# One download test when the suite starts: the first 200 MB of BERT's weights from
+# huggingface.co, 30 s cap, written to /dev/null so no cache changes. Prints MB/s
+# with one decimal, or nothing when it cannot be measured (TEMPLATE_00_135).
+# BENCHMARK_SKIP_NETWORK_TEST=1 skips it.
+network_download_mb_s() {
+  [[ "${BENCHMARK_SKIP_NETWORK_TEST:-0}" == "1" ]] && return 0
+  command -v curl >/dev/null 2>&1 || return 0
+  local out code bytes speed
+  out=$(curl -sL -o /dev/null --max-time 30 -r 0-209715199 -w '%{http_code} %{size_download} %{speed_download}' \
+    https://huggingface.co/google-bert/bert-base-uncased/resolve/main/model.safetensors 2>/dev/null) || true
+  read -r code bytes speed <<<"${out}"
+  [[ "${code:-}" == 2* ]] || return 0
+  awk -v b="${bytes:-0}" -v s="${speed:-0}" 'BEGIN { if (b + 0 >= 1048576 && s + 0 > 0) printf "%.1f", s / 1000000 }'
+}
+
 # Runs one workload with one profile; updates the counters.
 run_one() {
   local workload=$1 profile=$2 pass=$3
@@ -348,6 +364,8 @@ run_one() {
   printf '\n%s\n%s: bash run_benchmark.sh --%s\n' "${RULE_RUN}" "${workload}" "${profile}" >>"${log_file}"
 
   start=$(date +%s)
+  # Each ledger row records which pass of -r N it belongs to (TEMPLATE_00_135).
+  export BENCHMARK_SUITE_REPEAT_INDEX="${pass}"
   if [[ "${show_output}" == true ]]; then
     (cd "${root_dir}/${workload}" && bash run_benchmark.sh "--${profile}") </dev/null 2>&1 | tee -a "${log_file}"
     exit_code=${PIPESTATUS[0]}
@@ -386,7 +404,8 @@ main() {
   resolve_workloads
 
   runs_total=$((repeat_count * ${#profiles[@]} * ${#workloads[@]}))
-  [[ -n "${log_file}" ]] || log_file="${root_dir}/${LOG_SUBDIR}/run_benchmark_suite_$(hostname -s)_$(date '+%Y%m%d_%H%M%S').log"
+  suite_id="$(hostname -s)_$(date '+%Y%m%d_%H%M%S')"
+  [[ -n "${log_file}" ]] || log_file="${root_dir}/${LOG_SUBDIR}/run_benchmark_suite_${suite_id}.log"
 
   if [[ "${dry_run}" == true ]]; then
     echo "Dry run: nothing will be executed."
@@ -408,6 +427,17 @@ main() {
 
   suite_start_epoch=$(date +%s)
   suite_start_text=$(timestamp)
+  # Ledger columns suite_id, suite_repeat_total and network_download_mb_s (TEMPLATE_00_135).
+  export BENCHMARK_SUITE_ID="${suite_id}"
+  export BENCHMARK_SUITE_REPEAT_TOTAL="${repeat_count}"
+  export BENCHMARK_NETWORK_DOWNLOAD_MB_S
+  BENCHMARK_NETWORK_DOWNLOAD_MB_S="$(network_download_mb_s)"
+  say "Suite ID:   ${suite_id}"
+  if [[ -n "${BENCHMARK_NETWORK_DOWNLOAD_MB_S}" ]]; then
+    say "Download:   ${BENCHMARK_NETWORK_DOWNLOAD_MB_S} MB/s from huggingface.co"
+  else
+    say "Download:   not measured"
+  fi
   say "Root:       ${root_dir}"
   say "Workloads:  ${#workloads[@]}"
   say "Profiles:   ${profiles[*]}"

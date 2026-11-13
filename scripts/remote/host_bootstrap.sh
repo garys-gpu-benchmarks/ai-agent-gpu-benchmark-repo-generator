@@ -2,13 +2,15 @@
 # File: scripts/remote/host_bootstrap.sh
 # Description: One-time host preparation on the validation VM, run by
 #              scripts/remote_host_bootstrap.py before workload 1 (TEMPLATE_00_119).
-#              Foreground: apt index, Python venv support, and on NVIDIA the CUDA
-#              toolkit and DCGM through the same scripts/lib/nvidia_cuda_toolkit.sh
-#              every setup.sh calls, so later setups find them "already present".
+#              Foreground: Ubuntu mirror check (apt_mirror_fallback.sh), apt index and
+#              Python venv support. The NVIDIA CUDA toolkit and DCGM are left to the
+#              first setup.sh (TEMPLATE_00_135); BENCHMARK_BOOTSTRAP_CUDA=1 installs them
+#              here through scripts/lib/nvidia_cuda_toolkit.sh as before.
 #              Background: Hugging Face prefetch of the models this batch needs.
 #              Every step only warns; the script always exits 0 so generation continues.
 # Execution: bash host_bootstrap.sh --vendor nvidia|amd [--models "<spec> <spec> ..."]
-# Environment: BENCHMARK_HOST_STATE_DIR (default /var/lib/gpu-benchmark-host).
+# Environment: BENCHMARK_HOST_STATE_DIR (default /var/lib/gpu-benchmark-host),
+#              BENCHMARK_BOOTSTRAP_CUDA=1 (install the NVIDIA CUDA toolkit and DCGM here).
 set -uo pipefail
 # Model specs carry allow_patterns such as *.json; never expand them as globs.
 set -f
@@ -45,6 +47,16 @@ if [[ -f "${HERE}/../lib/keep_running_kernel.sh" ]]; then
   fi
 fi
 
+if [[ "${apt_ok}" == 1 && -f "${HERE}/../lib/apt_mirror_fallback.sh" ]]; then
+  # Switch an unreachable image mirror to archive.ubuntu.com (TEMPLATE_00_135).
+  # shellcheck disable=SC1091
+  source "${HERE}/../lib/apt_mirror_fallback.sh"
+  rm -f "${STATE}/apt_mirror_fallback.txt"
+  ensure_ubuntu_apt_mirror
+  [[ $? == 1 ]] && warn "apt-get update fails even after the Ubuntu mirror fallback"
+  [[ -f "${STATE}/apt_mirror_fallback.txt" ]] && warn "Ubuntu mirror $(cat "${STATE}/apt_mirror_fallback.txt")"
+fi
+
 if [[ "${apt_ok}" == 1 ]]; then
   record_cmd "apt-get update -y"
   if apt-get update -y; then
@@ -58,7 +70,16 @@ fi
 
 NVCC_RELEASE=""
 DCGM_STATE="not-applicable"
-if [[ "${VENDOR}" == "nvidia" && "${apt_ok}" == 1 ]]; then
+# Since TEMPLATE_00_135 the CUDA toolkit and DCGM are left to the first NVIDIA
+# setup.sh (x01), so every batch exercises the fresh-image install path that end
+# users hit, instead of finding CUDA already installed. BENCHMARK_BOOTSTRAP_CUDA=1
+# restores the TEMPLATE_00_119 behavior (install here, timed apart).
+if [[ "${VENDOR}" == "nvidia" && "${BENCHMARK_BOOTSTRAP_CUDA:-0}" != "1" ]]; then
+  NVCC_RELEASE="left-to-setup"
+  DCGM_STATE="left-to-setup"
+  log_status "STEP|BOOTSTRAP CUDA toolkit and DCGM left to the first setup.sh"
+fi
+if [[ "${VENDOR}" == "nvidia" && "${apt_ok}" == 1 && "${BENCHMARK_BOOTSTRAP_CUDA:-0}" == "1" ]]; then
   # shellcheck disable=SC1091
   source "${HERE}/../lib/nvidia_cuda_toolkit.sh"
   started=$(date +%s)

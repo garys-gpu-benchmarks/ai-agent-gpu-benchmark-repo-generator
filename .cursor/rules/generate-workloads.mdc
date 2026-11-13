@@ -27,6 +27,10 @@ Run both from the generator directory in Git Bash (Windows) or bash. Preflight i
 
 Do not pass `--remote-root`, `--project-root`, or `--template-root`. Do not reimplement copy, setup, or smoke. Continue until every requested workload is recorded.
 
+While the batch runs, every wait on it must return as soon as the **Successful time** line, a `[FAIL]` line, or a new `[RECORD]` line appears, or the process exits; report as soon as the batch finishes. A wait with no such trigger (a plain `sleep`) must not exceed 120 seconds. Cursor may warn about repeated polling; answer it with an event-triggered wait, not a longer blind sleep (TEMPLATE_00_138). A batch of 101–132 that finished at 05:32 was reported 21 minutes later because the agent was inside one long sleep (TEMPLATE_00_135).
+
+Helper scripts you write after the batch, for a review or a question, go in `/tmp` and are deleted when you finish; leave nothing in the project root or a repository.
+
 A locked overlay is a fingerprint, not a ban. When smoke fails inside a file listed in `results/overlay_lock.json`, write the same bytes in `implementation_components/<component-id>/files/<path>`, the sibling path, and that path's `sha256`, then recheck with `create_one_workload.py --validate-only`. Do not leave the workload failed when those three copies can match. Do not replace the overlay with a new collector. Do not run `create_generated_repo.py` again on a non-empty sibling. `scripts/metric_contract.py` has no lock entry: repair the generator copy and the sibling copy, then use the same recheck. `Locked overlay rewritten` means the sibling and the digest disagree. `Implementation component mismatch` means the sibling and the template source disagree.
 
 Log every change to a generator file during a batch with `python3 scripts/log_generator_repair.py --workload <N> --file <path> --reason "<why>"`. The batch summary ends with that list. A collector reports a counter the host does not have as `na (expected: <reason>)`; do not add new `classify_na` matches.

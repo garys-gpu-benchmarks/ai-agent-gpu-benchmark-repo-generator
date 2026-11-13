@@ -8,7 +8,6 @@ from pathlib import Path
 TEXT_SUFFIXES = {".md", ".py", ".sh", ".json", ".yaml", ".yml", ".txt", ".toml", ".csv"}
 GITKEEP_PATHS = (
     "results/raw/.gitkeep",
-    "results/parsed/.gitkeep",
     "tests/fixtures/.gitkeep",
 )
 

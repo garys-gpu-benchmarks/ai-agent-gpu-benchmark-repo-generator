@@ -94,7 +94,6 @@ Before starting Phase 2 content generation, confirm this minimum set exists unde
 - `scripts/self_check_generated_repo.sh`
 - `results/generation_manifest.json`
 - `results/raw/.gitkeep`
-- `results/parsed/.gitkeep`
 - `tests/fixtures/.gitkeep`
 - `.gitattributes`
 - `.claude/CLAUDE.md`
@@ -162,7 +161,7 @@ README generation rule: `scripts/fill_generated_docs.py` renders `README.md` fro
 - Repeat that ROCm verification after installing SGLang, vLLM, or other framework extras; dependency resolution can silently replace the ROCm wheel. Do not write the setup-complete marker until the final HIP/GPU check passes.
 - Before remote setup or smoke testing, run `bash scripts/self_check_generated_repo.sh`. It verifies canonical shell helpers, parser raw-output contracts, the active template copy, required workload files, and that `README.md` is not a generate-time stub (Prerequisites + mermaid + template headings).
 - SGLang readiness may remain HTTP 503 during model loading and first-use AITER JIT compilation. LLM-serving runners must call `wait_for_server` from `scripts/lib/common.sh` (default 600 seconds). Treat HTTP 503 as not ready. Do not hardcode 180 seconds.
-- After argument parsing, call `begin_benchmark_run "${profile}"` so `die()` appends a `/var/opt/benchmarks/runtime_ledger.csv` row on failure. After `ensure_setup.sh` returns, call `mark_benchmark_measure_start` so `total_runtime_mm_ss` starts at the benchmark. A setup failure still uses the `begin_benchmark_run` timestamp. Call `finish_benchmark_run` after a successful ledger write.
+- After argument parsing, call `begin_benchmark_run "${profile}"` so `die()` appends a `/var/opt/benchmarks/runtime_ledger.csv` row on failure. After `ensure_setup.sh` returns, call `mark_benchmark_measure_start` so `start_benchmark_datetime` and `runtime_benchmark_mm_ss` start at the benchmark; `start_setup_datetime` / `runtime_setup_mm_ss` cover `ensure_setup.sh` and `start_script_datetime` / `runtime_script_mm_ss` cover the whole invocation (TEMPLATE_00_135). A setup failure leaves the benchmark columns blank. Call `finish_benchmark_run` after a successful ledger write.
 - SGLang `bench_serving` labels end-to-end metrics as `Mean/Median/P95/P99 E2E Latency` and labels TPOT separately from ITL. Parsers must map E2E aliases explicitly and never use ITL values as TPOT values.
 - Implement standard runtime profiles in generated `run_benchmark.sh`:
 - `--smoke` (<= ~60s target),
@@ -198,7 +197,7 @@ Before completion, generate:
 
 Record `generation_finished_at` only after all implementation, validation, and checklist gates pass. Calculate the non-negative wall-clock `generation_duration_seconds` from the two timestamps, write all three timing fields to both generated artifacts, and print the timing summary before reporting completion.
 
-After the full requested list is recorded, delete generation-time scratch files from the local project root and from the remote validation host home. Keep the source template, each `<Workload Number>-<Repo Base Name>/` directory, `AI_AGENT_PROMPT_SUBMITTED_*.md`, and the local `batch_generation_manifest.json`. Remove leftover helpers and logs such as `*_create_start_time.txt`, `workload_identities.txt`, `rocm_pip_constraints.txt`, `_fill_generated_docs.py`, `patch_generated_repo.py`, `finish_one_workload.sh`, `process_range.sh`, `_generation_helpers/`, `batch_process*.log`, `batch_process*.stdout`, `retry*.stdout`, and root-level `*_setup.log`. After the local batch manifest is authoritative, also remove the VM-root copy of that manifest and leftover helpers. Do not delete generated repositories, files inside a generated `results/` tree, or `/var/opt/benchmarks/runtime_ledger.csv`.
+After the full requested list is recorded, delete generation-time scratch files from the local project root and from the remote validation host home. Keep the source template, each `<Workload Number>-<Repo Base Name>/` directory, `AI_AGENT_PROMPT_SUBMITTED_*.md`, the local `batch_generation_manifest.json`, and `batch_remote_output.log`. Remove leftover helpers and logs such as `*_create_start_time.txt`, `workload_identities.txt`, `rocm_pip_constraints.txt`, `_fill_generated_docs.py`, `patch_generated_repo.py`, `finish_one_workload.sh`, `process_range.sh`, `_generation_helpers/`, `batch_process*.log`, `batch_process*.stdout`, `retry*.stdout`, and root-level `*_setup.log`. After the local batch manifest is authoritative, also remove the VM-root copy of that manifest and leftover helpers. Do not delete generated repositories, files inside a generated `results/` tree, or `/var/opt/benchmarks/runtime_ledger.csv`.
 
 Validate manifest:
 

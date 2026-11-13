@@ -12,6 +12,7 @@ import re
 import shlex
 import socket
 import subprocess
+import time
 from pathlib import Path
 from typing import Any
 
@@ -47,17 +48,38 @@ def metric_slot_column_names() -> list[str]:
     return columns
 
 
+# TEMPLATE_00_135: outcome first, then the six timing columns, repeat/suite, host versions.
+# start_datetime is now start_benchmark_datetime and total_runtime_mm_ss is now
+# runtime_benchmark_mm_ss (same values); migrate_row carries older ledgers over.
+TIMING_COLUMNS = [
+    "start_script_datetime",
+    "start_setup_datetime",
+    "start_benchmark_datetime",
+    "runtime_script_mm_ss",
+    "runtime_setup_mm_ss",
+    "runtime_benchmark_mm_ss",
+]
 LEDGER_COLUMNS = [
     "table_index_number",
     "run_id",
     "workload_number",
-    "runtime_root_dir",
+    "workload_name",
     "benchmark_profile",
-    "start_datetime",
-    "total_runtime_mm_ss",
+    "result_status",
     "exit_code",
+    "metrics_na_count",
     "failure_stage",
     "failure_detail",
+    *TIMING_COLUMNS,
+    "workload_repeat_index",
+    "workload_repeat_total",
+    "suite_id",
+    "suite_repeat_index",
+    "suite_repeat_total",
+    "network_download_mb_s",
+    "gpu_driver_version",
+    "kernel_version",
+    "runtime_root_dir",
     "raw_run_dir",
     "hostname",
     "gpu_name",
@@ -65,17 +87,19 @@ LEDGER_COLUMNS = [
     "gpu_count",
     "os_version",
     "cpu_model",
-    "workload_name",
     *metric_slot_column_names(),
     "run_benchmark_command_submitted",
     "run_benchmark_command_fully_resolved",
     *parameter_slot_column_names(),
     "parameters_set",
     "notes",
-    "metrics_na_count",
-    "result_status",
     "gpu_model_note",
 ]
+# Old column name -> new column name (same value).
+RENAMED_COLUMNS = {
+    "start_datetime": "start_benchmark_datetime",
+    "total_runtime_mm_ss": "runtime_benchmark_mm_ss",
+}
 
 FAILURE_STAGES = (
     "ok",
@@ -263,6 +287,106 @@ def gpu_count() -> str:
     if amd.isdigit() and int(amd) > 0:
         return amd
     return ""
+
+
+def parse_amdgpu_version(text: str) -> str:
+    """amdgpu version from `amd-smi version` ("... | amdgpu version: 7.1.9.31600000")."""
+    match = re.search(r"amdgpu version:\s*([0-9][0-9A-Za-z.\-]*)", text or "", flags=re.IGNORECASE)
+    return match.group(1) if match else ""
+
+
+def gpu_driver_version() -> str:
+    """NVIDIA driver, or the loaded amdgpu module version (TEMPLATE_00_135)."""
+    nvidia = command_output("nvidia-smi --query-gpu=driver_version --format=csv,noheader 2>/dev/null | head -n 1")
+    if nvidia:
+        return nvidia
+    module = command_output("cat /sys/module/amdgpu/version 2>/dev/null || modinfo -F version amdgpu 2>/dev/null")
+    if module:
+        return module.splitlines()[0].strip()
+    return parse_amdgpu_version(command_output("amd-smi version 2>/dev/null"))
+
+
+def kernel_version() -> str:
+    import platform
+
+    return platform.release()
+
+
+def _ns_env(name: str, env: dict[str, str]) -> int | None:
+    raw = str(env.get(name, "") or "").strip()
+    return int(raw) if raw.isdigit() else None
+
+
+def _iso_from_ns(value: int) -> str:
+    return dt.datetime.fromtimestamp(value / 1e9, tz=dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
+def timing_columns(
+    env: dict[str, str],
+    *,
+    benchmark_start: str,
+    benchmark_runtime: str,
+    now_ns: int,
+) -> dict[str, str]:
+    """The six timing columns (TEMPLATE_00_135).
+
+    common.sh exports BENCHMARK_SCRIPT_START_NS (when run_benchmark.sh sourced it),
+    BENCHMARK_SETUP_START_NS (begin_benchmark_run, just before ensure_setup.sh) and,
+    once setup returned, BENCHMARK_START_NS with BENCHMARK_MEASURE_STARTED=1. The script
+    runtime runs until this row is written, so it also covers the hardware/software
+    inventory after the benchmark. A run whose setup failed has no benchmark start or
+    benchmark runtime; its setup runtime runs until now. Without those variables (an
+    older caller) the row keeps the two values it always had.
+    """
+    script_ns = _ns_env("BENCHMARK_SCRIPT_START_NS", env)
+    setup_ns = _ns_env("BENCHMARK_SETUP_START_NS", env)
+    # Generation runs setup.sh by itself just before run_benchmark.sh (TEMPLATE_00_136),
+    # so the setup inside this run is only the "already complete" check. Count that
+    # earlier setup.sh as this run's setup when its times are exported.
+    sep_start = _ns_env("BENCHMARK_SEPARATE_SETUP_START_NS", env)
+    sep_end = _ns_env("BENCHMARK_SEPARATE_SETUP_END_NS", env)
+    separate = (
+        setup_ns is not None and sep_start is not None and sep_end is not None
+        and sep_start <= sep_end <= setup_ns
+    )
+    extra_setup_ns = (sep_end - sep_start) if separate else 0
+    bench_ns = _ns_env("BENCHMARK_START_NS", env)
+    measured = str(env.get("BENCHMARK_MEASURE_STARTED", "") or "") == "1"
+    columns = {name: "" for name in TIMING_COLUMNS}
+    if setup_ns is None:
+        columns["start_benchmark_datetime"] = benchmark_start
+        columns["runtime_benchmark_mm_ss"] = format_total_runtime_mm_ss(benchmark_runtime)
+        return columns
+    if script_ns is None or script_ns > setup_ns:
+        script_ns = setup_ns
+    if separate:
+        script_ns = min(script_ns, sep_start)
+    columns["start_script_datetime"] = _iso_from_ns(script_ns)
+    columns["start_setup_datetime"] = _iso_from_ns(sep_start if separate else setup_ns)
+    columns["runtime_script_mm_ss"] = format_total_runtime_mm_ss(str(max(now_ns - script_ns, 0) / 1e9))
+    if measured and bench_ns is not None and bench_ns >= setup_ns:
+        columns["start_benchmark_datetime"] = benchmark_start or _iso_from_ns(bench_ns)
+        columns["runtime_setup_mm_ss"] = format_total_runtime_mm_ss(str((extra_setup_ns + bench_ns - setup_ns) / 1e9))
+        columns["runtime_benchmark_mm_ss"] = format_total_runtime_mm_ss(benchmark_runtime)
+    else:
+        columns["runtime_setup_mm_ss"] = format_total_runtime_mm_ss(str((extra_setup_ns + max(now_ns - setup_ns, 0)) / 1e9))
+    return columns
+
+
+def run_context_columns(env: dict[str, str]) -> dict[str, str]:
+    """Repeat, suite and network columns from the environment (TEMPLATE_00_135).
+
+    run_benchmark_suite.sh exports the suite values and the one download test;
+    run_benchmark.sh --repeat will export the workload repeat (until then 1 of 1).
+    """
+    return {
+        "workload_repeat_index": str(env.get("BENCHMARK_WORKLOAD_REPEAT_INDEX", "") or "1"),
+        "workload_repeat_total": str(env.get("BENCHMARK_WORKLOAD_REPEAT_TOTAL", "") or "1"),
+        "suite_id": str(env.get("BENCHMARK_SUITE_ID", "") or ""),
+        "suite_repeat_index": str(env.get("BENCHMARK_SUITE_REPEAT_INDEX", "") or ""),
+        "suite_repeat_total": str(env.get("BENCHMARK_SUITE_REPEAT_TOTAL", "") or ""),
+        "network_download_mb_s": str(env.get("BENCHMARK_NETWORK_DOWNLOAD_MB_S", "") or ""),
+    }
 
 
 def metric_items(definition: Path) -> list[tuple[str, str]]:
@@ -822,11 +946,14 @@ def format_total_runtime_mm_ss(value: str) -> str:
 
 def migrate_row(row: dict[str, str]) -> dict[str, str]:
     migrated = {column: str(row.get(column, "") or "") for column in LEDGER_COLUMNS}
-    if not migrated["total_runtime_mm_ss"]:
-        migrated["total_runtime_mm_ss"] = str(row.get("total_runtime", "") or "")
-    migrated["total_runtime_mm_ss"] = format_total_runtime_mm_ss(
-        migrated["total_runtime_mm_ss"]
-    )
+    # TEMPLATE_00_135 renames: carry the old values into the new columns.
+    for old, new in RENAMED_COLUMNS.items():
+        if not migrated[new]:
+            migrated[new] = str(row.get(old, "") or "")
+    if not migrated["runtime_benchmark_mm_ss"]:
+        migrated["runtime_benchmark_mm_ss"] = str(row.get("total_runtime", "") or "")
+    for column in ("runtime_script_mm_ss", "runtime_setup_mm_ss", "runtime_benchmark_mm_ss"):
+        migrated[column] = format_total_runtime_mm_ss(migrated[column])
     notes = migrated["notes"] or str(row.get("notes", "") or "")
     if not migrated["failure_stage"]:
         migrated["failure_stage"] = infer_failure_stage(
@@ -897,7 +1024,7 @@ def main() -> int:
     parser.add_argument(
         "--total-runtime",
         default="",
-        help="Elapsed runtime in seconds or mm:ss; stored as total_runtime_mm_ss.",
+        help="Benchmark runtime in seconds or mm:ss; stored as runtime_benchmark_mm_ss.",
     )
     parser.add_argument("--exit-code", required=True, type=int)
     parser.add_argument(
@@ -1004,8 +1131,15 @@ def main() -> int:
         "workload_number": fields.get("Workload Number", ""),
         "runtime_root_dir": str(args.runtime_root.resolve()),
         "benchmark_profile": args.profile,
-        "start_datetime": start_text,
-        "total_runtime_mm_ss": format_total_runtime_mm_ss(args.total_runtime),
+        **timing_columns(
+            dict(os.environ),
+            benchmark_start=start_text,
+            benchmark_runtime=args.total_runtime,
+            now_ns=time.time_ns(),
+        ),
+        **run_context_columns(dict(os.environ)),
+        "gpu_driver_version": gpu_driver_version(),
+        "kernel_version": kernel_version(),
         "exit_code": str(args.exit_code),
         "failure_stage": infer_failure_stage(args.exit_code, args.notes, args.failure_stage),
         "failure_detail": (
@@ -1091,6 +1225,18 @@ def main() -> int:
         except ImportError:
             pass
     print(f"Runtime entry added to {args.ledger}.")
+    # results/RESULTS_ACTUAL.md: the latest run of each profile, readable (TEMPLATE_00_135).
+    # The ledger row is the record; a failure here only warns.
+    if os.environ.get("BENCHMARK_RESULTS_MD", "1") != "0":
+        try:
+            from results_markdown import update_results_actual
+
+            page = update_results_actual(args.runtime_root.resolve(), fields, row)
+            print(f"Results page updated: {page}")
+        except Exception as exc:  # noqa: BLE001
+            import sys
+
+            print(f"[WARN] results/RESULTS_ACTUAL.md not updated: {exc}", file=sys.stderr)
     return 0
 
 

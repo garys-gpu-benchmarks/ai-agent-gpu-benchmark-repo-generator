@@ -21,7 +21,7 @@ from pathlib import Path  # noqa: E402
 
 from generated_repo_directory import find_generated_repo  # noqa: E402
 from log_generator_repair import read_entries, repairs_path  # noqa: E402
-from prompt_workflow import available_workloads, parse_workloads  # noqa: E402
+from prompt_workflow import available_workloads, ensure_prompt_metadata, parse_workloads  # noqa: E402
 
 # Interpreter caches only. Model and package caches (.cache, .venv) are never touched.
 CACHE_DIR_NAMES = ("__pycache__", ".pytest_cache", ".ruff_cache", ".mypy_cache")
@@ -215,6 +215,9 @@ def main(argv: list[str] | None = None) -> int:
         )
     workloads = parse_workloads(text, available_workloads(template_root / "BenchmarkSpecDefinitions.xlsx"))
     ip = remote_ip(text)
+    version = next((part for part in reversed(template_root.parts) if re.fullmatch(r"TEMPLATE_\d+_\d+", part)), "unknown")
+    if ensure_prompt_metadata(prompt, workloads, version):
+        print(f"[INFO] Added the traceability comment to {prompt.name}", flush=True)
     print(f"[INFO] Template root: {template_root}", flush=True)
     print(f"[INFO] Project root: {project_root}", flush=True)
     print(f"[INFO] Workloads: {', '.join(workloads)}", flush=True)

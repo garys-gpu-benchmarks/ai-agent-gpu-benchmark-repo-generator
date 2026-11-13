@@ -171,6 +171,11 @@ log_status "PHASE setup.sh start ${REPO_NAME}"
 # shellcheck disable=SC1091
 source "${REPO_ROOT}/scripts/lib/keep_running_kernel.sh"
 keep_running_kernel
+# A cloud image's Ubuntu mirror can be unreachable (IPv6-only, 503); switch to
+# archive.ubuntu.com before the first apt step (TEMPLATE_00_135).
+# shellcheck disable=SC1091
+source "${REPO_ROOT}/scripts/lib/apt_mirror_fallback.sh"
+ensure_ubuntu_apt_mirror || true
 record_cmd "DEBIAN_FRONTEND=noninteractive apt-get update -y"
 DEBIAN_FRONTEND=noninteractive apt-get update -y
 

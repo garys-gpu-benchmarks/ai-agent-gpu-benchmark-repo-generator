@@ -181,6 +181,15 @@ cd /opt/benchmarks && ./run_benchmark_suite.sh --list
 ./run_benchmark_suite.sh -w 101,102,115 --smoke
 ```
 
+> **If the first `apt-get update` fails** with `Failed to fetch`, `Network is unreachable`, or `503 Service Unavailable` for the image's own Ubuntu mirror (seen on fresh AMD cloud images in November 2026), point apt at the official Ubuntu archive and run the block again:
+>
+> ```bash
+> sed -i -E 's#^(URIs:[[:space:]]*)https?://[^[:space:]]*/ubuntu/?$#\1http://archive.ubuntu.com/ubuntu/#' /etc/apt/sources.list.d/ubuntu.sources
+> apt-get update
+> ```
+>
+> Workload setup does the same switch by itself when the mirror fails, and keeps the original file under `/var/lib/gpu-benchmark-host/apt-sources-backup/`, but the `apt-get install -y git tmux` line runs before any setup.
+
 On Ubuntu 26.04 (workloads 301–332), clone `bundle-amd-ubuntu-2604` instead and use 301, 302, and 315 in the last line. The first smoke run of a workload installs it, including ROCm; ROCm setup may restart the droplet. When it does, log in again after a few minutes, and setup continues by itself.
 
 After ROCm is installed, `amd-smi` shows the GPU's memory and utilization (`rocm-smi` still works as a fallback). For the full list of suite commands (all profiles, ranges of workloads, a long run inside `tmux`), see "Install on a GPU Host" and "After the install" in the profile README, [`github-profile-README.md`](github-profile-README.md), or run `./run_benchmark_suite.sh --help`.

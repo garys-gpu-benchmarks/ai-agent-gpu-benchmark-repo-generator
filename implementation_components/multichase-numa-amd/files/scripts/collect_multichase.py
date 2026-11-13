@@ -178,7 +178,7 @@ def main() -> int:
             rows.append(not_measured_row(
                 index, tier, size, args,
                 f"host has {len(numa_nodes) or 'no detected'} NUMA node(s)",
-                "na (requires a second NUMA node)",
+                "na (expected: needs a second NUMA node)",
             ))
             continue
         cpu_node = 0

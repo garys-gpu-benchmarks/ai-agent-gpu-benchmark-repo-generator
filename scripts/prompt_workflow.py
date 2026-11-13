@@ -139,6 +139,35 @@ def submitted_prompt_path(project_root: Path, token: str, now: dt.datetime | Non
     return candidate
 
 
+PROMPT_METADATA_MARKER = "<!-- Generation metadata"
+
+
+def ensure_prompt_metadata(path: Path, workloads: list[str], template_version: str = "unknown") -> bool:
+    """Append the traceability comment to a saved prompt that lacks it (TEMPLATE_00_136).
+
+    Agents save the chat text themselves and some skipped this comment. Returns True
+    when it was added. Never touches a file that holds private-key text.
+    """
+    text = path.read_text(encoding="utf-8")
+    # An agent-written "<!-- traceability" comment counts too (TEMPLATE_00_137: all four
+    # TEMPLATE_00_136 batches ended up with two comments).
+    if PROMPT_METADATA_MARKER in text or "<!-- traceability" in text or "PRIVATE KEY-----" in text:
+        return False
+    remote_status = "supplied-for-validation" if re.search(r"\bssh\b", text) else "not-supplied"
+    metadata = (
+        f"{PROMPT_METADATA_MARKER}\n"
+        f"created_at_utc: {dt.datetime.now(dt.timezone.utc).isoformat().replace('+00:00', 'Z')}\n"
+        f"workloads: {', '.join(workloads)}\n"
+        f"template_version: {template_version}\n"
+        f"prompt_path: {path.as_posix()}\n"
+        f"remote_validation_status: {remote_status}\n"
+        "added_by: scripts/run_from_prompt.py\n"
+        "-->\n"
+    )
+    path.write_text(text.rstrip() + "\n\n" + metadata, encoding="utf-8", newline="\n")
+    return True
+
+
 def write_submitted_prompt(
     prompt: str,
     path: Path,

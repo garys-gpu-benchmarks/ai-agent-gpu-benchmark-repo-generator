@@ -72,6 +72,11 @@ if grep -q $'\r' "$0"; then echo "This file has Windows (CRLF) line endings. Fix
 #        cp -a $P/Project381_201_232_TEMPLATE_00_112_20261019_Cursor/TEMPLATE_00_112/2[0-9][0-9]-* $R/
 #        cp -a $P/Project382_301_332_TEMPLATE_00_112_20261019_Cursor/TEMPLATE_00_112/3[0-9][0-9]-* $R/
 #        cp -a $P/Project383_401_432_TEMPLATE_00_112_20261019_Cursor/TEMPLATE_00_112/4[0-9][0-9]-* $R/
+#   1b. Optional (TEMPLATE_00_135): replace each workload's RESULTS_REFERENCE.md
+#      (written at generation from a smoke run) with a collected --baseline run:
+#        $R/ai-agent-gpu-benchmark-repo-generator/user_scripts/promote_results_reference.sh \
+#          --results <get_benchmark_results.sh output folder> --repos $R [--dry-run]
+#      Only runs that exited 0 are promoted; review the list it prints.
 #   2. Copy this script into Publishing\ (from the generator in the run folder)
 #      and run it from there, naming the run folder relative to Publishing\:
 #        cd /z/ServersProcsMemory/Github_Garys_GPU_Repos/Publishing

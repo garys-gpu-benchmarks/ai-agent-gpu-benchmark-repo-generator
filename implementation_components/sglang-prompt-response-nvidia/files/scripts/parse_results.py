@@ -592,9 +592,8 @@ def main() -> int:
     with jsonl.open("w", encoding="utf-8", newline="\n") as handle:
         for sample in parsed_samples:
             handle.write(json.dumps(sample) + "\n")
-    parsed_dir = results_dir / "parsed"
-    parsed_dir.mkdir(parents=True, exist_ok=True)
-    (parsed_dir / f"run_{run_id}.json").write_text(json.dumps(summary, indent=2) + "\n", encoding="utf-8", newline="\n")
+    # Per-run summary beside the run's other files (results/parsed/ removed in TEMPLATE_00_136).
+    (run_dir / "run_summary.json").write_text(json.dumps(summary, indent=2) + "\n", encoding="utf-8", newline="\n")
     print(f"[PASS] Parsed {len(parsed_samples)} samples into {db_path} run_id={run_id}")
     return 0
 

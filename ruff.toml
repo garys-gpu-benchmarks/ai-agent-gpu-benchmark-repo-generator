@@ -1,0 +1,10 @@
+# Plain "ruff check ." uses the project's pinned settings (TEMPLATE_00_135).
+# Without this file ruff found no config at the root and used its own defaults;
+# ruff 0.16 widened them (FURB, PLW, EXE, BLE, SIM, I, RUF...), so the command
+# printed thousands of lines for code that CI passes. The rules live in
+# config/pyproject.toml (E4, E7, E9, F), as CI runs them:
+#   ruff check --config config/pyproject.toml scripts implementation_components templates tests --exclude scripts/templates
+extend = "config/pyproject.toml"
+
+[lint]
+exclude = ["scripts/templates"]

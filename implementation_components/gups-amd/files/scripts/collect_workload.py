@@ -14,7 +14,7 @@ from pathlib import Path
 import yaml
 
 
-L3_COUNTER_NA = "na (LLC load counters unavailable)"
+L3_COUNTER_NA = "na (expected: LLC load counters not exposed on this host)"
 
 
 def pv(params, key, profile, default=""):
