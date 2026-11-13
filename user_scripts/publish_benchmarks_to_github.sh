@@ -107,7 +107,10 @@ if grep -q $'\r' "$0"; then echo "This file has Windows (CRLF) line endings. Fix
 #   1  stopped on a problem (see the STOPPED line)
 #   2  usage error
 #
-# Revision: 2026-11-07 (step 10 also copies docs/images/github-organization.png
+# Revision: 2026-11-13 (docs/OPEN_ISSUES.md, the generator's internal issue
+#           list, is never published: step 4 deletes it from every workload
+#           copy and step 9 from the generator copy, and both check for it)
+#           2026-11-07 (step 10 also copies docs/images/github-organization.png
 #           onto the profile repository as images/github-organization.png;
 #           show_ledger_runs.sh renamed list_runs.sh; bundle slugs quoted;
 #           gpu-bench-suite tools moved from scripts/ to the top of the repository)
@@ -1028,7 +1031,8 @@ echo "Ready: ${ready}   Not ready: ${not_ready}"
 # ==============================================================================
 # STEP 4: CLEAN UP AND CHECK WHAT WILL BE PUBLISHED
 # ==============================================================================
-# Removes TEMPLATE_*_copy, .venv and __pycache__ folders from the copies, then
+# Removes TEMPLATE_*_copy, .venv and __pycache__ folders and docs/OPEN_ISSUES.md
+# (the generator's internal issue list) from the copies, then
 # checks them for:
 # - files over 95 MB (GitHub rejects files over 100 MB)
 # - leftover *_copy folders
@@ -1040,17 +1044,22 @@ echo "Ready: ${ready}   Not ready: ${not_ready}"
 if is_done cleanup; then skipped 4; else
   step 4 "Clean up and check what will be published"
   removed=0
+  notes=0
   for dir in [1-4][0-9][0-9]-*; do
     r=$({ find "${dir}" -mindepth 1 -maxdepth 1 -type d \( -name 'TEMPLATE_*_copy' -o -name .venv \) -print -exec rm -rf {} +
           find "${dir}" -name .git -prune -o -type d -name __pycache__ -prune -print -exec rm -rf {} +; } | wc -l)
     removed=$((removed + r))
+    if [[ -f "${dir}/docs/OPEN_ISSUES.md" ]]; then
+      rm -f "${dir}/docs/OPEN_ISSUES.md" && notes=$((notes + 1))
+    fi
   done
   echo "--- leftover folders removed: ${removed}"
+  echo "--- docs/OPEN_ISSUES.md removed (generator notes, never published): ${notes}"
   problems=0
   check_zero "files over 95 MB" < <(find . \( -path ./_logs -o -name .git \) -prune -o -type f -size +95M -print)
   check_zero "leftover *_copy folders" < <(find . \( -path ./_logs -o -name .git \) -prune -o -type d -name '*_copy' -print)
   check_zero "unreplaced <org> clone links" < <(grep -rlE --exclude-dir=_logs --exclude-dir=scripts --exclude-dir=.git 'github\.com/(<org>|<OWNER>)/' .)
-  check_zero "never-publish items" < <(find . \( -path ./_logs -o -name .git \) -prune -o \( -name RESULTS -o -name runtime_ledger.csv -o -name '*.zip' -o -name .env -o -name .claude -o -name .venv -o -name '*.pyc' \) -print)
+  check_zero "never-publish items" < <(find . \( -path ./_logs -o -name .git \) -prune -o \( -name RESULTS -o -name runtime_ledger.csv -o -name '*.zip' -o -name .env -o -name .claude -o -name .venv -o -name '*.pyc' -o -path '*/docs/OPEN_ISSUES.md' \) -print)
   check_zero "unexpected files in results/raw" < <(find . \( -path ./_logs -o -name .git \) -prune -o -path '*/results/raw/*' -type f -not -name .gitkeep -not -iname '*manifest*' -print)
   echo "--- results/raw placeholders (one per workload is normal): $(find . \( -path ./_logs -o -name .git \) -prune -o -path '*/results/raw/*' -name .gitkeep -print | wc -l)"
   ((problems == 0)) || stop "${problems} problems listed above. Delete those files from the copies in ${PUB} (never from the run folder) and run again."
@@ -1475,11 +1484,15 @@ if is_done generator; then skipped 9; else
   # -delete turns on -depth, which disables -prune, so skip .git with a -path test instead.
   removed=$((removed + $(find . -type f -name '*.py[co]' -not -path './.git/*' -print -delete | wc -l)))
   echo "--- Python cache folders and files removed: ${removed}"
+  # The generator's internal issue list is never published (2026-11-13).
+  if [[ -f docs/OPEN_ISSUES.md ]]; then
+    rm -f docs/OPEN_ISSUES.md && echo "--- docs/OPEN_ISSUES.md removed (generator notes, never published)"
+  fi
   # The copy is kept between runs, so lint it too: it is what gets pushed.
   lint_generator "${PUB}/${GENREPO}"
   problems=0
   check_zero "nested *_copy and .git folders" < <(find . -mindepth 1 \( -path ./.git -prune \) -o -type d \( -name '*_copy' -o -name .git \) -print)
-  check_zero "never-publish items and generated workload folders" < <(find . -path ./.git -prune -o \( -name RESULTS -o -name runtime_ledger.csv -o -name '*.zip' -o -name .env -o -name .venv -o -name __pycache__ -o -name '*.py[co]' -o -type d -name '[1-4][0-9][0-9]-*' \) -print)
+  check_zero "never-publish items and generated workload folders" < <(find . -path ./.git -prune -o \( -name RESULTS -o -name runtime_ledger.csv -o -name '*.zip' -o -name .env -o -name .venv -o -name __pycache__ -o -name '*.py[co]' -o -path ./docs/OPEN_ISSUES.md -o -type d -name '[1-4][0-9][0-9]-*' \) -print)
   missing=""
   for f in LICENSE legal/NOTICE .gitattributes .gitignore; do [[ -e "${f}" ]] || missing="${missing} ${f}"; done
   echo "--- files the publish doc says to keep, missing (must be none):${missing:- none}"

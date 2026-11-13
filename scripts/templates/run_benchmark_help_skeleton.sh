@@ -24,7 +24,8 @@
 # die() writes a ledger row on failure, including a failed ensure_setup.sh.
 # After ensure_setup.sh returns, call mark_benchmark_measure_start so
 # start_benchmark_datetime and runtime_benchmark_mm_ss start at the benchmark
-# (setup time is recorded separately). After yaml defaults are applied, call
+# (setup time is recorded on the first run after setup.sh only; later runs
+# report setup 00:00). After yaml defaults are applied, call
 # set_benchmark_run_command with the fully resolved
 # `bash run_benchmark.sh ...` string (submitted flags plus yaml-filled
 # parameters that were not on the command line). After RUN_DIR is created,

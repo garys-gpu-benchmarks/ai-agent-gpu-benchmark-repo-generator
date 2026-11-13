@@ -217,6 +217,8 @@ begin_benchmark_run() {
   # can report setup and benchmark separately (TEMPLATE_00_135).
   BENCHMARK_SETUP_START_NS="${BENCHMARK_START_NS}"
   BENCHMARK_MEASURE_STARTED=0
+  # Decided by the first mark_benchmark_measure_start of this run (TEMPLATE_00_139).
+  unset BENCHMARK_FIRST_RUN_AFTER_SETUP
   export BENCHMARK_PROFILE BENCHMARK_START_DATETIME BENCHMARK_START_NS BENCHMARK_RUN_ACTIVE BENCHMARK_LEDGER_WRITTEN
   export BENCHMARK_SETUP_START_NS BENCHMARK_MEASURE_STARTED
   # Without errtrace, ERR is not inherited by functions. 102's validate_phase
@@ -226,10 +228,32 @@ begin_benchmark_run() {
 }
 
 mark_benchmark_measure_start() {
-  # Call after ensure_setup.sh returns. A setup failure still ledgers from the
-  # timestamp begin_benchmark_run recorded. The published elapsed time starts here.
-  BENCHMARK_START_DATETIME="$(iso_utc_now)"
-  BENCHMARK_START_NS="$(epoch_ns)"
+  # Call after ensure_setup.sh returns (and again after a model prefetch). A setup
+  # failure still ledgers from the timestamp begin_benchmark_run recorded.
+  #
+  # Setup time is counted only on the first run after setup.sh wrote .setup_state
+  # (TEMPLATE_00_139). That run is getting ready the first time: its setup time
+  # covers ensure_setup.sh and any model download, and the benchmark clock starts
+  # here. Every later run reports setup 00:00, and its checks and model lookups
+  # count as benchmark time (on 130/131 the SGLang checks and Hub lookup took
+  # 43-54 s per run and showed as setup on every baseline). setup.sh writes
+  # .setup_state last; .setup_state_timed records that a run has been timed since.
+  # A reinstall (a failed check removes .setup_state) makes the next run a first
+  # run again.
+  if [[ -z "${BENCHMARK_FIRST_RUN_AFTER_SETUP:-}" ]]; then
+    local root="${REPO_ROOT:-.}"
+    if [[ "${root}/.setup_state" -nt "${root}/.setup_state_timed" ]]; then
+      BENCHMARK_FIRST_RUN_AFTER_SETUP=1
+      : >"${root}/.setup_state_timed" 2>/dev/null || true
+    else
+      BENCHMARK_FIRST_RUN_AFTER_SETUP=0
+    fi
+    export BENCHMARK_FIRST_RUN_AFTER_SETUP
+  fi
+  if [[ "${BENCHMARK_FIRST_RUN_AFTER_SETUP}" == "1" ]]; then
+    BENCHMARK_START_DATETIME="$(iso_utc_now)"
+    BENCHMARK_START_NS="$(epoch_ns)"
+  fi
   BENCHMARK_MEASURE_STARTED=1
   export BENCHMARK_START_DATETIME BENCHMARK_START_NS BENCHMARK_MEASURE_STARTED
 }

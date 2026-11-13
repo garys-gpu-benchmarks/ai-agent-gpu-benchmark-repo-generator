@@ -64,6 +64,7 @@ temp/
 *.tmp
 .setup.lock
 .setup_state
+.setup_state_timed
 .rocm_runtime_stage.env
 results/reboot_resume.log
 
@@ -79,3 +80,6 @@ benchmark_actual_excel.csv
 RESULTS/
 .cache/
 *.safetensors
+
+# The generator's internal issue list stays local: never committed or published (TEMPLATE_00_139)
+docs/OPEN_ISSUES.md

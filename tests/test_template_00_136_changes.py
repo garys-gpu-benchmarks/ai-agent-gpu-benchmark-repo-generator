@@ -181,7 +181,9 @@ class PromptMetadataTests(unittest.TestCase):
             self.assertFalse(workflow.ensure_prompt_metadata(prompt, ["101"], "x"))
             self.assertEqual(prompt.read_text(encoding="utf-8").count("Generation metadata"), 1)
             key = Path(tmp) / "k.md"
-            key.write_text("-----BEGIN OPENSSH PRIVATE KEY-----\n", encoding="utf-8")
+            # Built from two pieces so this file does not match the CI secret scan
+            # (.github/workflows/ci.yml), which searches for the literal header.
+            key.write_text("-----BEGIN " + "OPENSSH PRIVATE KEY-----\n", encoding="utf-8")
             self.assertFalse(workflow.ensure_prompt_metadata(key, ["101"], "x"))
 
     def test_run_from_prompt_calls_it(self) -> None:

@@ -27,7 +27,7 @@ Run both from the generator directory in Git Bash (Windows) or bash. Preflight i
 
 Do not pass `--remote-root`, `--project-root`, or `--template-root`. Do not reimplement copy, setup, or smoke. Continue until every requested workload is recorded.
 
-While the batch runs, every wait on it must return as soon as the **Successful time** line, a `[FAIL]` line, or a new `[RECORD]` line appears, or the process exits; report as soon as the batch finishes. A wait with no such trigger (a plain `sleep`) must not exceed 120 seconds. Cursor may warn about repeated polling; answer it with an event-triggered wait, not a longer blind sleep (TEMPLATE_00_138). A batch of 101–132 that finished at 05:32 was reported 21 minutes later because the agent was inside one long sleep (TEMPLATE_00_135).
+While the batch runs, wait once per workload: each wait returns on the **Successful time** line, a `[FAIL]` line, or `[RECORD] <N>` where N is the next workload not yet recorded (never a later one), or on process exit. Such a wait may run up to 30 minutes; if it times out, start the same wait again. A plain `sleep` with no trigger must not exceed 120 seconds. Report as soon as the batch finishes. Waiting for any `[RECORD]` returns at once on lines already printed; 120-second waits drew Cursor's repeated-poll warning, and one agent then waited for the last workload's record and missed three before it (TEMPLATE_00_139). A batch of 101–132 that finished at 05:32 was reported 21 minutes later because the agent was inside one long sleep (TEMPLATE_00_135).
 
 Helper scripts you write after the batch, for a review or a question, go in `/tmp` and are deleted when you finish; leave nothing in the project root or a repository.
 

@@ -104,6 +104,7 @@ DOC_LEFTOVERS=(
   docs/generation-workflow.md
   docs/TEMPLATE_README.md
   docs/CHANGELOG.md
+  docs/OPEN_ISSUES.md
   docs/repository-template.md
   docs/SIBLING_WORKLOAD_NOTES.md
   docs/nvidia-sglang-install-contract.md
