@@ -189,10 +189,8 @@ def main() -> int:
     buf = io.StringIO()
     writer = csv.DictWriter(buf, fieldnames=header, extrasaction="ignore", lineterminator=chr(10))
     writer.writeheader()
-    writer.writerow({"sample_index": 0, **row})
-    writer.writerow({"sample_index": 1, **row})
+    writer.writerow({"sample_index": 0, **row})  # one measurement, one sample row
     Path(args.raw_file).write_text(buf.getvalue(), encoding="utf-8")
-    print(buf.getvalue(), end="")
     return 0 if row["status"] == "ok" else 1
 
 

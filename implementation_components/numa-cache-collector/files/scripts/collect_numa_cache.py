@@ -21,6 +21,7 @@ import os
 import re
 import shutil
 import subprocess
+import sys
 from pathlib import Path
 
 import yaml
@@ -330,9 +331,56 @@ def _fmt6(value):
         return str(value)
     return f"{float(value):.6f}"
 
+class ConsoleFilter:
+    """Write every line to the transcript; show only the useful ones on the console.
+
+    The full numa_sweep transcript (perf counter blocks, parameter echo, CSV) used
+    to go to the console. It now goes to numa_sweep_transcript.txt in the run
+    folder; the console keeps the INFO notes, one line per measured case, and
+    its ns/access result.
+    """
+
+    def __init__(self, transcript, console, verbose: bool = False):
+        self.transcript = transcript
+        self.console = console
+        self.verbose = verbose
+        self.pending = ""
+
+    def write(self, text: str) -> int:
+        self.transcript.write(text)
+        self.pending += text
+        while "\n" in self.pending:
+            line, self.pending = self.pending.split("\n", 1)
+            shown = line if self.verbose else self.console_line(line)
+            if shown is not None:
+                self.console.write(shown + "\n")
+                self.console.flush()
+        return len(text)
+
+    @staticmethod
+    def console_line(line: str) -> str | None:
+        stripped = line.strip()
+        if stripped.startswith("# INFO "):
+            return "[INFO] " + stripped[len("# INFO "):]
+        if stripped.startswith("# target="):
+            return "[INFO] measuring " + stripped[2:]
+        if stripped.startswith("ns/access"):
+            return "[INFO]   " + stripped
+        if stripped.startswith(("[RUN]", "[WARN]", "[FAIL]")):
+            return stripped
+        return None
+
+    def flush(self) -> None:
+        self.transcript.flush()
+        self.console.flush()
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="Collect NUMA cache latency samples")
     parser.add_argument("--output", required=True)
+    parser.add_argument("--transcript", default="",
+                        help="Full numa_sweep transcript (default: numa_sweep_transcript.txt beside --output)")
+    parser.add_argument("--verbose", action="store_true", help="Also print the full transcript to the console")
     parser.add_argument("--config", default="config/benchmark_config.yaml")
     parser.add_argument("--profile", default="smoke")
     parser.add_argument("--source-numa-node", default="")
@@ -343,7 +391,26 @@ def main() -> int:
     parser.add_argument("--access-pattern", default="")
     parser.add_argument("--num-iterations", default="")
     args = parser.parse_args()
+    transcript_path = Path(args.transcript) if args.transcript else Path(args.output).parent / "numa_sweep_transcript.txt"
+    transcript_path.parent.mkdir(parents=True, exist_ok=True)
+    console = sys.stdout
+    with transcript_path.open("w", encoding="utf-8") as transcript:
+        sys.stdout = ConsoleFilter(transcript, console, args.verbose)
+        try:
+            code = collect(args)
+        except BaseException:
+            sys.stdout.flush()
+            sys.stdout = console
+            tail = transcript_path.read_text(encoding="utf-8").splitlines()[-40:]
+            print("\n".join(["[INFO] last lines of " + str(transcript_path) + ":", *tail]), file=sys.stderr)
+            raise
+        finally:
+            sys.stdout = console
+    print(f"[INFO] full numa_sweep transcript: {transcript_path}")
+    return code
 
+
+def collect(args: argparse.Namespace) -> int:
     repo_root = Path(__file__).resolve().parents[1]
     sweep = load_sweep(Path(args.config))
     profile = args.profile
@@ -558,7 +625,7 @@ def main() -> int:
             **{name: _fmt6(summary_metrics[name]) for name in METRIC_FIELDS},
         }
 
-    rows = [summary_row("summary"), summary_row("summary_repeat")]
+    rows = [summary_row("summary")]
 
     fieldnames = [*PARAM_FIELDS, *METRIC_FIELDS]
     output_path = Path(args.output)

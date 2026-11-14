@@ -224,7 +224,6 @@ def main() -> int:
     writer.writerows(rows_for(samples, result, after, new_xids(before, after)))
     Path(args.raw_file).parent.mkdir(parents=True, exist_ok=True)
     Path(args.raw_file).write_text(buf.getvalue(), encoding="utf-8")
-    print(buf.getvalue(), end="")
     if result["status"] != "ok":
         print(f"[FAIL] {result['error_message']}")
     return 0

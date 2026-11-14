@@ -21,6 +21,7 @@ import json
 import re
 import shutil
 import subprocess
+import time
 import sys
 from pathlib import Path
 
@@ -175,9 +176,25 @@ def _validate_template_root(template_root: Path) -> None:
         raise SystemExit(f"[FAIL] Template root is incomplete; missing: {missing_text}")
 
 
+def _utc_clock() -> str:
+    return time.strftime("%H:%M:%SZ", time.gmtime())
+
+
+def _took(label: str, started: float) -> None:
+    """One line per local step with its UTC finish time and duration (TEMPLATE_00_141).
+
+    In the TEMPLATE_00_140 batches the local phase of 102/202/302/402 took 9-10 minutes
+    against under a minute before, and nothing on the console said which step was slow.
+    """
+    print(f"[TIME] {_utc_clock()} {time.monotonic() - started:.1f} s  {label}", flush=True)
+
+
 def _run(command: list[str], cwd: Path) -> None:
     print("[RUN] " + " ".join(command))
+    started = time.monotonic()
     subprocess.run(command, cwd=cwd, check=True)
+    script = next((Path(part).name for part in command if part.endswith((".py", ".sh"))), command[0])
+    _took(script, started)
 
 
 def _definition_fields(path: Path) -> dict[str, str]:
@@ -203,10 +220,12 @@ def _ignore_template_copy(path: str, names: list[str]) -> set[str]:
 
 
 def _copy_template(source: Path, destination: Path) -> None:
+    started = time.monotonic()
     if destination.exists():
         if not rmtree_reliable(destination):
             raise SystemExit(f"[FAIL] Could not remove the old template copy at {destination}.")
     shutil.copytree(source, destination, ignore=_ignore_template_copy)
+    _took(f"template copy to {destination.name}", started)
 
 
 # Laptop-side tools the operator runs from the project folder (the folder that
@@ -483,7 +502,9 @@ def main() -> int:
 
         ensure_gitkeep(repo_root)
         normalize_text_tree(repo_root)
+        started = time.monotonic()
         refresh_show_metrics(source_root)
+        _took("show_metrics.sh label refresh", started)
         install_workload_tools(source_root, repo_root)
         install_operator_tools(source_root, project_root)
         print(f"[PASS] Created generated repository: {repo_root}")

@@ -260,7 +260,6 @@ def main() -> int:
     output_path.parent.mkdir(parents=True, exist_ok=True)
     output_path.write_text(transcript.getvalue() + "\n" + csv_text, encoding="utf-8")
     output_path.with_suffix(".csv").write_text(csv_text, encoding="utf-8")
-    print(csv_text)
     return 0
 
 

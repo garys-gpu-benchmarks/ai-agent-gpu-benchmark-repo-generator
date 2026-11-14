@@ -10,6 +10,26 @@ from pathlib import Path
 import yaml
 
 
+def mark_measure_start() -> None:
+    """Setup ends here: record when the timed work starts (TEMPLATE_00_141).
+
+    run_benchmark.sh reads BENCHMARK_MEASURE_START_FILE when the benchmark stops and
+    starts the benchmark clock at this time, so model load and warmup count as setup.
+    The first call of a run wins. Outside run_benchmark.sh it does nothing.
+    """
+    import os
+    import time
+
+    path = os.environ.get("BENCHMARK_MEASURE_START_FILE", "")
+    if not path or os.path.exists(path):
+        return
+    try:
+        with open(path, "w", encoding="utf-8") as handle:
+            handle.write(f"{time.time_ns()}\n")
+    except OSError:
+        pass
+
+
 def pv(params, key, profile, default=""):
     raw = params.get(key, default)
     if isinstance(raw, dict):
@@ -39,14 +59,11 @@ def write_csv(path, header, rows):
     writer = csv.DictWriter(buf, fieldnames=header, extrasaction="ignore", lineterminator=chr(10))
     writer.writeheader()
     rows = list(rows)
-    if len(rows) == 1:
-        rows.append(dict(rows[0]))
     for index, row in enumerate(rows):
         writer.writerow({"sample_index": index, **row})
     text = buf.getvalue()
     Path(path).parent.mkdir(parents=True, exist_ok=True)
     Path(path).write_text(text, encoding="utf-8")
-    print(text, end="")
     return text
 
 
@@ -88,14 +105,17 @@ def main() -> int:
         opt.step()
     if device.type == "cuda":
         torch.cuda.synchronize()
+    mark_measure_start()  # setup ends: model loaded, warmup done
     start = time.perf_counter()
     for _ in range(iters):
         opt.zero_grad(set_to_none=True)
-        crit(model(x), y).backward()
+        loss = crit(model(x), y)
+        loss.backward()
         opt.step()
     if device.type == "cuda":
         torch.cuda.synchronize()
     elapsed = (time.perf_counter() - start) / iters
+    final_loss = float(loss.item())  # read after the timer: .item() waits for the GPU
     images = batch / elapsed
     mem = ""
     if device.type == "cuda":
@@ -111,10 +131,8 @@ def main() -> int:
         "step", "loss", "images_per_sec", "step_time_ms", "modeled_tflops",
         "min_operand_traffic_gb_s", "modeled_param_input_traffic_gb_s", "peak_gpu_memory_GB",
     ], [
-        {"step": 0, "loss": 1.0, "images_per_sec": images, "step_time_ms": elapsed * 1000.0,
-         "modeled_tflops": tflops, "min_operand_traffic_gb_s": bandwidth,
-         "modeled_param_input_traffic_gb_s": bandwidth, "peak_gpu_memory_GB": mem},
-        {"step": 1, "loss": 1.0, "images_per_sec": images, "step_time_ms": elapsed * 1000.0,
+        # One measurement, one row. loss is the last timed step's loss (was a fixed 1.0).
+        {"step": iters - 1, "loss": final_loss, "images_per_sec": images, "step_time_ms": elapsed * 1000.0,
          "modeled_tflops": tflops, "min_operand_traffic_gb_s": bandwidth,
          "modeled_param_input_traffic_gb_s": bandwidth, "peak_gpu_memory_GB": mem},
     ])

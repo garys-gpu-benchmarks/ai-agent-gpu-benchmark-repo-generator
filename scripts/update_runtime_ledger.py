@@ -1224,6 +1224,7 @@ def main() -> int:
             fcntl.flock(handle.fileno(), fcntl.LOCK_UN)
         except ImportError:
             pass
+    print()  # blank line before the ledger/results lines
     print(f"Runtime entry added to {args.ledger}.")
     # results/RESULTS_ACTUAL.md: the latest run of each profile, readable (TEMPLATE_00_135).
     # The ledger row is the record; a failure here only warns.
@@ -1231,8 +1232,8 @@ def main() -> int:
         try:
             from results_markdown import update_results_actual
 
-            page = update_results_actual(args.runtime_root.resolve(), fields, row)
-            print(f"Results page updated: {page}")
+            # Updated quietly; the page path is not printed (TEMPLATE_00_141).
+            update_results_actual(args.runtime_root.resolve(), fields, row)
         except Exception as exc:  # noqa: BLE001
             import sys
 

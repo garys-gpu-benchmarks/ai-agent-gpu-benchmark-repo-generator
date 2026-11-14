@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # File: scripts/collect_sdxl.py
-# Description: Run real SDXL twice and emit METRICS_CSV with two samples plus summary.
+# Description: Run real SDXL once and emit METRICS_CSV with one timed sample plus summary.
 from __future__ import annotations
 
 import argparse
@@ -209,7 +209,7 @@ def main() -> int:
         "seed": seed,
     }
     rows: list[dict[str, object]] = []
-    for pass_index in (1, 2):
+    for pass_index in (1,):  # one timed pass
         print(f"# timed_pass={pass_index}")
         command = [
             python_bin,
@@ -264,8 +264,8 @@ def main() -> int:
                 }
             )
 
-    if len(rows) < 2:
-        raise SystemExit("[FAIL] Collector must emit at least two timed samples.")
+    if len(rows) < 1:
+        raise SystemExit("[FAIL] Collector must emit at least one timed sample.")
 
     total_images = sum(int(float(row["num_images"])) for row in rows)
     total_timed_seconds = sum(

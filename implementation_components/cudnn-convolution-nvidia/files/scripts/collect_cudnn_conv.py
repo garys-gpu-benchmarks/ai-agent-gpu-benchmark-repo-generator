@@ -379,7 +379,7 @@ def main() -> int:
         "num_iterations": num_iterations,
     }
     rows: list[dict[str, object]] = []
-    for pass_index in (1, 2):
+    for pass_index in (1,):  # one timed pass
         print(f"# timed_pass={pass_index}")
         code, text = run_text(command, timeout=timeout_sec)
         print(f"# check=cudnn-conv-pass{pass_index} exit={code}")
@@ -389,22 +389,19 @@ def main() -> int:
             raise SystemExit(f"[FAIL] cudnn_conv harness exited {code} on pass {pass_index}")
         rows.append(pass_row(text, conv_direction, params, f"pass{pass_index}"))
 
-    if len(rows) < 2:
-        raise SystemExit("[FAIL] Collector must emit at least two timed samples.")
+    if len(rows) < 1:
+        raise SystemExit("[FAIL] Collector must emit at least one timed sample.")
 
     rows.append(summarize_passes(rows, params))
 
     fieldnames = ["check", "status", *PARAM_FIELDS, *METRIC_FIELDS]
     output_path = Path(args.output)
     output_path.parent.mkdir(parents=True, exist_ok=True)
-    print("# METRICS_CSV")
     with output_path.open("w", encoding="utf-8", newline="") as handle:
         writer = csv.DictWriter(handle, fieldnames=fieldnames, lineterminator="\n", extrasaction="ignore")
         writer.writeheader()
         writer.writerows(rows)
         handle.flush()
-    with output_path.open(encoding="utf-8") as handle:
-        print(handle.read(), end="")
     return 0
 
 

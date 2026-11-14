@@ -116,7 +116,7 @@ def main() -> int:
     ]
     transcripts = []
     parsed = []
-    for index in range(2):
+    for index in range(1):  # one pass, one sample
         print("[RUN] " + " ".join(command))
         code, text = run(command)
         transcripts.append(f"===== jax-pass{index + 1} rc={code} =====\n{text}")

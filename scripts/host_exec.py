@@ -108,6 +108,8 @@ def _stream_to_log(
     out: list[str] = []
     err: list[str] = []
     last = [""]
+    # monotonic time of the last non-empty output line, for the heartbeat
+    last_output = [time.monotonic()]
     lock = threading.Lock()
     proc = subprocess.Popen(
         argv,
@@ -128,6 +130,7 @@ def _stream_to_log(
                     handle.write(prefix + line if line.endswith("\n") else prefix + line + "\n")
                 if line.strip():
                     last[0] = line.strip()
+                    last_output[0] = time.monotonic()
         stream.close()
 
     readers = [
@@ -153,7 +156,19 @@ def _stream_to_log(
             raise subprocess.TimeoutExpired(argv, timeout, output="".join(out), stderr="".join(err))
         if now >= next_beat:
             elapsed = int(now - started)
-            print(f"[{label}] still running {elapsed // 60}m{elapsed % 60:02d}s; last: {last[0][:100]}", flush=True)
+            with lock:
+                quiet = int(now - last_output[0])
+                tail = last[0][:100]
+            # The same "last:" line repeated for minutes looked like a hang (330, 332 and
+            # 431 in TEMPLATE_00_140); say how long the output has been unchanged instead.
+            if quiet >= heartbeat_s:
+                print(
+                    f"[{label}] still running {elapsed // 60}m{elapsed % 60:02d}s; "
+                    f"no new output for {quiet // 60}m{quiet % 60:02d}s (last: {tail})",
+                    flush=True,
+                )
+            else:
+                print(f"[{label}] still running {elapsed // 60}m{elapsed % 60:02d}s; last: {tail}", flush=True)
             next_beat = now + heartbeat_s
     for reader in readers:
         reader.join(timeout=30)

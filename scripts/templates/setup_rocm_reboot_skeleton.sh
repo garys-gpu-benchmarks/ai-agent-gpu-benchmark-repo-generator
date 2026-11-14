@@ -359,10 +359,13 @@ print_amdgpu_reboot_may_be_required() {
     "NOTICE: A system reboot may be required during initial setup to load the new AMD GPU driver." \
     "If a reboot is required, you will be notified 30 seconds before it occurs."
   # The suite hides setup's stdout. /dev/tty is the SSH window that started it.
+  # -w /dev/tty is true over a non-interactive ssh with no terminal, and the write then
+  # printed "/dev/tty: No such device or address" (101 in TEMPLATE_00_140). The
+  # redirection error comes from the shell, so 2>/dev/null goes on the group.
   if [[ ! -t 1 && -w /dev/tty ]]; then
-    printf '\n%s\n%s\n\n' \
+    { printf '\n%s\n%s\n\n' \
       "NOTICE: A system reboot may be required during initial setup to load the new AMD GPU driver." \
-      "If a reboot is required, you will be notified 30 seconds before it occurs." >/dev/tty || true
+      "If a reboot is required, you will be notified 30 seconds before it occurs." >/dev/tty; } 2>/dev/null || true
   fi
 }
 
@@ -478,7 +481,7 @@ EOF
   fi
   printf '%s\n' "${banner}"
   if [[ ! -t 1 && -w /dev/tty ]]; then
-    printf '%s\n' "${banner}" >/dev/tty || true
+    { printf '%s\n' "${banner}" >/dev/tty; } 2>/dev/null || true
   fi
   if command -v wall >/dev/null 2>&1; then
     printf '%s\n' "${banner}" | wall >/dev/null 2>&1 || true
@@ -927,9 +930,12 @@ install_rocm_pytorch() {
   if [[ -n "${PYTORCH_FIND_LINKS:-}" && -d "${PYTORCH_FIND_LINKS}" ]]; then
     find_links_args=(--find-links "${PYTORCH_FIND_LINKS}")
   fi
+  # numpy with torch, as install_pytorch_nvidia.sh does: without it every torch import
+  # warned "Failed to initialize NumPy: No module named 'numpy'" (x04 and 13 other AMD
+  # smoke runs per batch in TEMPLATE_00_139/140), and tensor.numpy() would fail.
   "${PYTHON_BIN}" -m pip install --index-url "${PYTORCH_ROCM_INDEX_URL}" \
     --extra-index-url https://pypi.org/simple "${find_links_args[@]}" \
-    "${torch_packages[@]}" "${TORCHAUDIO_INSTALL_SPEC}"
+    "${torch_packages[@]}" "${TORCHAUDIO_INSTALL_SPEC}" numpy
   if [[ "${GPU_CHECKS_AFTER_REBOOT}" == 1 ]]; then
     # No usable GPU until the postponed reboot: check the ROCm build only. The
     # run after the reboot does the full GPU check below.

@@ -290,10 +290,8 @@ def main() -> int:
         "inter_token_latency_itl_p99_msec": pct(itls, 0.99) if itls else "",
         "end_to_end_request_latency_msec": pct(e2es, 0.50),
     }
-    # The harness needs at least two rows; both are the same run summary.
     rows = [
         {"check_name": "summary", "status": "ok", **params, **summary_metrics},
-        {"check_name": "summary_repeat", "status": "ok", **params, **summary_metrics},
     ]
     fieldnames = list(rows[0].keys())
     with (run_dir / "raw_results.csv").open("w", encoding="utf-8", newline="") as handle:

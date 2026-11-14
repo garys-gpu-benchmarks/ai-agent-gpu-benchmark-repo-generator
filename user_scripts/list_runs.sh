@@ -3,7 +3,7 @@
 # list_runs.sh
 #
 # Prints one line per run recorded in the runtime ledger of a benchmark
-# machine: workload, profile, setup and benchmark runtime, and exit code, under a header line.
+# machine: workload, profile, benchmark runtime, and exit code, under a header line.
 # Nothing else goes to stdout (errors go to stderr), and it copies nothing. With --host it reads the ledger of
 # that remote machine over ssh; without --host it reads this machine's ledger.
 #
@@ -51,7 +51,7 @@ Usage: ${SCRIPT_NAME} --host HOST [--port PORT] [options]    remote machine
        ${SCRIPT_NAME} [options]                             this machine
 
 Prints every run in the runtime ledger, one line each (workload, profile,
-setup runtime, benchmark runtime, exit code), under a header line. Nothing is copied; to copy the
+benchmark runtime, exit code), under a header line. Nothing is copied; to copy the
 ledger and the results as well, use get_benchmark_results.sh.
 
 Connection (remote machine only):
@@ -254,7 +254,8 @@ FIND
 
 # Ledger table: columns found by header name with a quote-aware CSV split, so
 # workload_name and failure_detail commas cannot shift them (TEMPLATE_00_135).
-# Works in mawk (the VMs) and gawk (Git Bash). Older ledgers show setup as -.
+# Works in mawk (the VMs) and gawk (Git Bash). Setup time stays in the ledger
+# but is not shown here (TEMPLATE_00_141).
 LEDGER_TABLE_AWK=$(cat <<'AWK'
 function parse_csv(line, out,    n, i, c, field, inq) {
   n = 0; field = ""; inq = 0
@@ -277,23 +278,22 @@ function base(path) { sub(/\/+$/, "", path); sub(/^.*\//, "", path); return path
 { sub(/\r$/, "") }
 $0 == "" { next }
 !hdr { n = parse_csv($0, h); for (i = 1; i <= n; i++) col[h[i]] = i; hdr = 1
-       printf "%-60s %-9s %-8s %-9s %s\n", "workload", "profile", "setup", "benchmark", "exit_code"; next }
+       printf "%-60s %-9s %-9s %s\n", "workload", "profile", "benchmark", "exit_code"; next }
 {
   parse_csv($0, f)
   prof = get(f, "benchmark_profile"); code = get(f, "exit_code")
   if (p != "" && prof != p) next
   if (failed == "true" && code == "0") next
-  setup = get(f, "runtime_setup_mm_ss"); if (setup == "") setup = "-"
   bench = get(f, "runtime_benchmark_mm_ss"); if (bench == "") bench = get(f, "total_runtime_mm_ss"); if (bench == "") bench = "-"
   rows++; if (code == "0") passed++
-  printf "%-60s %-9s %-8s %-9s %s\n", base(get(f, "runtime_root_dir")), prof, setup, bench, code
+  printf "%-60s %-9s %-9s %s\n", base(get(f, "runtime_root_dir")), prof, bench, code
 }
 END { if (summary == "true") printf "\nRuns in the ledger: %d   passed (exit code 0): %d   other: %d\n", rows, passed, rows - passed }
 AWK
 )
 
 # Prints the header line and, for every ledger row that matches --profile and
-# --failed: workload (folder name), profile, setup and benchmark runtime, and exit
+# --failed: workload (folder name), profile, benchmark runtime, and exit
 # code. Same table as get_benchmark_results.sh prints.
 show_runs() {
   local csv=$1

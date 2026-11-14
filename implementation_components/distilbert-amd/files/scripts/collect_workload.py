@@ -4,10 +4,51 @@ from __future__ import annotations
 import argparse
 import csv
 import io
+import os
 import time
 from pathlib import Path
 
 import yaml
+
+# Quiet Hugging Face loading: no "Loading weights" progress bar and no LOAD REPORT
+# table. The report lists the pretraining head (vocab_*) as UNEXPECTED and the new
+# classification head (pre_classifier, classifier) as MISSING; both are expected
+# when fine-tuning from distilbert-base-uncased. The settings are read when
+# transformers is imported, so they come first.
+os.environ.setdefault("HF_HUB_DISABLE_PROGRESS_BARS", "1")
+os.environ.setdefault("TRANSFORMERS_VERBOSITY", "error")
+
+# The new classification head is expected to be missing from the base checkpoint.
+CLASSIFIER_HEAD = ("pre_classifier.", "classifier.")
+
+
+def mark_measure_start() -> None:
+    """Setup ends here: record when the timed work starts (TEMPLATE_00_141).
+
+    run_benchmark.sh reads BENCHMARK_MEASURE_START_FILE when the benchmark stops and
+    starts the benchmark clock at this time, so model load and warmup count as setup.
+    The first call of a run wins. Outside run_benchmark.sh it does nothing.
+    """
+    import os
+    import time
+
+    path = os.environ.get("BENCHMARK_MEASURE_START_FILE", "")
+    if not path or os.path.exists(path):
+        return
+    try:
+        with open(path, "w", encoding="utf-8") as handle:
+            handle.write(f"{time.time_ns()}\n")
+    except OSError:
+        pass
+
+
+def warn_missing_weights(name: str, loading: dict) -> None:
+    """The hidden load report would also hide body weights missing from the
+    checkpoint (randomly initialized); name those, but not the classifier head."""
+    missing = sorted(key for key in loading.get("missing_keys", ()) if not key.startswith(CLASSIFIER_HEAD))
+    if missing:
+        print(f"[WARN] {name}: {len(missing)} model weights missing from the checkpoint "
+              f"(randomly initialized): {', '.join(missing[:5])}", flush=True)
 
 
 def pv(params, key, profile, default=""):
@@ -49,14 +90,11 @@ def write_csv(path, header, rows):
     writer = csv.DictWriter(buf, fieldnames=header, extrasaction="ignore", lineterminator=chr(10))
     writer.writeheader()
     rows = list(rows)
-    if len(rows) == 1:
-        rows.append(dict(rows[0]))
     for index, row in enumerate(rows):
         writer.writerow({"sample_index": index, **row})
     text = buf.getvalue()
     Path(path).parent.mkdir(parents=True, exist_ok=True)
     Path(path).write_text(text, encoding="utf-8")
-    print(text, end="")
     return text
 
 
@@ -86,7 +124,10 @@ def main() -> int:
     import torch
     from transformers import DistilBertForSequenceClassification
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    model = DistilBertForSequenceClassification.from_pretrained(model_name, num_labels=2).to(device)
+    model, loading = DistilBertForSequenceClassification.from_pretrained(
+        model_name, num_labels=2, output_loading_info=True)
+    warn_missing_weights(model_name, loading)
+    model = model.to(device)
     opt = torch.optim.AdamW(model.parameters(), lr=lr, weight_decay=float(pv(params, "weight_decay", args.profile, 0.01) or 0.01))
     ids = torch.randint(0, 1000, (batch, seq), device=device)
     mask = torch.ones_like(ids)
@@ -102,6 +143,7 @@ def main() -> int:
         # Peak memory covers the training steps, not the model load.
         torch.cuda.synchronize()
         torch.cuda.reset_peak_memory_stats()
+    mark_measure_start()  # setup ends: model loaded, warmup done
     print(f"[INFO] distilbert: warmup_iters={warmup} gradient_accumulation={accum} num_iterations={iters}", flush=True)
     start = time.perf_counter()
     opt.zero_grad(set_to_none=True)
@@ -114,6 +156,7 @@ def main() -> int:
     if device.type == "cuda":
         torch.cuda.synchronize()
     elapsed = (time.perf_counter() - start) / iters
+    final_loss = float(out.loss.item())  # read after the timer: .item() waits for the GPU
     mem = 0.001
     if device.type == "cuda":
         mem = max(0.001, torch.cuda.max_memory_allocated() / 1e9)
@@ -121,9 +164,8 @@ def main() -> int:
     write_csv(args.raw_file, [
         "step", "loss", "samples_per_sec", "step_time_ms", "tokens_per_sec", "peak_gpu_memory_gb",
     ], [
-        {"step": 0, "loss": 1.0, "samples_per_sec": samples, "step_time_ms": elapsed * 1000.0,
-         "tokens_per_sec": samples * seq, "peak_gpu_memory_gb": mem},
-        {"step": 1, "loss": 1.0, "samples_per_sec": samples, "step_time_ms": elapsed * 1000.0,
+        # One measurement, one row. loss is the last timed step's loss (was a fixed 1.0).
+        {"step": iters - 1, "loss": final_loss, "samples_per_sec": samples, "step_time_ms": elapsed * 1000.0,
          "tokens_per_sec": samples * seq, "peak_gpu_memory_gb": mem},
     ])
     return 0

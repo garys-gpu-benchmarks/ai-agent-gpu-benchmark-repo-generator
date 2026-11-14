@@ -19,6 +19,7 @@ import subprocess  # noqa: E402
 from datetime import datetime, timezone  # noqa: E402
 from pathlib import Path  # noqa: E402
 
+import batch_progress  # noqa: E402
 from generated_repo_directory import find_generated_repo  # noqa: E402
 from log_generator_repair import read_entries, repairs_path  # noqa: E402
 from prompt_workflow import available_workloads, ensure_prompt_metadata, parse_workloads  # noqa: E402
@@ -140,7 +141,7 @@ def print_batch_summary(project_root: Path, workloads: list[str]) -> None:
             flush=True,
         )
     successful, everything, failed_attempts = batch_times(batch, workloads)
-    print(f"[INFO] Successful time: {_hms(successful)} ({successful} sec)", flush=True)
+    batch_progress.progress(project_root, f"[INFO] Successful time: {_hms(successful)} ({successful} sec)")
     print(
         f"[INFO] Time including failed attempts: {_hms(everything)} ({everything} sec; "
         f"{failed_attempts} failed attempt(s))",
@@ -197,6 +198,24 @@ def remove_interpreter_caches(roots: list[Path]) -> int:
     return removed
 
 
+def open_workbooks(template_root: Path) -> list[str]:
+    """Workbooks Excel has open: Excel keeps a ~$<name>.xlsx lock file beside each one."""
+    return sorted(path.name[2:] for path in template_root.glob("~$*.xlsx"))
+
+
+def warn_open_workbooks(template_root: Path) -> None:
+    # Every workload copies the template and reads BenchmarkSpecDefinitions.xlsx. In the
+    # TEMPLATE_00_140 batches both workbooks were open in Excel while four batches did
+    # that, and the local phase of x02-x04 took 3-10 minutes instead of under one.
+    names = open_workbooks(template_root)
+    if names:
+        print(
+            f"[WARN] Excel has {', '.join(names)} open in the template folder. Close them before a batch: "
+            "every workload copies the template and reads the workbook.",
+            flush=True,
+        )
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Generate every workload named in a short operator prompt")
     parser.add_argument("--prompt-file", required=True)
@@ -223,6 +242,13 @@ def main(argv: list[str] | None = None) -> int:
     print(f"[INFO] Workloads: {', '.join(workloads)}", flush=True)
     print(f"[INFO] Remote validation: {ip or 'NONE'}", flush=True)
     ensure_batch_manifest(project_root, prompt, workloads, ip)
+    batch_progress.start(project_root, workloads)
+    warn_open_workbooks(template_root)
+    print(
+        f"[INFO] Progress lines ([RECORD], [FAIL], Successful time, [DONE]) are also written to "
+        f"{batch_progress.progress_path(project_root)}",
+        flush=True,
+    )
     repairs_before = len(read_entries(template_root))
     command = [
         sys.executable,
@@ -249,6 +275,7 @@ def main(argv: list[str] | None = None) -> int:
     removed = remove_interpreter_caches(roots)
     print(f"[INFO] Removed {removed} leftover interpreter cache folder(s)", flush=True)
     print_generator_repairs(template_root, repairs_before)
+    batch_progress.progress(project_root, f"[DONE] batch process exiting with code {completed.returncode}")
     return int(completed.returncode)
 
 

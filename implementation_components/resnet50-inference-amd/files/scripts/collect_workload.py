@@ -13,6 +13,26 @@ from pathlib import Path
 import yaml
 
 
+def mark_measure_start() -> None:
+    """Setup ends here: record when the timed work starts (TEMPLATE_00_141).
+
+    run_benchmark.sh reads BENCHMARK_MEASURE_START_FILE when the benchmark stops and
+    starts the benchmark clock at this time, so model load and warmup count as setup.
+    The first call of a run wins. Outside run_benchmark.sh it does nothing.
+    """
+    import os
+    import time
+
+    path = os.environ.get("BENCHMARK_MEASURE_START_FILE", "")
+    if not path or os.path.exists(path):
+        return
+    try:
+        with open(path, "w", encoding="utf-8") as handle:
+            handle.write(f"{time.time_ns()}\n")
+    except OSError:
+        pass
+
+
 def pv(params, key, profile, default=""):
     raw = params.get(key, default)
     if isinstance(raw, dict):
@@ -42,14 +62,11 @@ def write_csv(path, header, rows):
     writer = csv.DictWriter(buf, fieldnames=header, extrasaction="ignore", lineterminator=chr(10))
     writer.writeheader()
     rows = list(rows)
-    if len(rows) == 1:
-        rows.append(dict(rows[0]))
     for index, row in enumerate(rows):
         writer.writerow({"sample_index": index, **row})
     text = buf.getvalue()
     Path(path).parent.mkdir(parents=True, exist_ok=True)
     Path(path).write_text(text, encoding="utf-8")
-    print(text, end="")
     return text
 
 
@@ -182,6 +199,7 @@ def main() -> int:
                 # Peak memory per batch size: without a reset every later batch
                 # reported the largest peak so far.
                 torch.cuda.reset_peak_memory_stats()
+            mark_measure_start()  # setup ends: model loaded, warmup done
             samples = []
             loop_start = time.perf_counter()
             with UtilSampler(read_amd_gpu_util, "amd-smi") as sampler:

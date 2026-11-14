@@ -133,7 +133,7 @@ class LedgerWriterTests(unittest.TestCase):
             page = (repo / "results" / "RESULTS_ACTUAL.md").read_text(encoding="utf-8")
             self.assertIn("## baseline", page)
             self.assertIn("| 28.001 |", page)
-            self.assertIn("Results page updated", result.stdout)
+            self.assertNotIn("Results page updated", result.stdout)
             env["BENCHMARK_RESULTS_MD"] = "0"
             (repo / "results" / "RESULTS_ACTUAL.md").unlink()
             subprocess.run(result.args, cwd=repo, env=env, capture_output=True, text=True, timeout=120)

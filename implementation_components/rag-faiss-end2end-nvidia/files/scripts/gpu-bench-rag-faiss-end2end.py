@@ -10,12 +10,52 @@ import time
 from pathlib import Path
 from threading import Thread
 
+import os
+
+# Quiet library output on the console: "Loading weights", "Fetching N files" and
+# datasets "Generating ... split" progress bars, and library warnings. These
+# settings are read when the libraries are imported, so they come first. Errors
+# still print, and missing LLM weights still fail (reject_missing_causal_weights).
+os.environ.setdefault("HF_HUB_DISABLE_PROGRESS_BARS", "1")
+os.environ.setdefault("HF_DATASETS_DISABLE_PROGRESS_BARS", "1")
+os.environ.setdefault("TRANSFORMERS_VERBOSITY", "error")
+os.environ.setdefault("HF_HUB_VERBOSITY", "error")
+
 import numpy as np
 import torch
+import transformers
 from transformers import AutoModel, AutoModelForCausalLM, AutoModelForSequenceClassification, AutoTokenizer, TextIteratorStreamer
 
 from prefetch_rag_models import ensure_mistral
 from rag_model_paths import find_local_causal_lm, reject_missing_causal_weights
+
+
+def mark_measure_start() -> None:
+    """Setup ends here: record when the timed work starts (TEMPLATE_00_141).
+
+    run_benchmark.sh reads BENCHMARK_MEASURE_START_FILE when the benchmark stops and
+    starts the benchmark clock at this time, so model load and warmup count as setup.
+    The first call of a run wins. Outside run_benchmark.sh it does nothing.
+    """
+    import os
+    import time
+
+    path = os.environ.get("BENCHMARK_MEASURE_START_FILE", "")
+    if not path or os.path.exists(path):
+        return
+    try:
+        with open(path, "w", encoding="utf-8") as handle:
+            handle.write(f"{time.time_ns()}\n")
+    except OSError:
+        pass
+
+
+def _dtype_kwarg() -> str:
+    try:
+        major, minor = (int(part) for part in transformers.__version__.split(".")[:2])
+    except ValueError:
+        return "dtype"
+    return "dtype" if (major, minor) >= (4, 56) else "torch_dtype"
 
 
 DEFAULTS = {
@@ -282,6 +322,7 @@ def main() -> int:
 
     embed_tok = AutoTokenizer.from_pretrained(embedding_id)
     embed_model = AutoModel.from_pretrained(embedding_id).to(device)
+    mark_measure_start()  # setup ends: model loaded, warmup done
     embed_start = time.perf_counter()
     doc_vectors = encode_texts(embed_model, embed_tok, chunks, device, batch_size=min(32, max(batch_size, 8)), max_length=512)
     torch.cuda.synchronize()
@@ -314,7 +355,10 @@ def main() -> int:
         llm_tok.pad_token = llm_tok.eos_token
     llm, loading_info = AutoModelForCausalLM.from_pretrained(
         llm_source,
-        torch_dtype=torch.bfloat16,
+        # transformers 4.56+ names this argument dtype and warns on torch_dtype
+        # ("`torch_dtype` is deprecated! Use `dtype` instead!"); older releases only
+        # know torch_dtype. setup.sh installs transformers unpinned.
+        **{_dtype_kwarg(): torch.bfloat16},
         local_files_only=local_only,
         output_loading_info=True,
     )
@@ -418,7 +462,9 @@ def main() -> int:
         "chunk_backend": chunk_backend,
     }
     (run_dir / "raw_output.txt").write_text("SUMMARY " + json.dumps(summary) + "\n", encoding="utf-8")
-    print(json.dumps(summary, indent=2), flush=True)
+    # The full summary is in raw_output.txt (written just above) and in the parsed
+    # results; the 27-line JSON dump on the console repeated it.
+    print(f"[INFO] summary written to {run_dir / 'raw_output.txt'}", flush=True)
     return 0
 
 

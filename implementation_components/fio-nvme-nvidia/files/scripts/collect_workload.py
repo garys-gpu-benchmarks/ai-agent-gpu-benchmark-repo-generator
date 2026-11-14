@@ -240,12 +240,9 @@ def main() -> int:
     buf = io.StringIO()
     writer = csv.DictWriter(buf, fieldnames=header, extrasaction="ignore", lineterminator=chr(10))
     writer.writeheader()
-    if len(rows) == 1:
-        rows.append(dict(rows[0]))
     for index, row in enumerate(rows):
         writer.writerow({"sample_index": index, **row})
     Path(args.raw_file).write_text(buf.getvalue(), encoding="utf-8")
-    print(buf.getvalue(), end="")
     return 0
 
 

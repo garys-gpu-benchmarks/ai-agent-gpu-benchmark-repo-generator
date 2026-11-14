@@ -4,10 +4,37 @@ from __future__ import annotations
 import argparse
 import csv
 import io
+import os
 import time
 from pathlib import Path
 
 import yaml
+
+# Quiet Hugging Face loading: no "Loading weights" progress bar and no LOAD REPORT
+# table for the pretraining-head weights (cls.*) that BertModel does not use.
+# Both settings are read when transformers is imported, so they come first.
+os.environ.setdefault("HF_HUB_DISABLE_PROGRESS_BARS", "1")
+os.environ.setdefault("TRANSFORMERS_VERBOSITY", "error")
+
+
+def mark_measure_start() -> None:
+    """Setup ends here: record when the timed work starts (TEMPLATE_00_141).
+
+    run_benchmark.sh reads BENCHMARK_MEASURE_START_FILE when the benchmark stops and
+    starts the benchmark clock at this time, so model load and warmup count as setup.
+    The first call of a run wins. Outside run_benchmark.sh it does nothing.
+    """
+    import os
+    import time
+
+    path = os.environ.get("BENCHMARK_MEASURE_START_FILE", "")
+    if not path or os.path.exists(path):
+        return
+    try:
+        with open(path, "w", encoding="utf-8") as handle:
+            handle.write(f"{time.time_ns()}\n")
+    except OSError:
+        pass
 
 
 def pv(params, key, profile, default=""):
@@ -39,14 +66,11 @@ def write_csv(path, header, rows):
     writer = csv.DictWriter(buf, fieldnames=header, extrasaction="ignore", lineterminator=chr(10))
     writer.writeheader()
     rows = list(rows)
-    if len(rows) == 1:
-        rows.append(dict(rows[0]))
     for index, row in enumerate(rows):
         writer.writerow({"sample_index": index, **row})
     text = buf.getvalue()
     Path(path).parent.mkdir(parents=True, exist_ok=True)
     Path(path).write_text(text, encoding="utf-8")
-    print(text, end="")
     return text
 
 
@@ -72,7 +96,13 @@ def main() -> int:
     import torch
     from transformers import BertModel
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    model = BertModel.from_pretrained(model_name).to(device).eval()
+    model, loading = BertModel.from_pretrained(model_name, output_loading_info=True)
+    model = model.to(device).eval()
+    # The hidden load report would also hide encoder weights missing from the
+    # checkpoint (randomly initialized), so name those here.
+    if loading.get("missing_keys"):
+        print(f"[WARN] {model_name}: {len(loading['missing_keys'])} model weights missing from the checkpoint "
+              f"(randomly initialized): {', '.join(sorted(loading['missing_keys'])[:5])}", flush=True)
     if "16" in str(pv(params, "dtype", args.profile, "f16_r")).lower():
         model = model.half()
     if device.type == "cuda":
@@ -87,6 +117,7 @@ def main() -> int:
             model(input_ids=ids, attention_mask=mask)
         if device.type == "cuda":
             torch.cuda.synchronize()
+        mark_measure_start()  # setup ends: model loaded, warmup done
         start = time.perf_counter()
         for _ in range(iters):
             model(input_ids=ids, attention_mask=mask)

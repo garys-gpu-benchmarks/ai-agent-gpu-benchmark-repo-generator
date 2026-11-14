@@ -1,6 +1,6 @@
 {
   "component_id": "stream-collect-amd",
-  "description": "AMD 107 STREAM collector with -DNTIMES.",
+  "description": "STREAM collector (107/307) with -DNTIMES. Runs STREAM once with the full num_iterations; one sample. Full STREAM output goes to the raw file only.",
   "overlay": [
     "scripts/collect_workload.py"
   ],

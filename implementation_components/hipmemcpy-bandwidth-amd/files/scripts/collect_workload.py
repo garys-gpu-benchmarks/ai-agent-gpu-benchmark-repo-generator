@@ -45,14 +45,11 @@ def write_csv(path, header, rows):
     writer = csv.DictWriter(buf, fieldnames=header, extrasaction="ignore", lineterminator=chr(10))
     writer.writeheader()
     rows = list(rows)
-    if len(rows) == 1:
-        rows.append(dict(rows[0]))
     for index, row in enumerate(rows):
         writer.writerow({"sample_index": index, **row})
     text = buf.getvalue()
     Path(path).parent.mkdir(parents=True, exist_ok=True)
     Path(path).write_text(text, encoding="utf-8")
-    print(text, end="")
     return text
 
 
@@ -98,10 +95,16 @@ def main() -> int:
     except subprocess.TimeoutExpired as exc:
         text = str(exc) + f"\nTimeoutExpired after {timeout}s\n"
     rows = []
+    tool_log = []  # the tool's other lines; its CSV rows are rewritten below as csv_text
     for line in text.splitlines():
-        if line.lower().startswith("sample_index") or "," not in line:
+        if line.lower().startswith("sample_index"):
+            continue
+        if "," not in line:
+            tool_log.append(line)
             continue
         cells = [part.strip() for part in line.split(",")]
+        if not (len(cells) >= 7 and cells[1] in {"ok", "error"}):
+            tool_log.append(line)
         if len(cells) >= 7 and cells[1] in {"ok", "error"}:
             rows.append({
                 "status": cells[1], "direction": cells[2], "pinned_memory": cells[3],
@@ -117,7 +120,10 @@ def main() -> int:
         "sample_index", "status", "direction", "pinned_memory", "transfer_size_bytes",
         "latency_us", "bandwidth_GBps", "error_message",
     ], rows)
-    Path(args.raw_file).write_text(text + "\n" + csv_text, encoding="utf-8")
+    # The tool prints its rows as CSV with a sample_index header too. Writing its whole
+    # output before csv_text put every measurement in the raw file twice, and the parser
+    # counted both tables: 114 smoke parsed 114 samples for 57 rows (TEMPLATE_00_141).
+    Path(args.raw_file).write_text("\n".join(tool_log).strip("\n") + "\n" + csv_text, encoding="utf-8")
     return 0
 
 

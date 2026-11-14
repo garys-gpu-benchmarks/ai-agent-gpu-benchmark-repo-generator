@@ -155,7 +155,7 @@ class LinuxPerfPmuCollectorTest(unittest.TestCase):
         self.assertEqual(done.returncode, 0, done.stderr)
         for key in METRICS:
             self.assertIn(key, rows[0])
-        self.assertEqual(len(rows), 2)
+        self.assertEqual(len(rows), 1)  # one combined row; no copied second sample
         self.assertIn("--cpu 2 --timeout 1s", log)
         self.assertIn("--cache 2 --timeout 1s", log)
 
@@ -217,7 +217,7 @@ class LinuxPerfPmuCollectorTest(unittest.TestCase):
         )
         self.assertEqual(done.returncode, 0, done.stderr)
         self.assertIn("--branch 3 --timeout 2s", log)
-        self.assertEqual(len(rows), 2)  # one command, duplicated for the two-sample rule
+        self.assertEqual(len(rows), 1)  # one command, one sample row
 
     def test_failed_workload_fails_run(self):
         done, _, _, _ = self.run_collector("intel", FAKE_STRESS_FAIL="1")

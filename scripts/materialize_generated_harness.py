@@ -820,9 +820,6 @@ def main() -> int:
         failures.append("timestamps are not ISO-8601")
     if len(samples) < 1:
         failures.append("no sample rows")
-    wid = workload_number()
-    if (101 <= wid <= 123 or 301 <= wid <= 323) and len(samples) < 2:
-        failures.append("workloads 101-123 require at least two sample rows")
     skip = {"id", "run_id", "sample_index", "status", "error_message", "created_at",
             "benchmark_id", "benchmark_name", "started_at", "finished_at", "host_name",
             "os_version", "kernel_version", "gpu_name", "rocm_version", "framework_version",
@@ -1137,6 +1134,7 @@ ELAPSED="$((STOP_EPOCH - START_EPOCH))"
 (( ELAPSED < 0 )) && ELAPSED=0
 if [[ "${{QUIET}}" -eq 0 ]]; then
   bash scripts/print_run_metadata.sh "${{REPO_ROOT}}" || true
+  echo  # blank line before the summary
   echo "[INFO] ===== Benchmark Summary ====="
   echo "[INFO] Run ID: $(basename "${{RUN_DIR}}") | Status: ok | Samples: $(${{PYTHON_BIN}} -c 'import json; print(json.load(open("results/summary.json"))["sample_count"])') | Profile: ${{PROFILE}} | Device: $(display_device)"
   print_benchmark_summary_commands

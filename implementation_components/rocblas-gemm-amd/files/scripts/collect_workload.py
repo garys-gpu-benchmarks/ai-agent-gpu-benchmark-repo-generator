@@ -181,11 +181,9 @@ def main() -> int:
     buf = io.StringIO()
     writer = csv.DictWriter(buf, fieldnames=HEADER, extrasaction="ignore", lineterminator="\n")
     writer.writeheader()
-    # One rocblas-bench run already averages hot_iters calls; the harness needs two rows.
-    for index in range(2):
-        writer.writerow({"sample_index": index, **row})
+    # One rocblas-bench run already averages hot_iters calls: one sample row.
+    writer.writerow({"sample_index": 0, **row})
     Path(args.raw_file).write_text(buf.getvalue(), encoding="utf-8")
-    print(buf.getvalue(), end="")
     return 0
 
 

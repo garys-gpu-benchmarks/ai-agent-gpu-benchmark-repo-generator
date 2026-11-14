@@ -242,6 +242,9 @@ run_collection() {
   bash -c "${server_cmd}" >> "${RUN_DIR}/server.log" 2>&1 &
   SERVER_PID="$!"
   wait_for_server "http://127.0.0.1:8000/v1/models"
+  # The model is loaded and the server answers: setup ends, the benchmark clock
+  # starts (TEMPLATE_00_141). Server start and model load count as setup on every run.
+  mark_benchmark_measure_start
   local collect_cmd
   printf -v collect_cmd '%q ' "${PYTHON_BIN}" scripts/benchmark_serving.py --run-dir "${RUN_DIR}" --raw-file "${RAW_FILE}" --profile "${PROFILE}" --base-url "http://127.0.0.1:8000" --model-name "${MODEL_NAME}" --dtype "${DTYPE}" --kv-cache-dtype "${KV_CACHE_DTYPE}" --gpu-memory-utilization "${GPU_MEMORY_UTILIZATION}" --max-model-len "${max_model_len}" --input-len "${INPUT_LEN}" --output-len "${OUTPUT_LEN}" --num-prompts "${NUM_PROMPTS}" --concurrency "${CONCURRENCY}" --seed "${SEED}" --output-format "${OUTPUT_FORMAT}"
   log_run "${collect_cmd}"
@@ -274,6 +277,11 @@ run_collection
 run_parse
 run_validate
 record_benchmark_stop
+# Stop the model server as soon as the run is measured. The EXIT trap alone kept it
+# holding the GPU through the inventory, summary and ledger: amd-smi and rocminfo
+# calls took 2-4 s each instead of under 1 s, and the inventory 65-68 s instead of
+# 10-16 s (127-131 in TEMPLATE_00_140). The trap still covers a failed run.
+cleanup_server
 capture_journal_warnings "${RUN_DIR}" "${BENCHMARK_START_DATETIME}" "${STOP_TIME}"
 bash scripts/collect_hw_sw_info.sh "${RUN_DIR}"
 START_EPOCH="$(date -u -d "${BENCHMARK_START_DATETIME}" +%s)"
@@ -282,6 +290,7 @@ ELAPSED="$((STOP_EPOCH - START_EPOCH))"
 (( ELAPSED < 0 )) && ELAPSED=0
 if [[ "${QUIET}" -eq 0 ]]; then
   bash scripts/print_run_metadata.sh "${REPO_ROOT}" || true
+  echo  # blank line before the summary
   echo "[INFO] ===== Benchmark Summary ====="
   echo "[INFO] Run ID: $(basename "${RUN_DIR}") | Status: ok | Samples: $(${PYTHON_BIN} -c 'import json; print(json.load(open("results/summary.json"))["sample_count"])') | Profile: ${PROFILE} | Device: $(display_device)"
   print_benchmark_summary_commands

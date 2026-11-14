@@ -7,8 +7,34 @@ import argparse
 import math
 import os
 
+# Quiet Hugging Face loading: no "Loading weights" progress bar and no LOAD REPORT
+# table for the pretraining-head weights (cls.*) that BertModel does not use.
+# Both settings are read when transformers is imported, so they come first.
+os.environ.setdefault("HF_HUB_DISABLE_PROGRESS_BARS", "1")
+os.environ.setdefault("TRANSFORMERS_VERBOSITY", "error")
+
 import torch
 from transformers import AutoModel, BertConfig
+
+
+def mark_measure_start() -> None:
+    """Setup ends here: record when the timed work starts (TEMPLATE_00_141).
+
+    run_benchmark.sh reads BENCHMARK_MEASURE_START_FILE when the benchmark stops and
+    starts the benchmark clock at this time, so model load and warmup count as setup.
+    The first call of a run wins. Outside run_benchmark.sh it does nothing.
+    """
+    import os
+    import time
+
+    path = os.environ.get("BENCHMARK_MEASURE_START_FILE", "")
+    if not path or os.path.exists(path):
+        return
+    try:
+        with open(path, "w", encoding="utf-8") as handle:
+            handle.write(f"{time.time_ns()}\n")
+    except OSError:
+        pass
 
 
 def finite_nonneg(value: float) -> float:
@@ -28,7 +54,12 @@ def percentile(values: list[float], q: float) -> float:
 
 def load_model(name: str, dtype: torch.dtype, device: torch.device):
     try:
-        model = AutoModel.from_pretrained(name, torch_dtype=dtype)
+        model, loading = AutoModel.from_pretrained(name, torch_dtype=dtype, output_loading_info=True)
+        # The hidden load report would also hide encoder weights missing from the
+        # checkpoint (randomly initialized), so name those here.
+        if loading.get("missing_keys"):
+            print(f"[WARN] {name}: {len(loading['missing_keys'])} model weights missing from the checkpoint "
+                  f"(randomly initialized): {', '.join(sorted(loading['missing_keys'])[:5])}", flush=True)
     except Exception:
         model = AutoModel.from_config(BertConfig())
         model = model.to(dtype=dtype)
@@ -69,6 +100,7 @@ def main() -> int:
             model(input_ids=input_ids, attention_mask=attention_mask)
         torch.cuda.synchronize(device)
         torch.cuda.reset_peak_memory_stats(device)
+        mark_measure_start()  # setup ends: model loaded, warmup done
         times = []
         start = torch.cuda.Event(enable_timing=True)
         end = torch.cuda.Event(enable_timing=True)

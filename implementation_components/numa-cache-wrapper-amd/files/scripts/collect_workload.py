@@ -40,14 +40,11 @@ def write_csv(path, header, rows):
     writer = csv.DictWriter(buf, fieldnames=header, extrasaction="ignore", lineterminator=chr(10))
     writer.writeheader()
     rows = list(rows)
-    if len(rows) == 1:
-        rows.append(dict(rows[0]))
     for index, row in enumerate(rows):
         writer.writerow({"sample_index": index, **row})
     text = buf.getvalue()
     Path(path).parent.mkdir(parents=True, exist_ok=True)
     Path(path).write_text(text, encoding="utf-8")
-    print(text, end="")
     return text
 
 
@@ -81,13 +78,12 @@ def main() -> int:
     if overlay.is_file():
         with overlay.open(encoding="utf-8", newline="") as handle:
             for row in csv.DictReader(handle):
-                if str(row.get("check", "")).lower() not in {"summary", "summary_repeat"}:
+                if str(row.get("check", "")).lower() != "summary":
                     continue
                 rows.append({key: row.get(key, "") for key in header})
     if overlay.is_file() and not rows:
         text = overlay.read_text(encoding="utf-8")
         Path(args.raw_file).write_text(text, encoding="utf-8")
-        print(text, end="")
         return 0
     write_csv(args.raw_file, header, rows or [{key: "" for key in header}])
     return 0

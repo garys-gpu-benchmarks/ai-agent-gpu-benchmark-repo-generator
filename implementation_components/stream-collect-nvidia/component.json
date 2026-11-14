@@ -1,6 +1,6 @@
 {
   "component_id": "stream-collect-nvidia",
-  "description": "NVIDIA STREAM collector. Parses STREAM Copy/Scale/Add/Triad. Does not invent a bandwidth when the tool output has no rate.",
+  "description": "STREAM collector (207/407). Runs STREAM once with the full num_iterations; one sample. Parses Copy/Scale/Add/Triad and does not invent a bandwidth when the tool output has no rate. Full STREAM output goes to the raw file only.",
   "overlay": [
     "scripts/collect_workload.py"
   ],

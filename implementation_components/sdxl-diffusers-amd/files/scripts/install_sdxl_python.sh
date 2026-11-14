@@ -24,8 +24,15 @@ export PIP_CACHE_DIR="${PIP_CACHE_DIR:-${REPO_ROOT}/.cache/pip}"
 export HF_HUB_DISABLE_XET=1
 mkdir -p "${HF_HOME}" "${PIP_CACHE_DIR}"
 
-echo "[RUN] ${PYTHON_BIN} -m pip install diffusers transformers accelerate safetensors huggingface_hub"
-"${PYTHON_BIN}" -m pip install diffusers transformers accelerate safetensors huggingface_hub
+# Every run reaches here (the prefetch runs on every profile). pip printed ~55
+# "Requirement already satisfied" lines each time, so skip it when all five
+# packages are installed (pip install without -U changes nothing then either).
+if "${PYTHON_BIN}" -c 'import importlib.util, sys; sys.exit(any(importlib.util.find_spec(m) is None for m in ("diffusers", "transformers", "accelerate", "safetensors", "huggingface_hub")))' >/dev/null 2>&1; then
+  echo "[PASS] SDXL Python packages already installed"
+else
+  echo "[RUN] ${PYTHON_BIN} -m pip install diffusers transformers accelerate safetensors huggingface_hub"
+  "${PYTHON_BIN}" -m pip install --quiet --disable-pip-version-check diffusers transformers accelerate safetensors huggingface_hub
+fi
 
 if [[ "${1:-}" != "--prefetch" ]]; then
   echo "[INFO] SDXL Python packages installed; weights not prefetched (smoke path)."

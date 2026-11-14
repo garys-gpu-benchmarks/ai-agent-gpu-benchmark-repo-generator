@@ -13,6 +13,26 @@ import torch
 import torchvision.models
 
 
+def mark_measure_start() -> None:
+    """Setup ends here: record when the timed work starts (TEMPLATE_00_141).
+
+    run_benchmark.sh reads BENCHMARK_MEASURE_START_FILE when the benchmark stops and
+    starts the benchmark clock at this time, so model load and warmup count as setup.
+    The first call of a run wins. Outside run_benchmark.sh it does nothing.
+    """
+    import os
+    import time
+
+    path = os.environ.get("BENCHMARK_MEASURE_START_FILE", "")
+    if not path or os.path.exists(path):
+        return
+    try:
+        with open(path, "w", encoding="utf-8") as handle:
+            handle.write(f"{time.time_ns()}\n")
+    except OSError:
+        pass
+
+
 def finite_nonneg(value: float) -> float:
     parsed = float(value)
     if not math.isfinite(parsed) or parsed < 0.0:
@@ -136,6 +156,7 @@ def main() -> int:
             model(images)
         torch.cuda.synchronize(device)
         torch.cuda.reset_peak_memory_stats(device)
+        mark_measure_start()  # setup ends: model loaded, warmup done
         times_ms: list[float] = []
         start = torch.cuda.Event(enable_timing=True)
         end = torch.cuda.Event(enable_timing=True)

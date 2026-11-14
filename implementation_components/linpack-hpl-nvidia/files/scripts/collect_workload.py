@@ -153,7 +153,6 @@ def main() -> int:
     for index, row in enumerate(rows):
         writer.writerow({"sample_index": index, **row})
     Path(args.raw_file).write_text(buf.getvalue(), encoding="utf-8")
-    print(buf.getvalue(), end="")
     return 0
 
 

@@ -217,10 +217,13 @@ begin_benchmark_run() {
   # can report setup and benchmark separately (TEMPLATE_00_135).
   BENCHMARK_SETUP_START_NS="${BENCHMARK_START_NS}"
   BENCHMARK_MEASURE_STARTED=0
-  # Decided by the first mark_benchmark_measure_start of this run (TEMPLATE_00_139).
-  unset BENCHMARK_FIRST_RUN_AFTER_SETUP
+  # A Python collector that loads its model itself writes the time its timed work
+  # starts to this file (mark_measure_start in the collector); record_benchmark_stop
+  # moves the benchmark start there (TEMPLATE_00_141).
+  BENCHMARK_MEASURE_START_FILE="${TMPDIR:-/tmp}/benchmark_measure_start.$$"
+  rm -f "${BENCHMARK_MEASURE_START_FILE}" 2>/dev/null || true
   export BENCHMARK_PROFILE BENCHMARK_START_DATETIME BENCHMARK_START_NS BENCHMARK_RUN_ACTIVE BENCHMARK_LEDGER_WRITTEN
-  export BENCHMARK_SETUP_START_NS BENCHMARK_MEASURE_STARTED
+  export BENCHMARK_SETUP_START_NS BENCHMARK_MEASURE_STARTED BENCHMARK_MEASURE_START_FILE
   # Without errtrace, ERR is not inherited by functions. 102's validate_phase
   # then exits 1 under set -e and never writes a ledger row.
   set -E
@@ -228,34 +231,35 @@ begin_benchmark_run() {
 }
 
 mark_benchmark_measure_start() {
-  # Call after ensure_setup.sh returns (and again after a model prefetch). A setup
-  # failure still ledgers from the timestamp begin_benchmark_run recorded.
-  #
-  # Setup time is counted only on the first run after setup.sh wrote .setup_state
-  # (TEMPLATE_00_139). That run is getting ready the first time: its setup time
-  # covers ensure_setup.sh and any model download, and the benchmark clock starts
-  # here. Every later run reports setup 00:00, and its checks and model lookups
-  # count as benchmark time (on 130/131 the SGLang checks and Hub lookup took
-  # 43-54 s per run and showed as setup on every baseline). setup.sh writes
-  # .setup_state last; .setup_state_timed records that a run has been timed since.
-  # A reinstall (a failed check removes .setup_state) makes the next run a first
-  # run again.
-  if [[ -z "${BENCHMARK_FIRST_RUN_AFTER_SETUP:-}" ]]; then
-    local root="${REPO_ROOT:-.}"
-    if [[ "${root}/.setup_state" -nt "${root}/.setup_state_timed" ]]; then
-      BENCHMARK_FIRST_RUN_AFTER_SETUP=1
-      : >"${root}/.setup_state_timed" 2>/dev/null || true
-    else
-      BENCHMARK_FIRST_RUN_AFTER_SETUP=0
-    fi
-    export BENCHMARK_FIRST_RUN_AFTER_SETUP
-  fi
-  if [[ "${BENCHMARK_FIRST_RUN_AFTER_SETUP}" == "1" ]]; then
-    BENCHMARK_START_DATETIME="$(iso_utc_now)"
-    BENCHMARK_START_NS="$(epoch_ns)"
-  fi
+  # Setup ends and the benchmark clock starts here, on every run (TEMPLATE_00_141).
+  # Setup is everything before the timed work: ensure_setup.sh (the full install on
+  # the first run, the "already complete" check after that), model downloads or
+  # download checks, and, in the server workloads, starting the server and loading
+  # the model (those runners call this again once wait_for_server returns).
+  # Benchmark is the timed work only. Calling it again moves the start later.
+  # (TEMPLATE_00_139 counted setup only on the first run after setup.sh; reruns showed
+  # setup 00:00 and their server start and model load as benchmark time.)
+  BENCHMARK_START_DATETIME="$(iso_utc_now)"
+  BENCHMARK_START_NS="$(epoch_ns)"
   BENCHMARK_MEASURE_STARTED=1
   export BENCHMARK_START_DATETIME BENCHMARK_START_NS BENCHMARK_MEASURE_STARTED
+}
+
+apply_collector_measure_start() {
+  # A collector that loads its model in-process (121-126, 132 and their NVIDIA
+  # twins) writes the epoch nanoseconds its timed work starts to
+  # BENCHMARK_MEASURE_START_FILE. Move the benchmark start there, so model load and
+  # warmup count as setup. A missing, unreadable or earlier time changes nothing.
+  local file="${BENCHMARK_MEASURE_START_FILE:-}" ns=""
+  [[ -n "${file}" && -f "${file}" ]] || return 0
+  ns="$(head -n 1 "${file}" 2>/dev/null | tr -dc '0-9')"
+  rm -f "${file}" 2>/dev/null || true
+  [[ "${BENCHMARK_MEASURE_STARTED:-0}" == "1" && "${ns}" =~ ^[0-9]+$ ]] || return 0
+  [[ "${BENCHMARK_START_NS:-}" =~ ^[0-9]+$ ]] || return 0
+  (( ns > BENCHMARK_START_NS )) || return 0
+  BENCHMARK_START_NS="${ns}"
+  BENCHMARK_START_DATETIME="$(date -u -d "@$((ns / 1000000000))" +"%Y-%m-%dT%H:%M:%SZ" 2>/dev/null || echo "${BENCHMARK_START_DATETIME}")"
+  export BENCHMARK_START_DATETIME BENCHMARK_START_NS
 }
 
 prefetch_vllm_model_weights() {
@@ -314,6 +318,7 @@ PY
 
 record_benchmark_stop() {
   # Same instant as the printed Stop time, with sub-second resolution for the summary.
+  apply_collector_measure_start
   STOP_TIME="$(iso_utc_now)"
   BENCHMARK_STOP_NS="$(epoch_ns)"
   export STOP_TIME BENCHMARK_STOP_NS
@@ -492,8 +497,10 @@ write_metrics_summary_txt() {
 finish_benchmark_run() {
   trap - ERR
   set +E
+  rm -f "${BENCHMARK_MEASURE_START_FILE:-}" 2>/dev/null || true
   BENCHMARK_LEDGER_WRITTEN=1
   BENCHMARK_RUN_ACTIVE=0
+  echo  # blank line between the run's output and the next shell prompt
 }
 
 append_runtime_ledger_on_error() {
@@ -546,6 +553,7 @@ append_runtime_ledger_on_error() {
 die() {
   log_error "$*"
   append_runtime_ledger_on_error "$*" || true
+  echo  # blank line between the run's output and the next shell prompt
   exit 1
 }
 

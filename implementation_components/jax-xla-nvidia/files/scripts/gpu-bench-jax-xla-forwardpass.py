@@ -22,6 +22,26 @@ PROFILE_BUDGET_S = {"smoke": 60.0, "baseline": 300.0, "extended": 900.0}
 STEP_CHUNK = 64
 
 
+def mark_measure_start() -> None:
+    """Setup ends here: record when the timed work starts (TEMPLATE_00_141).
+
+    run_benchmark.sh reads BENCHMARK_MEASURE_START_FILE when the benchmark stops and
+    starts the benchmark clock at this time, so model load and warmup count as setup.
+    The first call of a run wins. Outside run_benchmark.sh it does nothing.
+    """
+    import os
+    import time
+
+    path = os.environ.get("BENCHMARK_MEASURE_START_FILE", "")
+    if not path or os.path.exists(path):
+        return
+    try:
+        with open(path, "w", encoding="utf-8") as handle:
+            handle.write(f"{time.time_ns()}\n")
+    except OSError:
+        pass
+
+
 def nvidia_vram_used_gb():
     """Used VRAM in GB from nvidia-smi, or "" when unavailable."""
     try:
@@ -223,6 +243,7 @@ def main() -> int:
     # to JIT-compile inside the timed window, which dominated short runs.
     for size in sorted({min(STEP_CHUNK, iters), iters % STEP_CHUNK} - {0}):
         step_chunk(size)
+    mark_measure_start()  # setup ends: model loaded, warmup done
     elapsed, completed = run_bounded(step_chunk, iters, args.profile)
     if completed <= 0:
         raise SystemExit("[FAIL] JAX XLA forward pass completed no iterations.")

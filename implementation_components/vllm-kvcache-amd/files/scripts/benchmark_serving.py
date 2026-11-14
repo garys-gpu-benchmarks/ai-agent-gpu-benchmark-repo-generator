@@ -381,7 +381,7 @@ def main() -> int:
     run_dir.mkdir(parents=True, exist_ok=True)
     rows = []
     texts = ["concurrency,tokens_per_sec,ttft_ms,tpot_ms,kv_cache_gb,kv_util_percent"]
-    for _repeat in range(2):
+    for _repeat in range(1):  # one sweep, one sample row
         metrics = run_sweep(args, output_len)
         aliases = {
             "tokens_per_sec": metrics[METRIC_COLUMNS[0]],

@@ -201,6 +201,13 @@ export PYTHONUNBUFFERED=1
 cp run_benchmark.sh "${RUN_DIR}/script.sh"
 mask_environment "${RUN_DIR}/env_variables.txt"
 
+# The raw file keeps the whole SDXL transcript (parameter echo, CSV, RESULT lines;
+# parse_results.py reads it). The console shows only tagged lines and the one-line
+# sdxl summary.
+sdxl_console_lines() {
+  grep --line-buffered -E '^\[(INFO|WARN|FAIL|PASS)\]|^sdxl per_image_latency_sec=' || true
+}
+
 run_collection() {
   log_section "Collection"
   if [[ "${BACKEND}" == "sdxl" ]]; then
@@ -218,13 +225,20 @@ run_collection() {
     --guidance-scale "${GUIDANCE_SCALE}" --seed "${SEED}"
   log_run "${collect_cmd}"
   echo "${collect_cmd}" >> "${COMMAND_LOG}"
-  "${PYTHON_BIN}" scripts/collect_sdxl.py \
+  if ! "${PYTHON_BIN}" scripts/collect_sdxl.py \
     --output "${RUN_DIR}/metrics.csv" --config "${CONFIG_FILE}" --profile "${PROFILE}" \
     --backend "${BACKEND}" --model-name "${MODEL_NAME}" --precision "${PRECISION}" \
     --scheduler "${SCHEDULER}" --prompt-source "${PROMPT_SOURCE}" --prompt-len "${PROMPT_LEN}" \
     --image-resolution "${IMAGE_RESOLUTION}" --batch-size "${BATCH_SIZE}" \
     --num-images "${NUM_IMAGES}" --num-inference-steps "${NUM_INFERENCE_STEPS}" \
-    --guidance-scale "${GUIDANCE_SCALE}" --seed "${SEED}" | tee "${RAW_FILE}"
+    --guidance-scale "${GUIDANCE_SCALE}" --seed "${SEED}" \
+    | tee "${RAW_FILE}" | sdxl_console_lines; then
+    # The console filter hides tracebacks that went to stdout; show the end of the raw file.
+    echo "[INFO] last lines of ${RAW_FILE}:"
+    tail -n 40 "${RAW_FILE}"
+    die "SDXL collection failed"
+  fi
+  log_info "full SDXL output: ${RAW_FILE}"
 }
 
 run_parse() {
@@ -262,6 +276,7 @@ ELAPSED="$((STOP_EPOCH - START_EPOCH))"
 (( ELAPSED < 0 )) && ELAPSED=0
 if [[ "${QUIET}" -eq 0 ]]; then
   bash scripts/print_run_metadata.sh "${REPO_ROOT}" || true
+  echo  # blank line before the summary
   echo "[INFO] ===== Benchmark Summary ====="
   echo "[INFO] Run ID: $(basename "${RUN_DIR}") | Status: ok | Samples: $(${PYTHON_BIN} -c 'import json; print(json.load(open("results/summary.json"))["sample_count"])') | Profile: ${PROFILE} | Device: $(display_device)"
   print_benchmark_summary_commands

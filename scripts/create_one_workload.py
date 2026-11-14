@@ -14,6 +14,7 @@ import time
 from datetime import datetime, timezone
 from pathlib import Path
 
+from batch_progress import progress
 from generated_repo_directory import find_generated_repo, generated_repo_directory_name
 from host_exec import normalize_remote_root, normalize_ssh_command, run_host_bash, to_git_bash_path
 from framework_registry import resolve_flags
@@ -130,6 +131,12 @@ def _emit(text: str) -> None:
     print(safe, flush=True)
 
 
+def _took(label: str, started: float) -> None:
+    """UTC finish time and duration of one phase, so a slow phase is visible (TEMPLATE_00_141)."""
+    clock = datetime.now(timezone.utc).strftime("%H:%M:%SZ")
+    print(f"[TIME] {clock} {time.monotonic() - started:.1f} s  {label}", flush=True)
+
+
 def record(
     project_root: Path,
     workload: str,
@@ -205,7 +212,7 @@ def record(
         entry["reason"] = note
     batch.setdefault("repositories", []).append(entry)
     path.write_text(json.dumps(batch, indent=2) + "\n", encoding="utf-8", newline="\n")
-    print(f"[RECORD] {workload} {status} {_duration(started, finished)} (attempt {len(attempts)})", flush=True)
+    progress(project_root, f"[RECORD] {workload} {status} {_duration(started, finished)} (attempt {len(attempts)})")
 
 
 def ssh_run(ssh: str, script: str, *, timeout: int = 7200, stream_label: str = "") -> subprocess.CompletedProcess[str]:
@@ -705,7 +712,7 @@ def recheck_first_workload(workload: str, args: argparse.Namespace, project_root
     print(f"[START] end-of-batch toolkit recheck for workload {workload}", flush=True)
     repo = find_generated_repo(project_root, workload)
     if repo is None:
-        print(f"[FAIL] no repository for end-of-batch recheck of workload {workload}", flush=True)
+        progress(project_root, f"[FAIL] no repository for end-of-batch recheck of workload {workload}")
         return 1
     reuse = args.reuse_remote_env and not args.fresh_remote_env
     rc = remote_validate(ssh, repo, reuse=reuse)
@@ -722,7 +729,7 @@ def recheck_first_workload(workload: str, args: argparse.Namespace, project_root
     if rc == 0:
         print(f"[PASS] end-of-batch toolkit recheck for workload {workload}", flush=True)
     else:
-        print(f"[FAIL] end-of-batch toolkit recheck for workload {workload}", flush=True)
+        progress(project_root, f"[FAIL] end-of-batch toolkit recheck for workload {workload}")
     return rc
 
 
@@ -810,7 +817,9 @@ def process_one(workload: str, args: argparse.Namespace, template_root: Path, pr
                 command.append("--force")
             if args.skip_remote_refresh:
                 command.append("--skip-remote-refresh")
+            phase = time.monotonic()
             created = subprocess.run(command, cwd=str(template_root), check=False)
+            _took(f"{workload} local create (create_generated_repo.py)", phase)
             if created.returncode != 0:
                 raise RuntimeError(f"create_generated_repo.py exited {created.returncode}")
         repo = find_generated_repo(project_root, workload)
@@ -822,7 +831,9 @@ def process_one(workload: str, args: argparse.Namespace, template_root: Path, pr
         workbook_name = fields.get("Repo Base Name") or fields.get("Repo Name") or repo.name
         repo_name = workbook_name
         reuse = args.reuse_remote_env and not args.fresh_remote_env
+        phase = time.monotonic()
         rc = remote_validate(ssh, repo, reuse=reuse)
+        _took(f"{workload} remote copy, setup and smoke", phase)
         if rc == 0 and ssh:
             fetch_results_reference(ssh, repo, template_root)
         finished = utc_now()
@@ -845,7 +856,7 @@ def process_one(workload: str, args: argparse.Namespace, template_root: Path, pr
     except Exception as exc:
         finished = utc_now()
         record(project_root, workload, repo_name, "failed", started, finished, str(exc), return_code=1)
-        print(f"[FAIL] {workload}: {exc}", flush=True)
+        progress(project_root, f"[FAIL] {workload}: {exc}")
         return 1
 
 

@@ -160,7 +160,7 @@ class GetBenchmarkResultsOptionTests(unittest.TestCase):
         self.assertEqual(self.ssh_calls(), [], "local mode must not use ssh")
         self.assertIn("No --host given: collecting from this machine", result.stdout)
         self.assertIn("Runs in the ledger: 2   passed (exit code 0): 1   other: 1", result.stdout)
-        self.assertRegex(result.stdout, r"101-sys-bench-a-ubu2404\s+smoke\s+-\s+00:01\s+0")
+        self.assertRegex(result.stdout, r"101-sys-bench-a-ubu2404\s+smoke\s+00:01\s+0")
         self.assertIn("(this machine)", result.stdout)
         directories = out / "DIRECTORIES"
         for workload in ("101-sys-bench-a-ubu2404", "102-sys-bench-b-ubu2404"):

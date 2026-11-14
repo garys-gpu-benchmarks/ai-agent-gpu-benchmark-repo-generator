@@ -254,7 +254,7 @@ def main() -> int:
     (run_dir / "loaded_model_id.txt").write_text(loaded_model_id + "\n", encoding="utf-8")
     rows = []
     texts = ["concurrency,tokens_per_sec,tpot_ms,ttft_ms,itl_ms,e2e_ms"]
-    for _repeat in range(2):
+    for _repeat in range(1):  # one sweep, one sample row
         metrics = run_sweep(args, output_len)
         rows.append({"sample_index": len(rows), "status": "ok", **{key: metrics[key] for key in METRIC_COLUMNS}, "error_message": ""})
         texts.append(
