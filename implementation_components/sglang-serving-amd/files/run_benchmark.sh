@@ -35,6 +35,7 @@ Parameters (override the profile's value):
 
 General options:
   --config <file>               Config file (default: config/benchmark_config.yaml)
+  --repeat <n>                  Run the selected profiles n times, in order (default: 1)
   --quiet                       Suppress nonessential stdout
   --log-level <level>           ERROR|WARN|INFO|DEBUG (default: INFO; DEBUG also prints [RUN] commands)
   --specification               Print this workload's specification and exit
@@ -177,7 +178,7 @@ run_collection() {
   mkdir -p "${HF_HOME}"
   local server_cmd=""
   if ! "${PYTHON_BIN}" -c "import sglang" >/dev/null 2>&1; then
-    die "sglang is not installed in .venv. Re-run: BENCHMARK_COMPILE_SGLANG=1 bash setup.sh --assume-yes"
+    die "sglang is not installed in .venv. Re-run: BENCHMARK_COMPILE_SGLANG=1 bash run_setup.sh --assume-yes"
   fi
   if ! "${PYTHON_BIN}" -c "import aiter" >/dev/null 2>&1; then
     die "aiter is not installed; AMD SGLang requires AITER."

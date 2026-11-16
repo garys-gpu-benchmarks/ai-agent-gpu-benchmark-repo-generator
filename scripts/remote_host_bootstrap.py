@@ -5,7 +5,7 @@
 #              helpers to the VM, runs host_bootstrap.sh in the foreground (Ubuntu
 #              mirror check and apt index; the NVIDIA CUDA toolkit and DCGM only with
 #              BENCHMARK_BOOTSTRAP_CUDA=1 since TEMPLATE_00_135, otherwise the first
-#              setup.sh installs them), and leaves a Hugging Face prefetch of
+#              run_setup.sh installs them), and leaves a Hugging Face prefetch of
 #              this batch's models running in the background. Warnings only:
 #              nothing here stops generation.
 from __future__ import annotations
@@ -141,7 +141,7 @@ def run_bootstrap(
             flush=True,
         )
         if not copy_bootstrap(run_host_bash, ssh_command, scripts_dir):
-            warnings.append("could not copy the bootstrap scripts to the VM; each setup.sh installs what it needs")
+            warnings.append("could not copy the bootstrap scripts to the VM; each run_setup.sh installs what it needs")
             report["status"] = "copy_failed"
         else:
             # BENCHMARK_BOOTSTRAP_CUDA=1 on the generation host asks the VM bootstrap to

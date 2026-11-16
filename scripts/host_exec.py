@@ -94,12 +94,18 @@ def _stream_to_log(
     log_path: Path,
     label: str,
     heartbeat_s: float,
+    progress_root: Path | None = None,
+    progress_every: int = 5,
 ) -> subprocess.CompletedProcess[str]:
     """Run argv, append its output to log_path as it arrives, and print a heartbeat.
 
     The console gets one line every heartbeat_s seconds instead of the output itself:
     a ROCm or CUDA setup log is larger than the 1 MB console capture (TEMPLATE_00_134).
-    The returned CompletedProcess still holds the full stdout and stderr.
+    With progress_root, every progress_every-th heartbeat (5 minutes by default) is
+    also appended to batch_progress.log, so the file the agent follows moves during
+    a long workload (431 was silent there for 16m 32s in TEMPLATE_00_141;
+    TEMPLATE_00_142). The returned CompletedProcess still holds the full stdout and
+    stderr.
     """
     import threading
     import time
@@ -141,6 +147,7 @@ def _stream_to_log(
         reader.start()
     started = time.monotonic()
     next_beat = started + heartbeat_s
+    beats = 0
     while True:
         try:
             proc.wait(timeout=1.0)
@@ -162,13 +169,19 @@ def _stream_to_log(
             # The same "last:" line repeated for minutes looked like a hang (330, 332 and
             # 431 in TEMPLATE_00_140); say how long the output has been unchanged instead.
             if quiet >= heartbeat_s:
-                print(
+                beat = (
                     f"[{label}] still running {elapsed // 60}m{elapsed % 60:02d}s; "
-                    f"no new output for {quiet // 60}m{quiet % 60:02d}s (last: {tail})",
-                    flush=True,
+                    f"no new output for {quiet // 60}m{quiet % 60:02d}s (last: {tail})"
                 )
             else:
-                print(f"[{label}] still running {elapsed // 60}m{elapsed % 60:02d}s; last: {tail}", flush=True)
+                beat = f"[{label}] still running {elapsed // 60}m{elapsed % 60:02d}s; last: {tail}"
+            beats += 1
+            if progress_root is not None and progress_every > 0 and beats % progress_every == 0:
+                from batch_progress import progress
+
+                progress(progress_root, beat)  # prints it too
+            else:
+                print(beat, flush=True)
             next_beat = now + heartbeat_s
     for reader in readers:
         reader.join(timeout=30)
@@ -184,6 +197,7 @@ def run_host_bash(
     stream_log: Path | None = None,
     heartbeat_label: str = "remote",
     heartbeat_s: float = 60.0,
+    progress_root: Path | None = None,
 ) -> subprocess.CompletedProcess[str]:
     """Run a Git Bash command and return its output.
 
@@ -200,6 +214,7 @@ def run_host_bash(
         result = _stream_to_log(
             [bash, "-lc", command], cwd=cwd, timeout=timeout, env=env,
             log_path=Path(stream_log), label=heartbeat_label, heartbeat_s=heartbeat_s,
+            progress_root=progress_root,
         )
         if check and result.returncode != 0:
             raise subprocess.CalledProcessError(result.returncode, result.args, result.stdout, result.stderr)

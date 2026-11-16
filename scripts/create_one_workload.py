@@ -223,7 +223,9 @@ def ssh_run(ssh: str, script: str, *, timeout: int = 7200, stream_label: str = "
         BATCH_LOG.parent.mkdir(parents=True, exist_ok=True)
         with BATCH_LOG.open("a", encoding="utf-8", newline="\n") as handle:
             handle.write(f"\n===== {utc_now()} {stream_label} =====\n")
-        return run_host_bash(command, timeout=timeout, stream_log=BATCH_LOG, heartbeat_label=stream_label)
+        # Every fifth heartbeat also goes to batch_progress.log (TEMPLATE_00_142).
+        return run_host_bash(command, timeout=timeout, stream_log=BATCH_LOG, heartbeat_label=stream_label,
+                             progress_root=BATCH_LOG.parent)
     return run_host_bash(command, timeout=timeout)
 
 
@@ -273,11 +275,11 @@ def classify_transient(output: str, install_tail: list[str]) -> str:
 
 
 def wait_remote_idle(ssh: str, name: str, *, timeout: int = 900) -> bool:
-    """Wait until no apt, dpkg or this repository's setup.sh is running on the VM."""
+    """Wait until no apt, dpkg or this repository's run_setup.sh is running on the VM."""
     deadline = time.time() + timeout
     script = (
         "pgrep -x apt-get >/dev/null || pgrep -x apt >/dev/null || pgrep -x dpkg >/dev/null || "
-        f"pgrep -f unattended-upgr >/dev/null || (pgrep -af 'setup.sh' | grep -F '{REMOTE_ROOT}/{name}' | grep -v grep >/dev/null) "
+        f"pgrep -f unattended-upgr >/dev/null || (pgrep -af 'run_setup.sh' | grep -F '{REMOTE_ROOT}/{name}' | grep -v grep >/dev/null) "
         "&& echo BUSY || echo IDLE"
     )
     while time.time() < deadline:
@@ -288,7 +290,7 @@ def wait_remote_idle(ssh: str, name: str, *, timeout: int = 900) -> bool:
         except (subprocess.TimeoutExpired, OSError):
             if not wait_for_ssh(ssh):
                 return False
-        print("[INFO] waiting for apt, dpkg or setup.sh to finish on the VM before the retry", flush=True)
+        print("[INFO] waiting for apt, dpkg or run_setup.sh to finish on the VM before the retry", flush=True)
         time.sleep(15)
     return False
 
@@ -316,7 +318,7 @@ def remote_exists(ssh: str, name: str) -> bool:
 def remote_setup_running(ssh: str, name: str) -> bool:
     result = ssh_probe(
         ssh,
-        f"pgrep -af 'setup.sh' | grep -F '{REMOTE_ROOT}/{name}' | grep -v grep || true",
+        f"pgrep -af 'run_setup.sh' | grep -F '{REMOTE_ROOT}/{name}' | grep -v grep || true",
         timeout=60,
     )
     return bool((result.stdout or "").strip())
@@ -435,21 +437,21 @@ def _connection_dropped(result: subprocess.CompletedProcess[str] | None) -> bool
 
 
 def _remote_script(name: str, *, resume: bool, stamp: str) -> str:
-    setup = "bash setup.sh --assume-yes"
+    setup = "bash run_setup.sh --assume-yes"
     if resume:
-        setup = "bash setup.sh --assume-yes --resume-auto || bash setup.sh --assume-yes"
+        setup = "bash run_setup.sh --assume-yes --resume-auto || bash run_setup.sh --assume-yes"
     quoted_stamp = shlex.quote(stamp)
     if resume:
-        # The reboot resume service may already be inside setup.sh. Wait for that
+        # The reboot resume service may already be inside run_setup.sh. Wait for that
         # process instead of exiting, then run setup --resume-auto (a no-op when
         # SETUP complete) and continue into smoke.
         guard = """
-if pgrep -af 'setup.sh' | grep -F "$REPO" | grep -v grep >/dev/null; then
-  echo "[INFO] setup.sh already running after reboot; waiting for it to finish"
+if pgrep -af 'run_setup.sh' | grep -F "$REPO" | grep -v grep >/dev/null; then
+  echo "[INFO] run_setup.sh already running after reboot; waiting for it to finish"
   deadline=$((SECONDS + 3600))
-  while pgrep -af 'setup.sh' | grep -F "$REPO" | grep -v grep >/dev/null; do
+  while pgrep -af 'run_setup.sh' | grep -F "$REPO" | grep -v grep >/dev/null; do
     if [ "$SECONDS" -ge "$deadline" ]; then
-      echo "[FAIL] setup.sh still running after wait"
+      echo "[FAIL] run_setup.sh still running after wait"
       exit 1
     fi
     sleep 10
@@ -458,8 +460,8 @@ fi
 """
     else:
         guard = """
-if pgrep -af 'setup.sh' | grep -F "$REPO" | grep -v grep >/dev/null; then
-  echo "[FAIL] setup.sh already running; not starting a second copy"
+if pgrep -af 'run_setup.sh' | grep -F "$REPO" | grep -v grep >/dev/null; then
+  echo "[FAIL] run_setup.sh already running; not starting a second copy"
   exit 1
 fi
 """
@@ -477,7 +479,7 @@ find "$REPO" -type f -name '*.sh' ! -path '*/.venv/*' -exec chmod +x {{}} +
 chmod +x "$REPO"/*.sh "$REPO"/scripts/*.sh "$REPO"/scripts/lib/*.sh 2>/dev/null || true
 mkdir -p "$REPO/results/raw" "$REPO/tests/fixtures"
 touch "$REPO/results/raw/.gitkeep" "$REPO/tests/fixtures/.gitkeep"
-# Time setup.sh, which generation runs here before the smoke run, so the ledger's setup
+# Time run_setup.sh, which generation runs here before the smoke run, so the ledger's setup
 # columns and RESULTS_REFERENCE.md show it (TEMPLATE_00_136). The start file must survive
 # a ROCm reboot and the resume run. TEMPLATE_00_136 aged it with `find -mmin`, and 301's
 # timer restarted after the reboot (setup 00:06 for a 5.5 min install), so TEMPLATE_00_137
@@ -495,18 +497,18 @@ else
 fi
 {setup}
 # A ROCm setup that needs a reboot schedules it 30 s ahead and exits 0 before setup is
-# complete. TEMPLATE_00_137 then deleted the start file (301: "setup.sh took 305 s",
+# complete. TEMPLATE_00_137 then deleted the start file (301: "run_setup.sh took 305 s",
 # connection closed, the resume logged a new start). Finish the timer only when setup is
-# complete; every setup.sh writes .setup_state last (TEMPLATE_00_138).
+# complete; every run_setup.sh writes .setup_state last (TEMPLATE_00_138).
 if [ -f "$REPO/.setup_state" ]; then
   date +%s%N > "$SETUP_T.end"
   BENCHMARK_SEPARATE_SETUP_START_NS="$(cat "$SETUP_T.start")"
   BENCHMARK_SEPARATE_SETUP_END_NS="$(cat "$SETUP_T.end")"
   export BENCHMARK_SEPARATE_SETUP_START_NS BENCHMARK_SEPARATE_SETUP_END_NS
-  echo "[INFO] generation setup timer: setup.sh took $(( (BENCHMARK_SEPARATE_SETUP_END_NS - BENCHMARK_SEPARATE_SETUP_START_NS) / 1000000000 )) s"
+  echo "[INFO] generation setup timer: run_setup.sh took $(( (BENCHMARK_SEPARATE_SETUP_END_NS - BENCHMARK_SEPARATE_SETUP_START_NS) / 1000000000 )) s"
   rm -f "$SETUP_T.start" "$SETUP_T.end"
 else
-  echo "[INFO] generation setup timer: setup.sh returned before setup was complete (no .setup_state; a reboot is pending); keeping start $(cat "$SETUP_T.start") for the resumed run"
+  echo "[INFO] generation setup timer: run_setup.sh returned before setup was complete (no .setup_state; a reboot is pending); keeping start $(cat "$SETUP_T.start") for the resumed run"
 fi
 printf '%s\\n' {quoted_stamp} > "$REPO/.env_reuse_stamp"
 if ! command -v rg >/dev/null 2>&1; then
@@ -619,7 +621,7 @@ def remote_validate(ssh: str, repo_dir: Path, *, reuse: bool) -> int:
         return 0
     name = repo_dir.name
     if remote_setup_running(ssh, name):
-        print("[FAIL] setup.sh already running on the remote VM; not starting a second copy", flush=True)
+        print("[FAIL] run_setup.sh already running on the remote VM; not starting a second copy", flush=True)
         return 1
     if _check_platform_policy(ssh, repo_dir) != 0:
         return 1
@@ -674,8 +676,8 @@ def remote_validate(ssh: str, repo_dir: Path, *, reuse: bool) -> int:
             _sync_remote_env_stamp(ssh, repo_dir)
             return 0
     # One retry for a temporary cause (TEMPLATE_00_134). It runs here, beside the reboot
-    # resume, so a second setup.sh can never start while the first is alive; the resume
-    # script itself waits for a setup.sh that is still running.
+    # resume, so a second run_setup.sh can never start while the first is alive; the resume
+    # script itself waits for a run_setup.sh that is still running.
     install_tail = remote_install_tail(ssh, name)
     reason = classify_transient(f"{result.stdout or ''}\n{result.stderr or ''}", install_tail)
     if reason:

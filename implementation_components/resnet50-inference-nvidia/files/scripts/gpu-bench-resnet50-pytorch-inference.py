@@ -119,6 +119,25 @@ def percentile(values: list[float], q: float) -> float:
     return ordered[index]
 
 
+# Workbook dtype names (bf16, f16_r, FP32, ...) mapped to torch dtypes. An
+# unknown name fails instead of falling back, so a run never reports a type it
+# did not use (open issue P1: this collector used one hard-coded type).
+TORCH_DTYPE_NAMES = {
+    "fp16": "float16", "f16": "float16", "f16_r": "float16", "float16": "float16", "half": "float16",
+    "bf16": "bfloat16", "bf16_r": "bfloat16", "bfloat16": "bfloat16",
+    "fp32": "float32", "f32": "float32", "f32_r": "float32", "float32": "float32", "float": "float32",
+}
+
+
+def torch_dtype(name: object):
+    import torch
+
+    key = str(name).strip().lower().replace("-", "_")
+    if key not in TORCH_DTYPE_NAMES:
+        raise SystemExit(f"[FAIL] dtype '{name}' is not supported; use fp16 (f16_r), bf16 (bf16_r) or fp32 (f32_r)")
+    return getattr(torch, TORCH_DTYPE_NAMES[key])
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--device-id", default="0")
@@ -142,7 +161,8 @@ def main() -> int:
     image_size = max(1, int(float(args.image_size)))
     warmup = max(0, int(float(args.warmup_iters)))
     iters = max(1, int(float(args.num_iterations)))
-    dtype = torch.bfloat16
+    dtype = torch_dtype(args.dtype)
+    print(f"[INFO] resnet50 inference: dtype {args.dtype} -> {dtype}", flush=True)
     model = torchvision.models.resnet50(weights=None)
     model.eval()
     model.to(device=device, dtype=dtype)

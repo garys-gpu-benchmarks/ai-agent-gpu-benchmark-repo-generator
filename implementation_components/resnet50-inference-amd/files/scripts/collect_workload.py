@@ -160,6 +160,25 @@ def parse_args():
     parser.add_argument("--output-format", default="csv")
     return parser.parse_args()
 
+# Workbook dtype names (bf16, f16_r, FP32, ...) mapped to torch dtypes. An
+# unknown name fails instead of falling back, so a run never reports a type it
+# did not use (open issue P1: this collector used one hard-coded type).
+TORCH_DTYPE_NAMES = {
+    "fp16": "float16", "f16": "float16", "f16_r": "float16", "float16": "float16", "half": "float16",
+    "bf16": "bfloat16", "bf16_r": "bfloat16", "bfloat16": "bfloat16",
+    "fp32": "float32", "f32": "float32", "f32_r": "float32", "float32": "float32", "float": "float32",
+}
+
+
+def torch_dtype(name: object):
+    import torch
+
+    key = str(name).strip().lower().replace("-", "_")
+    if key not in TORCH_DTYPE_NAMES:
+        raise SystemExit(f"[FAIL] dtype '{name}' is not supported; use fp16 (f16_r), bf16 (bf16_r) or fp32 (f32_r)")
+    return getattr(torch, TORCH_DTYPE_NAMES[key])
+
+
 def main() -> int:
     args = parse_args()
     params = load_params(args.config)
@@ -182,7 +201,9 @@ def main() -> int:
     else:
         device = torch.device("cpu")
     print(f"[INFO] resnet50 inference: device={device} use_channels_last={str(channels_last).lower()}", flush=True)
-    dtype = torch.bfloat16 if "bf16" in str(pv(params, "dtype", args.profile, "bf16")).lower() else torch.float16
+    dtype_name = pv(params, "dtype", args.profile, "bf16")
+    dtype = torch_dtype(dtype_name)
+    print(f"[INFO] resnet50 inference: dtype {dtype_name} -> {dtype}", flush=True)
     model = resnet50().to(device=device, dtype=dtype).eval()
     if channels_last:
         model = model.to(memory_format=torch.channels_last)

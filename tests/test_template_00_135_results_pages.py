@@ -86,6 +86,16 @@ class PageTests(unittest.TestCase):
         self.assertIn("status **FAIL** (exit 1)", text)
         self.assertIn("Failed at **setup**: apt-get update failed | mirror", text)
 
+    def test_amd_system_stress_states_full_utilization(self) -> None:
+        text = rm.render_section(row("smoke", workload_number="103"))
+        self.assertIn("Requested 50%, delivered ~100%", text)
+        ref = rm.reference_from_actual(text, profiles=("smoke",))
+        self.assertIn("Requested 50%, delivered ~100%", ref)
+        other = rm.render_section(row("smoke", workload_number="303"))
+        self.assertIn("Requested 50%, delivered ~100%", other)
+        nvidia = rm.render_section(row("smoke", workload_number="203"))
+        self.assertNotIn("delivered ~100%", nvidia)
+
     def test_reference_from_smoke_has_note(self) -> None:
         rm.update_results_actual(self.repo, FIELDS, row("smoke"))
         ref = rm.reference_from_actual(self.page(), template_version="TEMPLATE_00_135", generated="2026-11-12",

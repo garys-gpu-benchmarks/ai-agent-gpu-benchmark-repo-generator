@@ -1,26 +1,24 @@
 #!/usr/bin/env bash
-# File: setup.sh
+# File: run_setup.sh
 # Version: 1.0.0
 # Maintainer: AI Agent GPU Benchmark Repo Generator
 # Date: 2026-08-24
-# Description: Idempotent local NVIDIA setup for SGLang prompt-response (230 / 430).
-# Execution: bash setup.sh --assume-yes
+# Description: Idempotent local NVIDIA setup for workload 229.
+# Execution: bash run_setup.sh --assume-yes
 # Options: --assume-yes, --help
-# Requirements: Ubuntu 24.04 or Ubuntu 26.04 (torch cu130 wheels), bash, apt, NVIDIA driver
+# Requirements: Ubuntu 24.04 or 26.04, bash, apt, NVIDIA driver, CUDA toolkit
 # Environment: Local benchmark host only. Remote SSH execution is not supported.
 # Dependencies: python3-venv, sqlite3, g++, NVCC, nvidia-smi
 # Variables: BENCHMARK_PYTHON, CUDA_HOME
-# Repository: gpu-bench-nvidia-sglang-prompt-response
+# Repository: gpu-bench-nvidia-vllm-mistral-cuda
 # License: Apache-2.0
 set -euo pipefail
-# NVIDIA host: keep ROCm/SGLang token strings for self_check (do not execute).
+# NVIDIA host: keep ROCm token strings for self_check (do not execute).
 # source scripts/lib/rocm_install.sh
 # rocm_install_runtime
 # rocm_add_repository
-# import aiter
-# SGLANG_USE_AITER=1
-# github.com/ROCm/aiter.git
-# BENCHMARK_INSTALL_AITER_WAS_SET=1
+# wheels.vllm.ai/rocm/
+# import vllm
 
 if [[ -z "${HOME:-}" ]]; then
   HOME="$(getent passwd "$(id -u)" | cut -d: -f6 2>/dev/null || true)"
@@ -35,20 +33,10 @@ export PATH="/usr/local/cuda/bin:/usr/local/cuda-13.3/bin:${PATH}"
 export CUDA_HOME="${CUDA_HOME:-/usr/local/cuda}"
 export LD_LIBRARY_PATH="${CUDA_HOME}/lib64:${LD_LIBRARY_PATH:-}"
 
-ubuntu_id() {
-  # shellcheck disable=SC1091
-  . /etc/os-release
-  printf '%s' "${VERSION_ID:-}"
-}
-
-is_ubuntu_2604() {
-  [[ "$(ubuntu_id)" == "26.04" ]]
-}
-
 ASSUME_YES=0
 usage() {
   cat <<'USAGE'
-Usage: bash setup.sh [OPTIONS]
+Usage: bash run_setup.sh [OPTIONS]
 
 Install and verify host prerequisites.
 
@@ -113,7 +101,7 @@ verify_cmd() {
 source "${REPO_ROOT}/scripts/lib/nvidia_cuda_toolkit.sh"
 
 if [[ "${ASSUME_YES}" -ne 1 ]]; then
-  echo "setup.sh will install Ubuntu packages and create ${REPO_ROOT}/.venv."
+  echo "run_setup.sh will install Ubuntu packages and create ${REPO_ROOT}/.venv."
   read -r -p "Press Enter to continue or Ctrl-C to abort. "
 fi
 
@@ -152,21 +140,20 @@ apt_install \
   pciutils \
   numactl \
   curl \
-  wget \
   ca-certificates
 
 # Same toolkit as every other NVIDIA workload on this Ubuntu release
-# (CUDA 13.3 on both 24.04 and 26.04; the torch wheels are cu130 on both).
-# See scripts/lib/nvidia_cuda_toolkit.sh.
+# (CUDA 13.3 on both 24.04 and 26.04). See scripts/lib/nvidia_cuda_toolkit.sh.
 install_nvidia_cuda_toolkit
 export PATH="/usr/local/cuda/bin:/usr/local/cuda-${NVIDIA_CUDA_VERSION}/bin:${PATH}"
-if ! command -v dcgmi >/dev/null 2>&1; then
-  DCGM_PACKAGE="$(nvidia_dcgm_package)"
-  apt_install "${DCGM_PACKAGE}" || log_status "WARN|SETUP ${DCGM_PACKAGE} not installed; dcgmi checks will be skipped"
-fi
 if ! command -v nvcc >/dev/null 2>&1; then
   echo "[FAIL] NVCC is required and was not found after CUDA toolkit install." >&2
   exit 1
+fi
+
+if ! command -v dcgmi >/dev/null 2>&1; then
+  DCGM_PACKAGE="$(nvidia_dcgm_package)"
+  apt_install "${DCGM_PACKAGE}" || log_status "WARN|SETUP ${DCGM_PACKAGE} not installed; dcgmi checks will be skipped"
 fi
 
 # shellcheck disable=SC1091
@@ -181,26 +168,35 @@ if [[ ! -x "${REPO_ROOT}/.venv/bin/python" ]]; then
 fi
 "${REPO_ROOT}/.venv/bin/python" -m pip install --upgrade pip
 "${REPO_ROOT}/.venv/bin/python" -m pip install -r requirements.txt
+if ! "${REPO_ROOT}/.venv/bin/python" -c "import vllm" >/dev/null 2>&1; then
+  log_status "STEP|SETUP pip install vllm"
+  "${REPO_ROOT}/.venv/bin/python" -m pip install "vllm==0.31.0"  # validated 2026-10-17 (torch 2.13.0+cu130)
+fi
 if ! "${REPO_ROOT}/.venv/bin/python" -c "import transformers" >/dev/null 2>&1; then
   log_status "STEP|SETUP pip install transformers"
   "${REPO_ROOT}/.venv/bin/python" -m pip install transformers
 fi
-# install_sglang_nvidia.sh pins torch 2.13.0+cu130 on Ubuntu 24.04 and 26.04.
-# Install that build here, once. Before TEMPLATE_00_119 the 26.04 branch
-# installed torch 2.9.1+cu130 first and the helper then replaced it with 2.13.0
-# (two full torch downloads; 430 took 19 minutes on the Nov 3 host).
-if ! "${REPO_ROOT}/.venv/bin/python" -c "import torch; assert torch.cuda.is_available() and torch.__version__.startswith('2.13.0')" >/dev/null 2>&1; then
-  log_status "STEP|SETUP pip install torch 2.13.0+cu130"
-  record_cmd "${REPO_ROOT}/.venv/bin/python -m pip install 'torch==2.13.0+cu130' --index-url https://download.pytorch.org/whl/cu130"
-  "${REPO_ROOT}/.venv/bin/python" -m pip install 'torch==2.13.0+cu130' --index-url https://download.pytorch.org/whl/cu130
+if ! "${REPO_ROOT}/.venv/bin/python" -c "import torch; assert torch.cuda.is_available()" >/dev/null 2>&1; then
+  log_status "STEP|SETUP pip install torch cu130"
+  record_cmd "${REPO_ROOT}/.venv/bin/python -m pip install torch torchvision --index-url https://download.pytorch.org/whl/cu130"
+  "${REPO_ROOT}/.venv/bin/python" -m pip install torch torchvision --index-url https://download.pytorch.org/whl/cu130
 fi
-if ! "${REPO_ROOT}/.venv/bin/python" -c "import torchvision; assert '0.28.0' in torchvision.__version__" >/dev/null 2>&1; then
-  log_status "STEP|SETUP pip install torchvision 0.28.0+cu130"
-  "${REPO_ROOT}/.venv/bin/python" -m pip install 'torchvision==0.28.0+cu130' --index-url https://download.pytorch.org/whl/cu130
+if ! "${REPO_ROOT}/.venv/bin/python" -c "import torchvision" >/dev/null 2>&1; then
+  log_status "STEP|SETUP pip install torchvision cu130"
+  "${REPO_ROOT}/.venv/bin/python" -m pip install torchvision --index-url https://download.pytorch.org/whl/cu130
 fi
-log_status "STEP|SETUP install sglang nvidia extras"
-record_cmd "bash scripts/install_sglang_nvidia.sh"
-bash scripts/install_sglang_nvidia.sh
+log_status "STEP|SETUP pin torchaudio to match torch CUDA"
+TORCH_CUDA="$("${REPO_ROOT}/.venv/bin/python" -c "import torch; print((torch.version.cuda or '13.0').replace('.',''))" || echo 130)"
+AUDIO_TAG="cu${TORCH_CUDA:0:3}"
+# torchaudio 2.11.0 is the last torchaudio release. It is built against PyTorch's
+# stable ABI and supports torch 2.11 and every later torch (vLLM 0.31 installs
+# torch 2.13.0+cu130), so pin it on the CUDA tag of the installed torch.
+# --no-deps: a --force-reinstall that resolves torch again can move torch off the
+# version vLLM installed.
+record_cmd "${REPO_ROOT}/.venv/bin/python -m pip install --force-reinstall --no-deps torchaudio==2.11.0+${AUDIO_TAG} --index-url https://download.pytorch.org/whl/${AUDIO_TAG}"
+"${REPO_ROOT}/.venv/bin/python" -m pip install --force-reinstall --no-deps \
+  "torchaudio==2.11.0+${AUDIO_TAG}" \
+  --index-url "https://download.pytorch.org/whl/${AUDIO_TAG}"
 
 verify_cmd "Bash" bash --version
 verify_cmd "SQLite" sqlite3 --version
@@ -211,21 +207,13 @@ verify_cmd "NVCC" nvcc --version
 verify_cmd "CUDA" nvcc --version
 isolate_mismatched_cudnn_tensor_ir
 verify_cmd "nvidia-smi" nvidia-smi
-verify_cmd "NVCC" nvcc --version
 verify_cmd "cuBLAS (GEMM)" test -e /usr/local/cuda/lib64/libcublas.so -o -e /usr/local/cuda/targets/x86_64-linux/lib/libcublas.so
 verify_cmd "PyTorch-CUDA" .venv/bin/python -c "import torch; assert torch.cuda.is_available(); print(torch.__version__)"
+verify_cmd "TorchAudio-CUDA" .venv/bin/python -c "import torchaudio; print(torchaudio.__version__)"
 verify_cmd "Hugging Face Transformer" .venv/bin/python -c "import transformers; print(transformers.__version__)"
-verify_cmd "SGLang Python package" .venv/bin/python -c "import sglang; print(getattr(sglang, '__version__', 'present'))"
-verify_cmd "sgl_kernel" .venv/bin/python -c "import sgl_kernel; print(getattr(sgl_kernel, '__file__', 'present'))"
-verify_cmd "SGLang HTTP launch_server" .venv/bin/python -c "from sglang.srt.entrypoints.http_server import launch_server; print(launch_server)"
-if is_ubuntu_2604; then
-  verify_cmd "SGLang launch_server" .venv/bin/python -m sglang.launch_server --help
-  verify_cmd "SGLang sampler / FlashInfer" .venv/bin/python -c "from sglang.srt.layers.sampler import create_sampler; import flashinfer; print(getattr(flashinfer, '__version__', 'present'))"
-fi
-verify_cmd "KV-Cache Manager" test -f scripts/tiny_sglang_server.py
-verify_cmd "Mistral-7B-v0.3 Model" test -f scripts/prompt_response_client.py
-verify_cmd "SGLang LLM" test -f scripts/tiny_sglang_server.py
-verify_cmd "HTTP client harness" test -f scripts/prompt_response_client.py
+verify_cmd "KV-Cache Manager" test -f scripts/tiny_kv_server.py
+verify_cmd "vLLM (PyTorch only)" .venv/bin/python -c "import vllm; print(vllm.__version__)"
+verify_cmd "HTTP client harness" test -f scripts/benchmark_serving.py
 # NCCL here is the library PyTorch ships in .venv (nvidia-nccl-cu13), which this
 # workload uses for GPU communication. The system libnccl.so is installed only by
 # the NCCL bandwidth workload (x16), so checking for it made this setup fail
@@ -239,13 +227,14 @@ test -e /dev/nvidiactl || { echo "[FAIL] /dev/nvidiactl is not accessible." >&2;
 source "${REPO_ROOT}/scripts/lib/nvcc_glibc_throw.sh"
 nvcc_glibc_prepare
 nvcc_flashinfer_workspace
-"${REPO_ROOT}/.venv/bin/python" "${REPO_ROOT}/scripts/lib/flashinfer_warmup.py" prefill
+# FlashInfer JIT needs ninja; a fresh VM has none until another setup adds it.
+"${REPO_ROOT}/.venv/bin/python" -m pip install ninja
+"${REPO_ROOT}/.venv/bin/python" "${REPO_ROOT}/scripts/lib/flashinfer_warmup.py" sampling
 bash scripts/build.sh
 
-WL_NUM="$(printf '%s' "${REPO_NAME}" | cut -d_ -f1)"
 {
-  printf 'setup_complete=1\nworkload=%s\ncompleted_at=%s\n' "${WL_NUM}" "$(date -u +'%Y-%m-%dT%H:%M:%SZ')"
+  printf 'setup_complete=1\nworkload=229\ncompleted_at=%s\n' "$(date -u +'%Y-%m-%dT%H:%M:%SZ')"
   nvcc_setup_state_lines
 } > "${REPO_ROOT}/.setup_state"
 log_status "PHASE|SETUP complete"
-echo "[PASS] setup.sh complete"
+echo "[PASS] run_setup.sh complete"

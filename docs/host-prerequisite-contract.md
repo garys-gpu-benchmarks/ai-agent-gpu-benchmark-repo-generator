@@ -1,8 +1,8 @@
 # Host Prerequisite Contract
 
-This contract defines how generated `setup.sh` scripts discover, install, and verify non-ROCm host prerequisites. It applies before any generated build or benchmark execution.
+This contract defines how generated `run_setup.sh` scripts discover, install, and verify non-ROCm host prerequisites. It applies before any generated build or benchmark execution.
 
-This contract is only the non-ROCm portion of setup. It must not be interpreted as permission to omit workload runtime installation. `setup.sh` remains the complete installation entrypoint: after host prerequisites, it must install and verify every workload-specific dependency and build the required execution backend. For ROCm-dependent GPU workloads, the generated setup must also follow `docs/rocm-reboot-install-contract.md` by default. A CPU fixture is an explicit fallback only, never the normal completion state for a GPU workload.
+This contract is only the non-ROCm portion of setup. It must not be interpreted as permission to omit workload runtime installation. `run_setup.sh` remains the complete installation entrypoint: after host prerequisites, it must install and verify every workload-specific dependency and build the required execution backend. For ROCm-dependent GPU workloads, the generated setup must also follow `docs/rocm-reboot-install-contract.md` by default. A CPU fixture is an explicit fallback only, never the normal completion state for a GPU workload.
 
 ## Derivation
 
@@ -32,7 +32,7 @@ The table is guidance, not a fixed package list. Workload-specific dependencies 
 
 ## Setup Implementation Requirements
 
-Generated `setup.sh` must:
+Generated `run_setup.sh` must:
 
 1. Be the primary, idempotent installation entry point and begin with `set -euo pipefail`.
 2. Create or reuse the repository-local `.venv`; use `.venv/bin/python` for repository Python commands and never install benchmark packages globally.
@@ -58,11 +58,11 @@ run_privileged env DEBIAN_FRONTEND=noninteractive apt-get install -y <package>
 
 ## Verification and failure behavior
 
-After installation, `setup.sh` must verify every required package and command. It must fail with an actionable message identifying the unavailable prerequisite and remediation if provisioning or verification fails.
+After installation, `run_setup.sh` must verify every required package and command. It must fail with an actionable message identifying the unavailable prerequisite and remediation if provisioning or verification fails.
 
-For source trees that contain `configure.ac`, `setup.sh` must provision and verify `autoconf`, `automake`, `libtoolize`, and `make`. Before invoking a generated `install.sh`, `scripts/build.sh` must detect missing generated libtool metadata such as `ltmain.sh` and bootstrap it with the repository's supported autotools flow (for example, `libtoolize --force --copy` followed by `autoreconf -fi`). Do not assume a vendored dependency has already generated `ltmain.sh`.
+For source trees that contain `configure.ac`, `run_setup.sh` must provision and verify `autoconf`, `automake`, `libtoolize`, and `make`. Before invoking a generated `install.sh`, `scripts/build.sh` must detect missing generated libtool metadata such as `ltmain.sh` and bootstrap it with the repository's supported autotools flow (for example, `libtoolize --force --copy` followed by `autoreconf -fi`). Do not assume a vendored dependency has already generated `ltmain.sh`.
 
-When `scripts/build.sh` or a Makefile invokes `hipcc`, that script must be self-contained: source `scripts/lib/hipcc_host_gcc.sh` (copied into every generated repository) or pass `--gcc-install-dir` to a GCC 13/14/15 install dir that still ships libstdc++ headers. `scripts/lib/common.sh` also sources the helper so `setup.sh` and `run_benchmark.sh` export `HIPCC_COMPILE_FLAGS_APPEND` into child `bash scripts/build.sh` processes. A bare `hipcc -O2 src/foo.cpp` is not acceptable on Ubuntu 26.04.
+When `scripts/build.sh` or a Makefile invokes `hipcc`, that script must be self-contained: source `scripts/lib/hipcc_host_gcc.sh` (copied into every generated repository) or pass `--gcc-install-dir` to a GCC 13/14/15 install dir that still ships libstdc++ headers. `scripts/lib/common.sh` also sources the helper so `run_setup.sh` and `run_benchmark.sh` export `HIPCC_COMPILE_FLAGS_APPEND` into child `bash scripts/build.sh` processes. A bare `hipcc -O2 src/foo.cpp` is not acceptable on Ubuntu 26.04.
 
 Setup must create a successful setup/build marker only after all checks pass. `run_benchmark.sh` must refuse to run when that marker is absent or stale for the generated repository's setup contract.
 
@@ -78,4 +78,4 @@ For a GPU workload, “all checks pass” includes verification that the expecte
 
 ## Documentation
 
-Generated `README.md` must list the host packages provisioned by `setup.sh`, including conditional packages selected from the workload implementation.
+Generated `README.md` must list the host packages provisioned by `run_setup.sh`, including conditional packages selected from the workload implementation.

@@ -1,6 +1,6 @@
 {
   "component_id": "harness-self-check",
-  "description": "Mixin: no-op RAG stubs so ROCm setup.sh references exist without installing RAG.",
+  "description": "Mixin: no-op RAG stubs so ROCm run_setup.sh references exist without installing RAG.",
   "role": "mixin",
   "completeness": "thin",
   "apply_when": {

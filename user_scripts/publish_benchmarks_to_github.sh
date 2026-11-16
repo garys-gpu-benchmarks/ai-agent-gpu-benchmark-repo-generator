@@ -315,11 +315,39 @@ platform() {
 }
 
 # If GitHub already has history for this repository, put the new commit on
-# top of it, so a later run is a normal update.
+# top of it, so a later run is a normal update. Returns 1, so the caller stops
+# with a message, when GitHub cannot be asked (TEMPLATE_00_142).
+#
+# Before TEMPLATE_00_142 a failed check (a network blip, a rate limit) was read
+# as "no history": the commit was built with no parent and GitHub rejected the
+# push (bundle-nvidia-ubuntu-2404, v1.0.39). A rerun then kept that parentless
+# commit, because the fetch only ran when there was no local commit, and was
+# rejected again.
+#
+# git ls-remote --exit-code: 0 = main exists, 2 = no main yet (new or empty
+# repository), anything else = GitHub could not be asked; that is retried.
 attach_history() {
-  if ! git rev-parse -q --verify HEAD >/dev/null &&
-     GIT_TERMINAL_PROMPT=0 git ls-remote -q --exit-code origin refs/heads/main >/dev/null 2>&1; then
-    git fetch -q origin main && git reset -q --soft FETCH_HEAD
+  local rc=0 try pause="${ATTACH_HISTORY_RETRY_SEC:-5}"
+  for try in 1 2 3 4; do
+    rc=0
+    GIT_TERMINAL_PROMPT=0 git ls-remote -q --exit-code origin refs/heads/main >/dev/null 2>&1 || rc=$?
+    ((rc == 0 || rc == 2)) && break
+    ((try < 4)) && { echo "  (could not ask GitHub for the history of $(git remote get-url origin 2>/dev/null), trying again in ${pause} seconds)"; sleep "${pause}"; }
+  done
+  ((rc == 2)) && return 0
+  if ((rc != 0)); then
+    echo "Could not read the history of $(git remote get-url origin 2>/dev/null) from GitHub (git ls-remote exit ${rc}). Nothing was committed or pushed; run the script again when GitHub is reachable."
+    return 1
+  fi
+  again git fetch -q origin main || { echo "Fetching the history of $(git remote get-url origin 2>/dev/null) failed."; return 1; }
+  if ! git rev-parse -q --verify HEAD >/dev/null; then
+    git reset -q --soft FETCH_HEAD
+  elif ! git merge-base --is-ancestor FETCH_HEAD HEAD 2>/dev/null; then
+    # Local commits that are not on top of GitHub's main: left by an earlier
+    # attempt that was never pushed. Keep the files (the index and work tree
+    # are this run's content) and commit them again on top of GitHub's main.
+    echo "  local commit $(git rev-parse --short HEAD) is not on top of GitHub's main; recommitting this run's files on top of $(git rev-parse --short FETCH_HEAD)"
+    git reset -q --soft FETCH_HEAD
   fi
 }
 

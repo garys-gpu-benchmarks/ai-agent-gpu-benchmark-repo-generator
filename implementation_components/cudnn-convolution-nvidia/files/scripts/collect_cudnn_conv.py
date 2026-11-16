@@ -7,7 +7,7 @@
 # Execution: .venv/bin/python scripts/collect_cudnn_conv.py --output PATH --config PATH
 # Options: --output, --config, --profile, --dtype, --input-source, --conv-direction, --batch-size, --input-channels, --input-height, --input-width, --output-channels, --kernel-height, --kernel-width, --stride-h, --stride-w, --group-count, --search-strategy, --warmup-iters, --num-iterations, --harness
 # Requirements: Python 3.12, PyYAML
-# Environment: Repository-local .venv after setup.sh
+# Environment: Repository-local .venv after run_setup.sh
 # Dependencies: bin/cudnn_conv
 # Variables: PATH
 # Repository: gpu-bench-nvidia-cudnn-convolution-micro

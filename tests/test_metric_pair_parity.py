@@ -19,8 +19,8 @@ IC = ROOT / "implementation_components"
 EMITTED = {
     117: ("1", "achieved_compute_tflops", "rocblas-gemm-amd/files/scripts/collect_workload.py"),
     217: ("1", "achieved_compute_tflops", "cublas-gemm-nvidia/files/scripts/collect_cublas_gemm.py"),
-    121: ("3", "modeled_tflops", "resnet50-training-amd/files/scripts/collect_workload.py"),
-    221: ("3", "fp16_tflops", "resnet50-training-nvidia/files/scripts/train_resnet50.py"),
+    121: ("3", "counted_tflops", "resnet50-training-amd/files/scripts/collect_workload.py"),
+    221: ("3", "counted_tflops", "resnet50-training-nvidia/files/scripts/train_resnet50.py"),
 }
 
 
@@ -63,7 +63,7 @@ class MetricPairParityTests(unittest.TestCase):
                 with self.subTest(workload=workload, column=column):
                     self.assertNotIn("achieved_TFLOPS", row[column])
                     self.assertNotIn("memory_bandwidth_GBps", row[column])
-                    self.assertIn("modeled_tflops", row[column])
+                    self.assertIn("counted_tflops", row[column])  # modeled_tflops until TEMPLATE_00_142 (M5)
 
     def test_no_fixed_cache_resident_qualifier_in_labels(self) -> None:
         # The cache-resident note is added at run time by metric_contract.annotate_metrics.

@@ -95,6 +95,62 @@ That wrapper lives in the 00_64 project (`TEMPLATE_00_64/_generation_work/`), no
 
 `--apply --in-place` destroys the nested generation workspace. Use it only when you have another copy.
 
+## Publishing everything with publish_benchmarks_to_github.sh
+
+Moved here from the generator README on 2026-11-16. Folder names are placeholders in Git Bash form: `<projects folder>` holds the `Project<NNN>_...` folders, and `<publishing folder>` holds `Publishing\`.
+
+Publishing is done by [`user_scripts/publish_benchmarks_to_github.sh`](../user_scripts/publish_benchmarks_to_github.sh). The generator holds the master copy; it is never copied into generated workloads (generation copies `.claude/`, `schemas/`, `docs/`, `scripts/` and `config/`, plus `show_metrics.sh` and `list_runs.sh` at the top of each workload). The script has no source folders built in: you fill the run folder by hand, and step 0 only checks it (every batch has all 32 workloads, no duplicate or out-of-range numbers, the generator present).
+
+The script lives in `Publishing\`, with one dated folder per publish run:
+
+```text
+<publishing folder>\
+└── Publishing\
+    ├── publish_benchmarks_to_github.sh             # copy of user_scripts/publish_benchmarks_to_github.sh
+    └── 20261019_02\
+        ├── src_380_381_382_383\                    # filled by hand: the 128 workloads + ai-agent-gpu-benchmark-repo-generator
+        ├── src_380_381_382_383_PubTree\            # created by the script (logs in _logs\)
+        ├── src_380_381_382_383_Bundles\            # created by the script
+        ├── shared-workflows\                       # built by the script from the generator
+        └── gpu-bench-suite\                        # built by the script from the generator
+```
+
+### 1. Publish
+
+Git Bash; use `/` in paths. Fill the run folder with the four generated batches and the generator they were generated from, then copy the script into `Publishing\` and run it there:
+
+```bash
+P=<projects folder>
+RUN=<YYYYMMDD_NN>/src_<AAA>_<BBB>_<CCC>_<DDD>                       # e.g. 20261019_02/src_380_381_382_383
+R=<publishing folder>/Publishing/$RUN
+mkdir -p $R
+cp -a $P/Project<NNN>_TEMPLATE_00_<XXX>_<date>/TEMPLATE_00_<XXX>/ai-agent-gpu-benchmark-repo-generator $R/
+cp -a $P/Project<AAA>_101_132_TEMPLATE_00_<XXX>_<date>/TEMPLATE_00_<XXX>/1[0-9][0-9]-* $R/   # and 2xx, 3xx, 4xx likewise
+
+cd <publishing folder>/Publishing
+cp $RUN/ai-agent-gpu-benchmark-repo-generator/user_scripts/publish_benchmarks_to_github.sh .
+./publish_benchmarks_to_github.sh $RUN
+```
+
+The script builds `shared-workflows` and `gpu-bench-suite` with `scripts/emit_shared_workflows.py` from the generator copy in the run folder, publishes `shared-workflows` first (after its Self-test passes it tags the next `v1.x.0` and moves `v1`), then the workloads, the four bundles and the generator, and last copies `BenchmarkSpecDefinitions.xlsx` and `docs/images/github-organization.png` onto the profile repository (`garymichaelbass/garymichaelbass`; its README is maintained by hand and never overwritten). `docs/OPEN_ISSUES.md` is never published. If it stops, fix the problem and run the same command again; finished work is skipped.
+
+### 2. Preview the shared repositories
+
+Optional, from the generator folder:
+
+```bash
+python3 scripts/ci_contract.py --show                                               # resolved owner, tag, tool versions
+python3 scripts/emit_shared_workflows.py --output-root <publish folder> --check      # what would change
+```
+
+`<publish folder>` is the folder that holds `shared-workflows/`, for example `Publishing/20261019_02`.
+
+### 3. Change CI later
+
+Edit `templates/shared-workflows/` (or `config/ci_contract.yaml`) here, then publish as in step 1. A compatible change needs no workload changes; the script releases it as the next `v1.x.0` and moves `v1`.
+
+A breaking change (renamed or removed input) is released as `v2.0.0` / `v2`; set `shared_workflows.ref: v2` in `config/ci_contract.yaml` and regenerate the workloads.
+
 ## In a week, start here
 
 1. Open this file: `ai-agent-gpu-benchmark-repo-generator/docs/GITHUB_PUBLISH_GENERATOR_OPERATIONS.md`

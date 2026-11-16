@@ -5,7 +5,7 @@
 # Execution: .venv/bin/python scripts/infer_sdxl.py --backend sdxl --image-resolution 1024 --num-inference-steps 50
 # Options: --backend, --model-name, --precision, --scheduler, --prompt-source, --prompt-len, --image-resolution, --batch-size, --num-images, --num-inference-steps, --guidance-scale, --seed, --output
 # Requirements: Python 3.12, PyTorch, diffusers, and cached SDXL weights.
-# Environment: Repository-local .venv after setup.sh. HF_HOME defaults to .cache/huggingface.
+# Environment: Repository-local .venv after run_setup.sh. HF_HOME defaults to .cache/huggingface.
 # Dependencies: torch, diffusers, transformers
 # Repository: gpu-bench-amd-sdxl-diffusers-latency / gpu-bench-nvidia-sdxl-diffusers-latency
 # License: Apache-2.0

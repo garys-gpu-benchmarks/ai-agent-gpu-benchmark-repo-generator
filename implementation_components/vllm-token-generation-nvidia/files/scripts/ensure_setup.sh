@@ -24,8 +24,8 @@ if [[ -f .setup_state ]]; then
     fi
 fi
 
-[[ -f setup.sh ]] || {
-    printf '[ERROR] setup.sh is missing; cannot start automatic setup.\n' >&2
+[[ -f run_setup.sh ]] || {
+    printf '[ERROR] run_setup.sh is missing; cannot start automatic setup.\n' >&2
     exit 1
 }
 
@@ -47,17 +47,17 @@ fi
 
 printf '[INFO] .setup_state is absent; starting automatic setup.\n'
 setup_args=()
-if grep -Fq -- "--assume-yes" setup.sh; then
+if grep -Fq -- "--assume-yes" run_setup.sh; then
     setup_args+=(--assume-yes)
 fi
 
-if ! bash setup.sh "${setup_args[@]}"; then
+if ! bash run_setup.sh "${setup_args[@]}"; then
     printf '[ERROR] Automatic setup failed; benchmark will not run.\n' >&2
     exit 1
 fi
 
 if [[ ! -f .setup_state ]]; then
-    printf '[ERROR] setup.sh returned successfully without creating .setup_state; benchmark will not run.\n' >&2
+    printf '[ERROR] run_setup.sh returned successfully without creating .setup_state; benchmark will not run.\n' >&2
     exit 1
 fi
 

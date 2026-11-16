@@ -11,13 +11,13 @@ Thank you for improving this GPU benchmark workload repository.
 
 ```bash
 bash scripts/check_github_publish_ready.sh
-bash -n setup.sh run_benchmark.sh
+bash -n run_setup.sh run_benchmark.sh
 ```
 
 5. When a compatible GPU system is available, validate setup and the smoke profile:
 
 ```bash
-bash setup.sh
+bash run_setup.sh
 bash run_benchmark.sh --smoke
 ```
 

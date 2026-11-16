@@ -357,7 +357,7 @@ def main() -> int:
         llm_source,
         # transformers 4.56+ names this argument dtype and warns on torch_dtype
         # ("`torch_dtype` is deprecated! Use `dtype` instead!"); older releases only
-        # know torch_dtype. setup.sh installs transformers unpinned.
+        # know torch_dtype. run_setup.sh installs transformers unpinned.
         **{_dtype_kwarg(): torch.bfloat16},
         local_files_only=local_only,
         output_loading_info=True,

@@ -184,6 +184,15 @@ def main() -> int:
     devices = jax.devices("gpu")
     if not devices:
         raise SystemExit("[FAIL] JAX did not see a GPU.")
+    # --device-id selects the GPU (open issue P2: it was accepted and never
+    # used, so every run went to the first device). jax_default_device places
+    # the parameters, the tokens and every jitted call on that device.
+    device_id = int(float(args.device_id))
+    if not 0 <= device_id < len(devices):
+        raise SystemExit(f"[FAIL] device_id {device_id} is not visible; JAX sees {len(devices)} GPU(s)")
+    device = devices[device_id]
+    jax.config.update("jax_default_device", device)
+    print(f"[INFO] jax forward pass: device_id {device_id} -> {device}", flush=True)
     dtype = parse_dtype(args.dtype)
     seq = max(4, int(float(args.sequence_len)))
     hidden = max(8, int(float(args.hidden_size)))
@@ -257,7 +266,7 @@ def main() -> int:
     flops += 2.0 * batch * seq * hidden * vocab
     tflops = finite_nonneg(flops / per_iter / 1e12) if elapsed else 0.0
     try:
-        peak = finite_nonneg(float(jax.local_devices()[0].memory_stats()["peak_bytes_in_use"]) / 1e9)
+        peak = finite_nonneg(float(device.memory_stats()["peak_bytes_in_use"]) / 1e9)
     except Exception:
         peak = gpu_vram_used_gb()
     # No number from JAX or the vendor tool: report the reason, not a guess (it

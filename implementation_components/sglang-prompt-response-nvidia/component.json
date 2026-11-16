@@ -2,7 +2,7 @@
   "component_id": "sglang-prompt-response-nvidia",
   "description": "Reusable implementation assets for sglang prompt response nvidia.",
   "overlay": [
-    "setup.sh",
+    "run_setup.sh",
     "scripts/parse_results.py",
     "run_benchmark.sh",
     "scripts/ensure_setup.sh",
@@ -30,7 +30,7 @@
   "role": "collector",
   "completeness": "thin",
   "provides": [
-    "setup.sh",
+    "run_setup.sh",
     "scripts/parse_results.py",
     "run_benchmark.sh",
     "scripts/ensure_setup.sh",

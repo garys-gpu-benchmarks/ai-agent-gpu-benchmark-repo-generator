@@ -3,7 +3,7 @@
   "description": "NVIDIA throughput/latency runner using real vLLM in every profile, token-validated ITL, and p50 request latency.",
   "overlay": [
     "config/benchmark_config.yaml",
-    "setup.sh",
+    "run_setup.sh",
     "requirements.txt",
     "run_benchmark.sh",
     "scripts/ensure_setup.sh",
@@ -26,7 +26,7 @@
   "completeness": "thin",
   "provides": [
     "config/benchmark_config.yaml",
-    "setup.sh",
+    "run_setup.sh",
     "requirements.txt",
     "run_benchmark.sh",
     "scripts/ensure_setup.sh",

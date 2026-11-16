@@ -1663,8 +1663,7 @@ parameters:
     workload_specific_overrides:
       '103':
         workload_name: CPU + System Stress (Baseline Health)
-        meaning: smoke 5 / baseline 200 / extended 580 s. gpu_load_percent, temp_threshold, power_threshold, throttle_check,
-          and ecc_check are yaml fields and are ignored; no rocblas-bench or GPU GEMM load is started
+        meaning: smoke 5 / baseline 200 / extended 580 s
       '104':
         workload_name: Silent Data Corruption (SDC)
         meaning: wall-clock cap (values >=10000 treated as milliseconds)
@@ -1683,8 +1682,7 @@ parameters:
         meaning: Defined by the workload description.
       '303':
         workload_name: CPU + System Stress (Baseline Health)
-        meaning: smoke 5 / baseline 200 / extended 580 s. gpu_load_percent, temp_threshold, power_threshold, throttle_check,
-          and ecc_check are yaml fields and are ignored; no rocblas-bench or GPU GEMM load is started
+        meaning: smoke 5 / baseline 200 / extended 580 s
       '304':
         workload_name: Silent Data Corruption (SDC)
         meaning: wall-clock cap (values >=10000 treated as milliseconds)
@@ -3401,13 +3399,13 @@ parameters:
     workload_specific_overrides:
       '103':
         workload_name: CPU + System Stress (Baseline Health)
-        meaning: Defined by the workload description.
+        meaning: recorded, not a duty cycle
       '203':
         workload_name: CPU + System Stress (Baseline Health)
         meaning: share of each 100 ms window the GPU runs FP16 GEMMs (default 50)
       '303':
         workload_name: CPU + System Stress (Baseline Health)
-        meaning: Defined by the workload description.
+        meaning: recorded, not a duty cycle
       '403':
         workload_name: CPU + System Stress (Baseline Health)
         meaning: share of each 100 ms window the GPU runs FP16 GEMMs (default 50)

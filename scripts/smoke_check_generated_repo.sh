@@ -77,7 +77,7 @@ required_paths=(
   "docs/GENERATION_REPORT.md"
   "SPEC.md"
   "README.md"
-  "setup.sh"
+  "run_setup.sh"
   "run_benchmark.sh"
   "requirements.txt"
   "config/benchmark_config.yaml"
@@ -166,14 +166,14 @@ PY
         pin_patterns=("ROCM_VERSION=.*10.1.0" "UBUNTU_CODENAME=.*resolute")
     fi
     for pattern in "install_resume_service" "systemctl enable" "resume-from-service" "rocm_runtime_stage" "install_status_log_phase" "install_status_log_step" "flock" "cleanup_resume_service" "${pin_patterns[@]}" "GFX_TARGET=.*gfx942"; do
-        if ! rg -n "${pattern}" "${TARGET_REPO}/setup.sh" >/dev/null; then
-            echo "[FAIL] ROCm setup.sh is missing reboot-resume contract element: ${pattern}" >&2
+        if ! rg -n "${pattern}" "${TARGET_REPO}/run_setup.sh" >/dev/null; then
+            echo "[FAIL] ROCm run_setup.sh is missing reboot-resume contract element: ${pattern}" >&2
             exit 1
         fi
     done
     for pattern in "TimeoutStartSec=0" "TimeoutStopSec=0" "KillMode=process" "systemctl show" "systemctl is-enabled"; do
-        if ! rg -n "${pattern}" "${TARGET_REPO}/setup.sh" >/dev/null; then
-            echo "[FAIL] ROCm setup.sh is missing systemd timeout safeguard: ${pattern}" >&2
+        if ! rg -n "${pattern}" "${TARGET_REPO}/run_setup.sh" >/dev/null; then
+            echo "[FAIL] ROCm run_setup.sh is missing systemd timeout safeguard: ${pattern}" >&2
             exit 1
         fi
     done

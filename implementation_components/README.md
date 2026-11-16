@@ -57,15 +57,15 @@ destinations to the component files. `scripts/self_check_generated_repo.sh`
 also asserts STREAM per-element relative checksum tokens and leftover-DB
 `ADD COLUMN` / rebuild tokens.
 
-`init_generated_repo.py` may replace overlay `setup.sh` with the canonical
-ROCm setup skeleton when `GPU Vendor` is AMD. When that happens, `setup.sh`
+`init_generated_repo.py` may replace overlay `run_setup.sh` with the canonical
+ROCm setup skeleton when `GPU Vendor` is AMD. When that happens, `run_setup.sh`
 must still call the component install helpers after the venv exists
 (`scripts/install_sglang_nvidia.sh` is NVIDIA-only; AMD uses
 `scripts/install_rag_amd.sh` and the matching AMD helpers).
 
 When `GPU Vendor` is NVIDIA, init copies `scripts/templates/setup_nvidia_skeleton.sh`
-as `setup.sh` **before** overlays and does **not** recopy it afterward. NVIDIA
-vLLM/SGLang overlay `setup.sh` therefore wins. The NVIDIA skeleton calls
+as `run_setup.sh` **before** overlays and does **not** recopy it afterward. NVIDIA
+vLLM/SGLang overlay `run_setup.sh` therefore wins. The NVIDIA skeleton calls
 `scripts/install_pytorch_nvidia.sh`, then `install_sglang_nvidia.sh` /
 `install_rag_nvidia.sh` / `install_sdxl_python.sh` when those files exist,
 then `scripts/build.sh`. Do not call `install_pytorch_nvidia.sh` from the

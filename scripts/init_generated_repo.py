@@ -59,8 +59,10 @@ OPTIONAL_SOURCE_FILES = ["benchmark_specification.json"]
 
 SHARED_DIRS = [".claude", "schemas", "docs", "scripts", "config"]
 
+COMPAT_WRAPPER_REL = Path("scripts") / "templates" / "setup_compat_wrapper.sh"
+
 REQUIRED_PATHS = [
-    "setup.sh",
+    "run_setup.sh",
     "run_benchmark.sh",
     "requirements.txt",
     "config/benchmark_config.yaml",
@@ -98,7 +100,7 @@ COPY_EXCLUSIONS = [
     # which is not in SHARED_DIRS, so it needs no exclusion here.
 ]
 NO_BUILD_STEP_SH = """#!/usr/bin/env bash
-# This workload has no compile step. setup.sh calls this file; it does nothing.
+# This workload has no compile step. run_setup.sh calls this file; it does nothing.
 set -euo pipefail
 echo "[INFO] scripts/build.sh: no build step for this workload."
 """
@@ -137,7 +139,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--rocm-setup",
         action="store_true",
-        help="Materialize the canonical reboot-safe ROCm setup skeleton as setup.sh",
+        help="Materialize the canonical reboot-safe ROCm setup skeleton as run_setup.sh",
     )
     return parser.parse_args()
 
@@ -399,10 +401,10 @@ def main() -> int:
     skeleton = source_root / SKELETON_REL[bundle]
     if not skeleton.exists():
         raise SystemExit(f"[FAIL] Missing setup skeleton for bundle {bundle}: {skeleton}")
-    skeleton_target = repo_root / "setup.sh"
+    skeleton_target = repo_root / "run_setup.sh"
     shutil.copy2(skeleton, skeleton_target)
     skeleton_target.chmod(skeleton_target.stat().st_mode | 0o111)
-    print(f"[INFO] Materialized {bundle} setup skeleton as setup.sh")
+    print(f"[INFO] Materialized {bundle} setup skeleton as run_setup.sh")
 
     for resolved in resolved_components:
         component_id = str(resolved["component_id"])
@@ -417,14 +419,14 @@ def main() -> int:
     if bundle == "rocm":
         # A workload overlay may not replace the canonical ROCm controller with
         # an empty or minimal setup script.
-        shutil.copy2(source_root / SKELETON_REL[bundle], repo_root / "setup.sh")
-        (repo_root / "setup.sh").chmod((repo_root / "setup.sh").stat().st_mode | 0o111)
+        shutil.copy2(source_root / SKELETON_REL[bundle], repo_root / "run_setup.sh")
+        (repo_root / "run_setup.sh").chmod((repo_root / "run_setup.sh").stat().st_mode | 0o111)
     elif bundle == "cpu-system":
-        shutil.copy2(source_root / SKELETON_REL[bundle], repo_root / "setup.sh")
-        (repo_root / "setup.sh").chmod((repo_root / "setup.sh").stat().st_mode | 0o111)
-    # NVIDIA overlay setup.sh (vLLM / SGLang) must win. Do not recopy the
+        shutil.copy2(source_root / SKELETON_REL[bundle], repo_root / "run_setup.sh")
+        (repo_root / "run_setup.sh").chmod((repo_root / "run_setup.sh").stat().st_mode | 0o111)
+    # NVIDIA overlay run_setup.sh (vLLM / SGLang) must win. Do not recopy the
     # NVIDIA skeleton after overlays. Overlay helpers are invoked by the
-    # skeleton when those setup.sh files are not present.
+    # skeleton when those run_setup.sh files are not present.
 
     for rel in COPY_EXCLUSIONS:
         target = repo_root / rel
@@ -437,18 +439,25 @@ def main() -> int:
     for rel in REQUIRED_PATHS:
         path = repo_root / rel
         path.parent.mkdir(parents=True, exist_ok=True)
-        if rel == "setup.sh":
+        if rel == "run_setup.sh":
             if not path.exists() or path.stat().st_size == 0:
-                raise SystemExit("[FAIL] setup.sh was not materialized from a setup skeleton.")
+                raise SystemExit("[FAIL] run_setup.sh was not materialized from a setup skeleton.")
             continue
         if rel == "scripts/build.sh" and (not path.exists() or path.stat().st_size == 0):
             # Workloads without a compile step still get a valid script, so
-            # setup.sh can call it and shellcheck/bash -n have something real.
+            # run_setup.sh can call it and shellcheck/bash -n have something real.
             path.write_text(NO_BUILD_STEP_SH, encoding="utf-8", newline="\n")
             path.chmod(path.stat().st_mode | 0o111)
             continue
         if not path.exists():
             path.touch()
+    # setup.sh became run_setup.sh in TEMPLATE_00_142. A small setup.sh that
+    # runs run_setup.sh keeps "bash setup.sh --assume-yes" working for a few
+    # templates (older instructions, scripts and the reboot resume service of a
+    # repository regenerated in the same folder).
+    wrapper = repo_root / "setup.sh"
+    shutil.copy2(source_root / COMPAT_WRAPPER_REL, wrapper)
+    wrapper.chmod(wrapper.stat().st_mode | 0o111)
     materialize_generated_harness(repo_root)
     _write_generation_manifest(repo_root, source_root, resolved_components)
     if apply_component_gaps(repo_root, source_root / "implementation_components") != 0:

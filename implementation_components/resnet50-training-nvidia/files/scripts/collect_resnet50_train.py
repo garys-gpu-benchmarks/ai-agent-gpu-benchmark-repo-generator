@@ -15,7 +15,7 @@ import yaml
 METRIC_FIELDS = [
     "step_time_msec",
     "images_per_sec",
-    "fp16_tflops",
+    "counted_tflops",
     "modeled_weight_feature_traffic_gb_s",
     "peak_gpu_memory_gb",
 ]
@@ -27,7 +27,7 @@ RESULT_RE = re.compile(
     r"learning_rate=(?P<learning_rate>\S+) gradient_accumulation=(?P<gradient_accumulation>\S+) "
     r"warmup_iters=(?P<warmup_iters>\S+) num_iterations=(?P<num_iterations>\S+) "
     r"step_time_msec=(?P<step_time_msec>[0-9.eE+-]+) images_per_sec=(?P<images_per_sec>[0-9.eE+-]+) "
-    r"fp16_tflops=(?P<fp16_tflops>[0-9.eE+-]+) memory_bandwidth_gb_s=(?P<memory_bandwidth_gb_s>[0-9.eE+-]+) "
+    r"counted_tflops=(?P<counted_tflops>[0-9.eE+-]+|na) memory_bandwidth_gb_s=(?P<memory_bandwidth_gb_s>[0-9.eE+-]+) "
     r"peak_gpu_memory_gb=(?P<peak_gpu_memory_gb>[0-9.eE+-]+) status=(?P<status>\w+)"
 )
 
@@ -104,7 +104,10 @@ def main() -> int:
         match = RESULT_RE.search(text)
         if code != 0 or match is None:
             raise SystemExit("[FAIL] train_resnet50.py did not emit a RESULT line.")
-        parsed.append(match.groupdict())
+        item = match.groupdict()
+        flops_na = re.search(r"^FLOPS_NA reason=(.+)$", text, re.MULTILINE)
+        item["flops_na_reason"] = flops_na.group(1).strip() if flops_na else ""
+        parsed.append(item)
     rows = []
     for index, item in enumerate(parsed, start=1):
         row = {
@@ -118,7 +121,11 @@ def main() -> int:
             "modeled_weight_feature_traffic_gb_s": "memory_bandwidth_gb_s",
         }
         for name in METRIC_FIELDS:
-            row[name] = f"{float(item[source_names.get(name, name)]):.6f}"
+            value = item[source_names.get(name, name)]
+            if value == "na":  # train_resnet50.py printed the reason on a FLOPS_NA line
+                row[name] = item.get("flops_na_reason") or "na (FLOP count not reported)"
+            else:
+                row[name] = f"{float(value):.6f}"
         rows.append(row)
     summary = {
         "check": "summary",
@@ -128,7 +135,11 @@ def main() -> int:
         "status": "ok",
     }
     for name in METRIC_FIELDS:
-        values = [float(row[name]) for row in rows]
+        texts = [row[name] for row in rows]
+        if any(text.startswith("na") for text in texts):
+            summary[name] = next(text for text in texts if text.startswith("na"))
+            continue
+        values = [float(text) for text in texts]
         summary[name] = f"{(sum(values) / len(values)):.6f}"
     rows.append(summary)
     run_dir = Path(args.run_dir)

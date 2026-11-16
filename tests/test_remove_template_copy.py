@@ -25,7 +25,7 @@ COPY = "ai-agent-gpu-benchmark-repo-generator_copy"
 def _make_repo(root: Path, *, with_copy: bool = True) -> Path:
     repo = root / "101-sys-bench-amd-rocm-stack-validation-ubu2404"
     (repo / "results").mkdir(parents=True)
-    (repo / "setup.sh").write_text("#!/usr/bin/env bash\n", encoding="utf-8")
+    (repo / "run_setup.sh").write_text("#!/usr/bin/env bash\n", encoding="utf-8")
     (repo / "benchmark_specification.json").write_text("[]\n", encoding="utf-8")
     manifest = {
         "schema_version": "1.0.0",
@@ -70,7 +70,7 @@ class RemoveTemplateCopyTests(unittest.TestCase):
             self.assertTrue(manifest["template_copy_removed_at"].endswith("Z"))
             self.assertEqual(manifest["template_copy_path"], COPY)  # provenance kept
             self.assertEqual(manifest["template_copy_sha256"], "0" * 64)
-            self.assertTrue((repo / "setup.sh").is_file())  # generated files untouched
+            self.assertTrue((repo / "run_setup.sh").is_file())  # generated files untouched
 
     def test_idempotent(self):
         with tempfile.TemporaryDirectory() as tmp:

@@ -4,8 +4,10 @@ from __future__ import annotations
 import argparse
 import csv
 import io
+import os
 import shutil
 import re
+import signal
 import subprocess
 import sys
 import threading
@@ -263,7 +265,25 @@ def sample_row(second):
 # that setup compiles; if no load runs, the two GPU metrics are published as na.
 ROCBLAS_BENCH_LOCAL = Path(__file__).resolve().parents[1] / "third_party" / "rocBLAS" / "build" / "release" / "clients" / "staging" / "rocblas-bench"
 GEMM_N = 8192
-GEMM_ITERS = 400
+# Faster than this MI300X's measured 12 ms 8192³ FP32 GEMM, so the hot loop
+# cannot finish before the budget even on a quicker GPU.
+ITER_FLOOR_S = 0.005
+
+
+def gemm_iterations(budget_s, floor_s=ITER_FLOOR_S):
+    """Iterations whose hot loop outlasts budget_s at floor_s per iteration."""
+    budget_us = int(round(float(budget_s) * 1_000_000))
+    floor_us = int(round(float(floor_s) * 1_000_000))
+    if budget_us <= 0 or floor_us <= 0:
+        return 1
+    return max(1, (budget_us + floor_us - 1) // floor_us)
+
+
+def rocblas_bench_argv(bench, budget_s):
+    n = str(GEMM_N)
+    return [str(bench), "-f", "gemm", "-r", "f32_r", "--transposeA", "N", "--transposeB", "N",
+            "-m", n, "-n", n, "-k", n, "--lda", n, "--ldb", n, "--ldc", n,
+            "-i", str(gemm_iterations(budget_s)), "-j", "1"]
 
 
 def find_rocblas_bench():
@@ -272,12 +292,40 @@ def find_rocblas_bench():
     return shutil.which("rocblas-bench")
 
 
+def leftover_gpu_processes(text):
+    """Lines from `amd-smi process` that still name rocBLAS or HIP."""
+    found = []
+    for line in str(text or "").splitlines():
+        low = line.lower()
+        if "rocblas" in low or re.search(r"\bhip\b", low):
+            stripped = line.strip()
+            if stripped:
+                found.append(stripped)
+    return found
+
+
+def confirm_gpu_idle():
+    """Run amd-smi process. Return leftover rocBLAS/HIP lines, or a note if it did not run."""
+    for cmd in (["/opt/rocm/bin/amd-smi", "process"], ["amd-smi", "process"]):
+        try:
+            out = subprocess.run(cmd, capture_output=True, text=True, timeout=20)
+        except (OSError, subprocess.TimeoutExpired):
+            continue
+        return leftover_gpu_processes((out.stdout or "") + "\n" + (out.stderr or ""))
+    return ["amd-smi process did not run"]
+
+
 class GpuLoad:
-    """Runs rocblas-bench FP32 GEMMs in a duty cycle (run, then sleep so the busy
-    share is about load_pct) until the deadline. Records whether it ever ran."""
+    """One rocblas-bench FP32 GEMM whose hot loop outlasts the deadline.
+
+    --gpu-load-percent is recorded by the caller. This load does not sleep to
+    hit that percent: requested 50%, delivered ~100%. The process and its
+    children are terminated when the deadline hits.
+    """
 
     def __init__(self, seconds, load_pct, log_path):
         self.deadline = time.time() + seconds
+        self.budget_s = float(seconds)
         self.load_pct = max(1, min(100, load_pct))
         self.log_path = log_path
         self.bench = find_rocblas_bench()
@@ -291,28 +339,45 @@ class GpuLoad:
             self.thread.start()
         return self
 
+    def _terminate(self):
+        proc = self.proc
+        if proc is None or proc.poll() is not None:
+            return
+        pid = proc.pid
+        for sig, fallback in ((signal.SIGTERM, proc.terminate), (signal.SIGKILL, proc.kill)):
+            if proc.poll() is not None:
+                return
+            try:
+                os.killpg(pid, sig)
+            except (ProcessLookupError, PermissionError, OSError):
+                fallback()
+            try:
+                proc.wait(timeout=10)
+            except subprocess.TimeoutExpired:
+                continue
+
     def _loop(self):
-        n = str(GEMM_N)
-        cmd = [self.bench, "-f", "gemm", "-r", "f32_r", "--transposeA", "N", "--transposeB", "N",
-               "-m", n, "-n", n, "-k", n, "--lda", n, "--ldb", n, "--ldc", n,
-               "-i", str(GEMM_ITERS), "-j", "1"]
+        cmd = rocblas_bench_argv(self.bench, self.budget_s)
         with open(self.log_path, "a", encoding="utf-8") as log:
+            log.write(
+                f"$ requested {self.load_pct}%, delivered ~100% "
+                f"(one rocblas-bench hot loop for {self.budget_s:g} s at a {ITER_FLOOR_S * 1000:g} ms floor)\n"
+            )
             log.write("$ " + " ".join(cmd) + "\n")
+            log.flush()
             while time.time() < self.deadline:
                 began = time.time()
                 try:
-                    self.proc = subprocess.Popen(cmd, stdout=log, stderr=subprocess.STDOUT)
+                    self.proc = subprocess.Popen(
+                        cmd, stdout=log, stderr=subprocess.STDOUT, start_new_session=True,
+                    )
                 except OSError as exc:
                     self.error = f"rocblas-bench could not start: {exc}"
                     return
                 while self.proc.poll() is None and time.time() < self.deadline:
                     time.sleep(0.2)
                 if self.proc.poll() is None:
-                    self.proc.terminate()
-                    try:
-                        self.proc.wait(timeout=10)
-                    except subprocess.TimeoutExpired:
-                        self.proc.kill()
+                    self._terminate()
                     if time.time() - began > 2:
                         self.ok_runs += 1
                     return
@@ -320,14 +385,12 @@ class GpuLoad:
                     self.error = f"rocblas-bench exited with code {self.proc.returncode} (see gpu_load.log)"
                     return
                 self.ok_runs += 1
-                busy = time.time() - began
-                idle = busy * (100 - self.load_pct) / self.load_pct
-                time.sleep(max(0.0, min(idle, self.deadline - time.time())))
+                # No duty-cycle sleep. A call that returns early is restarted at once
+                # so the window cannot go idle; -i is sized so the first call does not return.
 
     def stop(self):
         self.deadline = 0
-        if self.proc is not None and self.proc.poll() is None:
-            self.proc.terminate()
+        self._terminate()
         if self.thread.is_alive():
             self.thread.join(timeout=15)
 
@@ -336,38 +399,68 @@ class GpuLoad:
 # loading the rocBLAS library before its first GEMM; with the old fixed start, the
 # 5 s smoke window saw only that start-up (1-4% utilization, idle power and
 # temperature, so both metrics were na) and baseline/extended averaged 5 idle
-# seconds into "sustained" power.
+# seconds into "sustained" power. One startup sample at 10% is the same idle
+# noise, so the window opens only after two polls in a row stay at or above 10%.
 UTIL_THRESHOLD_PCT = 10.0
 LOAD_WAIT_MAX_S = 30
+SUSTAINED_POLLS = 2
 
 
 def wait_for_gpu_load(load, max_wait=LOAD_WAIT_MAX_S, poll_s=0.5, read_util=None):
-    """Block until GPU utilization reaches UTIL_THRESHOLD_PCT, the load fails, or
-    max_wait seconds pass. Returns (seconds waited, peak utilization seen)."""
+    """Block until utilization stays at or above UTIL_THRESHOLD_PCT for two polls
+    in a row, the load fails, or max_wait seconds pass.
+
+    Returns (seconds waited, peak utilization seen, sustained). sustained is True
+    only after SUSTAINED_POLLS consecutive readings at or above the threshold.
+    """
     read_util = read_util or (lambda: gpu_metrics()[0])
     began = time.time()
     peak = 0.0
+    streak = 0
+    sustained = False
     while time.time() - began < max_wait:
         try:
             util = float(read_util())
         except (TypeError, ValueError):
             util = 0.0
         peak = max(peak, util)
-        if util >= UTIL_THRESHOLD_PCT or load.error or not load.thread.is_alive():
+        if load.error or not load.thread.is_alive():
             break
+        if util >= UTIL_THRESHOLD_PCT:
+            streak += 1
+            if streak >= SUSTAINED_POLLS:
+                sustained = True
+                break
+        else:
+            streak = 0
         time.sleep(poll_s)
-    return time.time() - began, peak
+    return time.time() - began, peak, sustained
 
 
-def gpu_load_failure(load, rows, profile):
-    """Return an na reason when the requested GPU load did not run, else ""."""
+def gpu_load_failure(load, rows, profile, waited_s=None, peak_seen=None):
+    """Return an na reason when the requested GPU load did not run, else "".
+
+    An idle sample window stays an unexpected na. waited_s and peak_seen are the
+    wait that actually happened; omitted, the reason uses the 30 s budget and the
+    sample-window peak. profile is accepted so every caller site stays the same.
+    """
     utils = [float(r["gpu_util_pct"]) for r in rows if str(r.get("gpu_util_pct", "")).replace(".", "", 1).isdigit()]
-    peak_util = max(utils) if utils else 0.0
-    if load.ok_runs > 0 and peak_util >= UTIL_THRESHOLD_PCT:
+    sample_peak = max(utils) if utils else 0.0
+    if load.ok_runs > 0 and sample_peak >= UTIL_THRESHOLD_PCT:
         return ""
+    peak_util = sample_peak
+    if peak_seen is not None:
+        try:
+            peak_util = max(peak_util, float(peak_seen))
+        except (TypeError, ValueError):
+            pass
+    if waited_s is None:
+        waited_text = f"{LOAD_WAIT_MAX_S:g} s"
+    else:
+        waited_text = f"{float(waited_s):.1f} s"
     why = load.error or (
-        f"GPU utilization peaked at {peak_util:g}% after waiting up to {LOAD_WAIT_MAX_S} s "
-        f"for it to reach {UTIL_THRESHOLD_PCT:g}%"
+        f"GPU utilization peaked at {peak_util:g}% after {waited_text} "
+        f"without staying at or above {UTIL_THRESHOLD_PCT:g}% for two polls"
     )
     return f"na (GPU load did not run: {why})"
 
@@ -390,9 +483,24 @@ def main() -> int:
         # Start the GPU load first and give it room to get going, then start the
         # timed window (and the CPU stress) once the GPU is actually busy.
         gpu_proc = GpuLoad(seconds + LOAD_WAIT_MAX_S, gpu_load, Path(args.run_dir) / "gpu_load.log").start()
-        waited, seen = wait_for_gpu_load(gpu_proc)
-        gpu_proc.deadline = time.time() + seconds
-        print(f"[INFO] GPU load reached {seen:g}% utilization after {waited:.1f} s; the {seconds} s timed window starts now")
+        waited, seen, sustained = wait_for_gpu_load(gpu_proc)
+        if sustained:
+            gpu_proc.deadline = time.time() + seconds
+            print(
+                f"[INFO] GPU load reached {seen:g}% utilization after {waited:.1f} s; "
+                f"the {seconds} s timed window starts now"
+            )
+        elif gpu_proc.error or not gpu_proc.thread.is_alive():
+            print(
+                f"[WARN] GPU load stopped after {waited:.1f} s; utilization peaked at {seen:g}%",
+                file=sys.stderr,
+            )
+        else:
+            print(
+                f"[WARN] GPU load timed out after {waited:.1f} s; utilization peaked at {seen:g}% "
+                f"and never stayed at or above {UTIL_THRESHOLD_PCT:g}% for two polls",
+                file=sys.stderr,
+            )
     if shutil.which("stress-ng"):
         stress = subprocess.Popen(
             ["stress-ng", "--cpu", str(threads), "--cpu-load", str(cpu_load), "--timeout", f"{seconds}s"],
@@ -412,7 +520,7 @@ def main() -> int:
         stress.wait(timeout=max(5, seconds))
     if gpu_proc is not None:
         gpu_proc.stop()
-        reason = gpu_load_failure(gpu_proc, rows, args.profile)
+        reason = gpu_load_failure(gpu_proc, rows, args.profile, waited_s=waited, peak_seen=seen)
         utils = [float(r["gpu_util_pct"]) for r in rows if isinstance(r.get("gpu_util_pct"), (int, float))]
         mean_util = sum(utils) / len(utils) if utils else 0.0
         if reason:
@@ -421,7 +529,15 @@ def main() -> int:
                 row["peak_gpu_junction_temp_c"] = reason
                 row["sustained_gpu_power_w"] = reason
         else:
-            print(f"[INFO] GPU load observed: mean GPU utilization {mean_util:.1f}% (requested {gpu_load}%)")
+            print(
+                f"[INFO] GPU load observed: mean GPU utilization {mean_util:.1f}% "
+                f"(requested {gpu_load}%, delivered ~100%)"
+            )
+        leftovers = confirm_gpu_idle()
+        if leftovers:
+            print("[WARN] amd-smi still shows a rocblas or HIP process: " + "; ".join(leftovers), file=sys.stderr)
+        else:
+            print("[INFO] amd-smi shows no rocblas or HIP process left on the GPU")
     if not rows:
         rows.append(sample_row(0))
     delta = ecc_interval_delta([row["ras_uncorrectable_ecc_delta_count"] for row in rows])

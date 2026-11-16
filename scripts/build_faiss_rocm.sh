@@ -29,7 +29,7 @@ command -v git >/dev/null 2>&1 || die "git is required"
 command -v swig >/dev/null 2>&1 || die "swig is required"
 [[ -d /opt/rocm ]] || die "ROCm is required at /opt/rocm"
 VENV_ROOT="${repo_root}/.venv"
-[[ -x "${VENV_ROOT}/bin/python" ]] || die "${VENV_ROOT}/bin/python is required; run setup.sh first"
+[[ -x "${VENV_ROOT}/bin/python" ]] || die "${VENV_ROOT}/bin/python is required; run run_setup.sh first"
 
 python_include="$("${VENV_ROOT}/bin/python" -c 'import sysconfig; print(sysconfig.get_path("include"))')"
 numpy_include="$("${VENV_ROOT}/bin/python" -c 'import numpy; print(numpy.get_include())')"

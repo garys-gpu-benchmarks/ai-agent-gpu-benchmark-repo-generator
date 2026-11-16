@@ -208,16 +208,16 @@ _rocm_install_linux_modules_extra() {
 #
 # WARNING: If the reload fails, this function calls "sudo reboot" once. The
 #          caller must handle reconnection (e.g., systemd auto-resume in
-#          setup.sh) and must exit while the stage file remains. When the
+#          run_setup.sh) and must exit while the stage file remains. When the
 #          reload succeeds, the function returns with the stage file cleared.
 #
-# Deferred reboot: with ROCM_DEFER_REBOOT=1 (set by setup.sh) a failed reload
+# Deferred reboot: with ROCM_DEFER_REBOOT=1 (set by run_setup.sh) a failed reload
 #          does not reboot here. Stage3 stays saved, ROCM_REBOOT_PENDING=1 is
 #          set, and the function returns 0. The caller installs everything
 #          else, then reboots once; after that reboot this function logs the
 #          reboot step and clears the stage, as for an immediate reboot.
 #
-# When to call: setup.sh, when benchmark_specification.json
+# When to call: run_setup.sh, when benchmark_specification.json
 #   Execution Domain is "GPU Compute / ROCm" AND the machine has no ROCm
 #   installation (check: [ ! -f /opt/rocm/bin/rocm-smi ]).
 # ════════════════════════════════════════════════════════════════════════════
@@ -338,7 +338,7 @@ _rocm_checkout_rocblas_tag() {
 rocm_install_runtime() {
     _rocm_log "=== rocm_install_runtime: ROCm ${ROCM_VERSION} on ${UBUNTU_CODENAME} ==="
     local stage
-    # Read by setup.sh after this function returns.
+    # Read by run_setup.sh after this function returns.
     # shellcheck disable=SC2034
     ROCM_REBOOT_PENDING=0
     stage="$(_rocm_runtime_stage_get)"
@@ -415,7 +415,7 @@ rocm_install_runtime() {
             return 0
         fi
         if [[ "${ROCM_DEFER_REBOOT:-0}" == 1 ]]; then
-            # setup.sh installs everything else first and reboots once at the end.
+            # run_setup.sh installs everything else first and reboots once at the end.
             # shellcheck disable=SC2034
             ROCM_REBOOT_PENDING=1
             echo "ROCM_REBOOT_BOOT_ID=$(_rocm_current_boot_id)" >> "$(_rocm_runtime_stage_file)"
@@ -465,7 +465,7 @@ rocm_install_runtime() {
 #          ROCm apt feed directly (without amdgpu-install).
 #          Idempotent: skips steps that are already complete.
 #
-# When to call: setup.sh, after rocm_install_runtime has completed.
+# When to call: run_setup.sh, after rocm_install_runtime has completed.
 #   Userspace check: /etc/apt/sources.list.d/amdrocm-stable.sources.
 # ════════════════════════════════════════════════════════════════════════════
 rocm_add_repository() {

@@ -186,7 +186,7 @@ def main() -> int:
             warnings.append(f"SSH target recorded for later remote validation: {args.ssh_target}")
 
     print("[INFO] Write generated .sh/.py/.md/.yaml/.json/.txt as LF only, including nested *_copy/.")
-    print("[INFO] Do not start a second overlapping setup.sh on the remote VM.")
+    print("[INFO] Do not start a second overlapping run_setup.sh on the remote VM.")
     for warning in warnings:
         print(f"[WARN] {warning}")
     if python_errors:

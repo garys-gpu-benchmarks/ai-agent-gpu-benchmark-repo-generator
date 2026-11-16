@@ -13,7 +13,7 @@
 
 ## Testing
 
-- [ ] I have run `bash setup.sh` locally
+- [ ] I have run `bash run_setup.sh` locally
 - [ ] I have run `bash run_benchmark.sh` locally and verified results
 - [ ] I have set `.venv` and run `.venv/bin/python scripts/validate_results.py`; all checks passed
 - [ ] I have verified my changes do not introduce new `TODO`, `pass`, or `raise NotImplementedError`

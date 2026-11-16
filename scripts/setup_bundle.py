@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # File: scripts/setup_bundle.py
-# Description: Map Execution Domain + GPU Vendor to a setup.sh skeleton. No Framework substring matching.
+# Description: Map Execution Domain + GPU Vendor to a run_setup.sh skeleton. No Framework substring matching.
 from __future__ import annotations
 
 CPU_SYSTEM = "cpu-system"

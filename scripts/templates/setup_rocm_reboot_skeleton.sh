@@ -3,8 +3,8 @@
 # Version: 1.3.0
 # Maintainer: AI Agent GPU Benchmark Repo Generator
 # Date: 2026-08-26
-# Description: Reusable local-only setup.sh skeleton for ROCm workloads with systemd reboot auto-resume.
-# Execution: Copy to generated repo root as setup.sh, then adapt workload skip flags if needed.
+# Description: Reusable local-only run_setup.sh skeleton for ROCm workloads with systemd reboot auto-resume.
+# Execution: Copy to generated repo root as run_setup.sh, then adapt workload skip flags if needed.
 # Options: --skip-rocm, --skip-rvs, --assume-yes, --resume-auto, --no-resume-auto, --resume-from-service, --help
 # Requirements: Ubuntu 24.04 or Ubuntu 26.04; bash; selected Python interpreter; sudo/systemd for ROCm installation.
 # Environment: Local benchmark host; remote execution is not supported.
@@ -221,11 +221,11 @@ LOCK_FILE="${REPO_ROOT}/.setup.lock"
 
 # flock releases this descriptor automatically if setup is killed by reboot.
 exec 9>"${LOCK_FILE}"
-flock -n 9 || die "Another setup.sh invocation is already running; inspect ${RESUME_LOG}."
+flock -n 9 || die "Another run_setup.sh invocation is already running; inspect ${RESUME_LOG}."
 
 usage() {
   cat <<USAGE
-Usage: bash setup.sh [options]
+Usage: bash run_setup.sh [options]
 
 Options:
   --skip-rocm          Skip ROCm runtime/repository setup.
@@ -471,7 +471,7 @@ EOF
 This machine will reboot once in 30 seconds, at ${when}.
 The new AMD GPU driver could not be loaded without a reboot.
 This SSH session will close. Setup of ${REPO_NAME} resumes by itself after boot.
-Do not start setup.sh again.
+Do not start run_setup.sh again.
 SSH back in, then run:
   tail -f ${REPO_ROOT}/results/reboot_resume.log
 That log prints SETUP COMPLETE when setup is finished.
@@ -530,7 +530,7 @@ gpu_check() {
 
 # rocm_add_repository adds the user to the render and video groups. Groups apply
 # at the next login. When the driver is reloaded instead of rebooting, nothing
-# forces that login, so the shell that ran setup.sh (and a benchmark loop that
+# forces that login, so the shell that ran run_setup.sh (and a benchmark loop that
 # continues in it) would get "permission denied" on /dev/kfd. Grant this user
 # access to the current GPU device nodes with an ACL. The ACL lasts until the
 # nodes are recreated (next reboot or driver reload); by then a new login has
@@ -564,7 +564,7 @@ install_resume_service() {
 
   run_privileged tee "${RESUME_SERVICE_FILE}" >/dev/null <<EOF
 [Unit]
-Description=Resume ${REPO_NAME} setup.sh after reboot
+Description=Resume ${REPO_NAME} run_setup.sh after reboot
 After=network-online.target
 Wants=network-online.target
 
@@ -579,7 +579,7 @@ Environment=HOME=/root
 Environment=BENCHMARK_REPO_ROOT=${REPO_ROOT}
 Environment=BENCHMARK_PYTHON=${PYTHON_BOOTSTRAP}
 WorkingDirectory=${REPO_ROOT}
-ExecStart=/bin/bash ${REPO_ROOT}/setup.sh --assume-yes --resume-auto --resume-from-service
+ExecStart=/bin/bash ${REPO_ROOT}/run_setup.sh --assume-yes --resume-auto --resume-from-service
 StandardOutput=append:${REPO_ROOT}/results/reboot_resume.log
 StandardError=append:${REPO_ROOT}/results/reboot_resume.log
 
@@ -601,9 +601,9 @@ EOF
 cleanup_resume_service() {
   if command -v systemctl >/dev/null 2>&1 && run_privileged test -f "${RESUME_SERVICE_FILE}"; then
     if [[ "${RESUME_FROM_SERVICE}" == 1 ]]; then
-      # This setup.sh IS the running start job of that unit. Reloading systemd
+      # This run_setup.sh IS the running start job of that unit. Reloading systemd
       # after removing its file reloads the unit without TimeoutStartSec=infinity;
-      # systemd then times the start job out and SIGTERMs setup.sh (seen 26.04,
+      # systemd then times the start job out and SIGTERMs run_setup.sh (seen 26.04,
       # 13:53:13, before .setup_state). Disable without a reload and remove the
       # file; systemd drops the unit at its next reload or boot.
       run_privileged systemctl disable --no-reload "${RESUME_SERVICE_NAME}" >/dev/null 2>&1 || true
@@ -635,7 +635,7 @@ if [[ ! -f "${STATUS_FILE}" || "${RESUME_FROM_SERVICE}" != 1 && ! -f "${RUNTIME_
   : > "${COMMANDS_FILE}"
 fi
 
-install_status_log_phase "setup.sh start"
+install_status_log_phase "run_setup.sh start"
 save_benchmark_suite_command
 print_amdgpu_reboot_may_be_required
 
@@ -1302,10 +1302,10 @@ fi
 install_status_log_setup "complete"
 touch .setup_state
 if ! cleanup_resume_service; then
-  log_warn "Setup completed, but resume-service cleanup was deferred; rerun setup.sh to retry cleanup."
+  log_warn "Setup completed, but resume-service cleanup was deferred; rerun run_setup.sh to retry cleanup."
 fi
 install_status_sync_motd
-log_pass "setup.sh now complete"
+log_pass "run_setup.sh now complete"
 if [[ "${RESUME_FROM_SERVICE}" == 1 ]]; then
   print_setup_complete_after_reboot
 fi

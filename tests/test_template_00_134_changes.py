@@ -36,7 +36,7 @@ class TransientRetryTest(unittest.TestCase):
         self.assertEqual(col.classify_transient("E: Could not get lock /var/lib/dpkg/lock-frontend", []), "apt/dpkg lock")
         self.assertEqual(col.classify_transient("E: dpkg was interrupted, you must manually run", []), "dpkg interrupted")
         self.assertEqual(col.classify_transient("E: Failed to fetch http://archive.ubuntu.com/x.deb  Hash Sum mismatch", []), "package mirror")
-        self.assertEqual(col.classify_transient("", ["setup.sh start", "Auto-resume service enabled: r127"]),
+        self.assertEqual(col.classify_transient("", ["run_setup.sh start", "Auto-resume service enabled: r127"]),
                          "setup stopped after enabling the reboot-resume service")
         # A missing package is also apt exit 100, and a later build failure is real.
         self.assertEqual(col.classify_transient("E: Unable to locate package libfoo", []), "")
@@ -78,7 +78,7 @@ class TransientRetryTest(unittest.TestCase):
         calls = [subprocess.TimeoutExpired(["ssh"], 60), completed(0, "")]
         with mock.patch.object(col, "ssh_run", side_effect=calls) as run, \
                 mock.patch.object(col, "wait_for_ssh", return_value=True):
-            result = col.ssh_probe("ssh root@h", "pgrep -af setup.sh || true")
+            result = col.ssh_probe("ssh root@h", "pgrep -af run_setup.sh || true")
         self.assertEqual(result.returncode, 0)
         self.assertEqual(run.call_count, 2)
 

@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # File: scripts/build.sh
 # Description: Compile overlay src/cudnn_conv.cu into bin/cudnn_conv.
-# Uses the toolkit setup.sh installed (/usr/local/cuda, CUDA 13.3 on both
+# Uses the toolkit run_setup.sh installed (/usr/local/cuda, CUDA 13.3 on both
 # Ubuntu releases), never a leftover CUDA 12 nvcc. CUDA 13 links this repo's
 # venv cu13 cuDNN wheel. The wheel ships libcudnn.so.9 (no unversioned
 # libcudnn.so) and its headers under nvidia/cudnn/include. Do not retarget

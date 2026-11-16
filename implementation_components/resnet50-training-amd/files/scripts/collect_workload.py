@@ -67,6 +67,31 @@ def write_csv(path, header, rows):
     return text
 
 
+def counted_step_flops(step) -> object:
+    """FLOPs of one training step (forward + backward), counted by PyTorch.
+
+    torch.utils.flop_counter.FlopCounterMode counts the matrix multiplies and
+    convolutions the step dispatches (TEMPLATE_00_142, open issue M5; the metric
+    was 3 x 2 x 3.8e9 MACs x (image/224)^2 per image, a constant). Elementwise
+    work (batch norm, ReLU, the optimizer) is not counted. The step runs once,
+    untimed, before the benchmark clock starts. Returns an na reason when the
+    counter is unavailable or counts nothing, never a guess.
+    """
+    try:
+        from torch.utils.flop_counter import FlopCounterMode
+    except ImportError as exc:
+        return f"na (FlopCounterMode unavailable: {exc})"
+    try:
+        with FlopCounterMode(display=False) as counter:
+            step()
+        total = float(counter.get_total_flops())
+    except Exception as exc:  # noqa: BLE001 - any counter failure becomes an na reason
+        return f"na (FlopCounterMode failed: {type(exc).__name__})"
+    if total <= 0:
+        return "na (FlopCounterMode counted no FLOPs)"
+    return total
+
+
 def parse_args():
     parser = argparse.ArgumentParser()
     parser.add_argument("--run-dir", required=True)
@@ -103,9 +128,16 @@ def main() -> int:
         opt.zero_grad(set_to_none=True)
         crit(model(x), y).backward()
         opt.step()
+
+    def counted_step():
+        opt.zero_grad(set_to_none=True)
+        crit(model(x), y).backward()
+
+    step_flops = counted_step_flops(counted_step)
+    opt.zero_grad(set_to_none=True)
     if device.type == "cuda":
         torch.cuda.synchronize()
-    mark_measure_start()  # setup ends: model loaded, warmup done
+    mark_measure_start()  # setup ends: model loaded, warmup and FLOP count done
     start = time.perf_counter()
     for _ in range(iters):
         opt.zero_grad(set_to_none=True)
@@ -120,20 +152,19 @@ def main() -> int:
     mem = ""
     if device.type == "cuda":
         mem = torch.cuda.max_memory_allocated() / 1e9
-    # Same estimate as the NVIDIA twin (train_resnet50.py): 3.8e9 MACs per 224x224
-    # image, x2 FLOPs per MAC, scaled by image area, x3 for forward+backward.
-    tflops = 3.0 * 2.0 * 3.8e9 * (image / 224.0) ** 2 * images / 1e12
+    # FLOPs of one counted step / mean timed step time (same as train_resnet50.py).
+    tflops = step_flops / elapsed / 1e12 if isinstance(step_flops, float) else step_flops
     param_bytes = sum(p.numel() * p.element_size() for p in model.parameters())
     activation_bytes = x.numel() * x.element_size()
     bytes_moved = param_bytes * 4 + activation_bytes * 2
     bandwidth = bytes_moved / elapsed / 1e9
     write_csv(args.raw_file, [
-        "step", "loss", "images_per_sec", "step_time_ms", "modeled_tflops",
+        "step", "loss", "images_per_sec", "step_time_ms", "counted_tflops",
         "min_operand_traffic_gb_s", "modeled_param_input_traffic_gb_s", "peak_gpu_memory_GB",
     ], [
         # One measurement, one row. loss is the last timed step's loss (was a fixed 1.0).
         {"step": iters - 1, "loss": final_loss, "images_per_sec": images, "step_time_ms": elapsed * 1000.0,
-         "modeled_tflops": tflops, "min_operand_traffic_gb_s": bandwidth,
+         "counted_tflops": tflops, "min_operand_traffic_gb_s": bandwidth,
          "modeled_param_input_traffic_gb_s": bandwidth, "peak_gpu_memory_GB": mem},
     ])
     return 0

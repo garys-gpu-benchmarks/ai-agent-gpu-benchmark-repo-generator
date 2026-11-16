@@ -75,6 +75,8 @@ pci=""; for d in /sys/bus/pci/devices/*; do
   case "$c" in 0x03*|0x12*) pci="$pci $(cat "$d/vendor" 2>/dev/null)" ;; esac
 done
 kv pci_gpu_vendors "$(printf '%s\n' $pci | sort -u | tr '\n' ' ' | sed 's/ *$//')"
+# One entry per device, for the GPU count when no vendor tool reports it (AMD).
+kv pci_gpu_devices "$(printf '%s\n' $pci | tr '\n' ' ' | sed 's/^ *//; s/ *$//')"
 nv=""; for c in /usr/local/cuda/bin/nvcc /usr/local/cuda-*/bin/nvcc; do [ -x "$c" ] && nv="$("$c" --version 2>/dev/null | sed -n 's/.*release \([0-9.]*\).*/\1/p' | head -n1)" && break; done
 kv nvcc "${nv:-missing}"
 if command -v dcgmi >/dev/null 2>&1; then kv dcgmi present; else kv dcgmi missing; fi
@@ -200,6 +202,17 @@ def series_vendor(workloads: list[str]) -> str:
     return found.pop() if len(found) == 1 else ""
 
 
+def pci_gpu_count(values: dict[str, str], vendor: str) -> int:
+    """GPUs of vendor among the PCI display and accelerator devices (TEMPLATE_00_142).
+
+    Only the NVIDIA probe reports a count (nvidia-smi -L); the AMD host line printed
+    "x?" (TEMPLATE_00_141, 101-132 and 301-332). A virtual display adapter has another
+    vendor ID and is not counted.
+    """
+    ids = {pci_id for pci_id, name in PCI_VENDORS.items() if name == vendor}
+    return sum(1 for device in values.get("pci_gpu_devices", "").split() if device in ids)
+
+
 def resolve_vendor(values: dict[str, str], workloads: list[str]) -> tuple[str, str, list[str], list[str]]:
     """Return (vendor, source, warnings, notes) for the batch (TEMPLATE_00_134).
 
@@ -302,12 +315,16 @@ def evaluate(values: dict[str, str], workloads: list[str], kernels: dict[str, st
     vendor, source, vendor_warnings, vendor_notes = resolve_vendor(values, workloads)
     values["vendor_resolved"] = vendor
     values["vendor_source"] = source
+    if not str(values.get("gpu_count", "")).strip():
+        count = pci_gpu_count(values, vendor)
+        if count:
+            values["gpu_count"] = str(count)
     warnings.extend(vendor_warnings)
     notes.extend(vendor_notes)
     if vendor == "nvidia" and values.get("nvcc", "missing") == "missing":
-        notes.append("No CUDA toolkit on the VM. The first NVIDIA workload's setup.sh installs it (a few minutes on a cold host).")
+        notes.append("No CUDA toolkit on the VM. The first NVIDIA workload's run_setup.sh installs it (a few minutes on a cold host).")
     if vendor == "nvidia" and values.get("dcgmi") == "missing":
-        notes.append("DCGM is not installed. The first NVIDIA workload's setup.sh installs it.")
+        notes.append("DCGM is not installed. The first NVIDIA workload's run_setup.sh installs it.")
     bind = values.get("numactl_bind", "")
     if bind.startswith("rc=") and not bind.startswith("rc=0"):
         warnings.append(f"numactl cannot bind on this host ({bind}). GUPS and STREAM run unbound.")

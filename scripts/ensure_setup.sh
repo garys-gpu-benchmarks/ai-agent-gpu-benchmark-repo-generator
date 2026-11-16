@@ -23,8 +23,8 @@ if [[ -f .setup_state ]]; then
     fi
 fi
 
-[[ -f setup.sh ]] || {
-    printf '[ERROR] setup.sh is missing; cannot start automatic setup.\n' >&2
+[[ -f run_setup.sh ]] || {
+    printf '[ERROR] run_setup.sh is missing; cannot start automatic setup.\n' >&2
     exit 1
 }
 
@@ -46,14 +46,14 @@ fi
 
 printf '[INFO] .setup_state is absent; starting automatic setup.\n'
 setup_args=()
-if grep -Fq -- "--assume-yes" setup.sh; then
+if grep -Fq -- "--assume-yes" run_setup.sh; then
     setup_args+=(--assume-yes)
 fi
 
 # stdin from /dev/null: run_benchmark.sh is often called with output redirected to a
 # log while stdin is still a terminal. Under Ubuntu's "Defaults use_pty", sudo then
 # runs apt-get on a hidden pty where it stops on SIGTTOU and never returns.
-if ! bash setup.sh "${setup_args[@]}" </dev/null; then
+if ! bash run_setup.sh "${setup_args[@]}" </dev/null; then
     printf '[ERROR] Automatic setup failed; benchmark will not run.\n' >&2
     exit 1
 fi
@@ -64,7 +64,7 @@ if [[ ! -f .setup_state ]]; then
        grep -Eq '[^[:space:]]+-setup-resume\.service'; then
         printf '[WARN] Setup is awaiting reboot-resume completion. Rerun bash run_benchmark.sh after setup completes.\n' >&2
     else
-        printf '[ERROR] setup.sh returned successfully without creating .setup_state; benchmark will not run.\n' >&2
+        printf '[ERROR] run_setup.sh returned successfully without creating .setup_state; benchmark will not run.\n' >&2
     fi
     exit 1
 fi

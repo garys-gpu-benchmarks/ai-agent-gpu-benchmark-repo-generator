@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # File: scripts/install_rag_amd.sh
-# Description: AMD RAG extras. Call from setup.sh after the ROCm venv exists.
+# Description: AMD RAG extras. Call from run_setup.sh after the ROCm venv exists.
 # Do not install a CUDA torch wheel. Reuse the operator-selected ROCm torch.
 set -euo pipefail
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -9,7 +9,7 @@ PYTHON_BIN="${REPO_ROOT}/.venv/bin/python"
 [[ -x "${PYTHON_BIN}" ]] || PYTHON_BIN="${BENCHMARK_PYTHON:-python3}"
 
 if [[ "${BENCHMARK_GPU_CHECKS_AFTER_REBOOT:-0}" == 1 ]]; then
-  # setup.sh postponed the amdgpu reboot: no GPU yet. Check that ROCm PyTorch is
+  # run_setup.sh postponed the amdgpu reboot: no GPU yet. Check that ROCm PyTorch is
   # installed; setup checks the GPU after the reboot.
   if ! "${PYTHON_BIN}" -c "import torch; assert torch.version.hip" >/dev/null 2>&1; then
     echo "[FAIL] ROCm PyTorch must already be installed before AMD RAG extras." >&2

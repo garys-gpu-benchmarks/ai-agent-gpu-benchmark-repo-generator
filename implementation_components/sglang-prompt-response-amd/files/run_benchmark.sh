@@ -6,7 +6,7 @@
 # Description: Every profile launches python -m sglang.launch_server; smoke uses the smallest request sizes.
 # Execution: bash run_benchmark.sh [--smoke|--baseline|--extended]
 # Options: --smoke, --baseline, --extended, --config, --quiet, --log-level, --dtype, --input-len, --output-len, --num-prompts, --seed, --streaming, --specification, --help
-# Requirements: bash, repository-local .venv after setup.sh
+# Requirements: bash, repository-local .venv after run_setup.sh
 # Environment: Local generated repository. Remote SSH execution is not supported.
 # Dependencies: scripts/lib/common.sh, ensure_setup helper, scripts/prompt_response_client.py, scripts/parse_results.py, scripts/validate_results.py, scripts/update_runtime_ledger.py, scripts/collect_hw_sw_info.sh, scripts/print_run_metadata.sh, scripts/print_metric_summary.py
 # Variables: BENCHMARK_PYTHON
@@ -43,6 +43,7 @@ Parameters (override the profile's value):
 
 General options:
   --config <file>               Config file (default: config/benchmark_config.yaml)
+  --repeat <n>                  Run the selected profiles n times, in order (default: 1)
   --quiet                       Suppress nonessential stdout
   --log-level <level>           ERROR|WARN|INFO|DEBUG (default: INFO; DEBUG also prints [RUN] commands)
   --specification               Print this workload's specification and exit
@@ -115,7 +116,7 @@ begin_benchmark_run "${PROFILE}"
 bash scripts/ensure_setup.sh --profile "${PROFILE}"
 mark_benchmark_measure_start
 PYTHON_BIN="${REPO_ROOT}/.venv/bin/python"
-[[ -x "${PYTHON_BIN}" ]] || die "Missing ${PYTHON_BIN}; run bash setup.sh --assume-yes first."
+[[ -x "${PYTHON_BIN}" ]] || die "Missing ${PYTHON_BIN}; run bash run_setup.sh --assume-yes first."
 
 yaml_get() {
   "${PYTHON_BIN}" - "${CONFIG_FILE}" "${PROFILE}" "$1" <<'PY'
@@ -204,7 +205,7 @@ run_collection() {
   mkdir -p "${HF_HOME}"
   local server_cmd=""
   if ! "${PYTHON_BIN}" -c "import sglang" >/dev/null 2>&1; then
-    die "sglang is not installed in .venv. Re-run: BENCHMARK_COMPILE_SGLANG=1 bash setup.sh --assume-yes"
+    die "sglang is not installed in .venv. Re-run: BENCHMARK_COMPILE_SGLANG=1 bash run_setup.sh --assume-yes"
   fi
   if ! "${PYTHON_BIN}" -c "import aiter" >/dev/null 2>&1; then
     die "aiter is not installed; AMD SGLang requires AITER."

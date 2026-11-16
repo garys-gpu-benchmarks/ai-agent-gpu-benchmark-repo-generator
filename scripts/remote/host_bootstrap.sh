@@ -4,7 +4,7 @@
 #              scripts/remote_host_bootstrap.py before workload 1 (TEMPLATE_00_119).
 #              Foreground: Ubuntu mirror check (apt_mirror_fallback.sh), apt index and
 #              Python venv support. The NVIDIA CUDA toolkit and DCGM are left to the
-#              first setup.sh (TEMPLATE_00_135); BENCHMARK_BOOTSTRAP_CUDA=1 installs them
+#              first run_setup.sh (TEMPLATE_00_135); BENCHMARK_BOOTSTRAP_CUDA=1 installs them
 #              here through scripts/lib/nvidia_cuda_toolkit.sh as before.
 #              Background: Hugging Face prefetch of the models this batch needs.
 #              Every step only warns; the script always exits 0 so generation continues.
@@ -42,7 +42,7 @@ if [[ -f "${HERE}/../lib/keep_running_kernel.sh" ]]; then
   # shellcheck disable=SC1091
   source "${HERE}/../lib/keep_running_kernel.sh"
   if ! keep_running_kernel; then
-    warn "keep_running_kernel refused this host; skipping apt work in the bootstrap (each setup.sh will report it)"
+    warn "keep_running_kernel refused this host; skipping apt work in the bootstrap (each run_setup.sh will report it)"
     apt_ok=0
   fi
 fi
@@ -71,13 +71,13 @@ fi
 NVCC_RELEASE=""
 DCGM_STATE="not-applicable"
 # Since TEMPLATE_00_135 the CUDA toolkit and DCGM are left to the first NVIDIA
-# setup.sh (x01), so every batch exercises the fresh-image install path that end
+# run_setup.sh (x01), so every batch exercises the fresh-image install path that end
 # users hit, instead of finding CUDA already installed. BENCHMARK_BOOTSTRAP_CUDA=1
 # restores the TEMPLATE_00_119 behavior (install here, timed apart).
 if [[ "${VENDOR}" == "nvidia" && "${BENCHMARK_BOOTSTRAP_CUDA:-0}" != "1" ]]; then
   NVCC_RELEASE="left-to-setup"
   DCGM_STATE="left-to-setup"
-  log_status "STEP|BOOTSTRAP CUDA toolkit and DCGM left to the first setup.sh"
+  log_status "STEP|BOOTSTRAP CUDA toolkit and DCGM left to the first run_setup.sh"
 fi
 if [[ "${VENDOR}" == "nvidia" && "${apt_ok}" == 1 && "${BENCHMARK_BOOTSTRAP_CUDA:-0}" == "1" ]]; then
   # shellcheck disable=SC1091
@@ -87,7 +87,7 @@ if [[ "${VENDOR}" == "nvidia" && "${apt_ok}" == 1 && "${BENCHMARK_BOOTSTRAP_CUDA
     NVCC_RELEASE="${NVIDIA_CUDA_VERSION:-}"
     log_status "STEP|BOOTSTRAP CUDA toolkit ${NVCC_RELEASE} ready in $(( $(date +%s) - started )) s"
   else
-    warn "CUDA toolkit install failed in the bootstrap; each setup.sh will try again"
+    warn "CUDA toolkit install failed in the bootstrap; each run_setup.sh will try again"
   fi
   if command -v dcgmi >/dev/null 2>&1; then
     DCGM_STATE="present"

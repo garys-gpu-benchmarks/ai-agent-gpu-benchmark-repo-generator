@@ -267,7 +267,7 @@ def _runtime_display(text: str) -> str:
 
 
 def requirements(fields: dict[str, str]) -> str:
-    bullets = [f"- {_value(fields, 'OS Version') or 'Ubuntu'}, root or sudo for `setup.sh`"]
+    bullets = [f"- {_value(fields, 'OS Version') or 'Ubuntu'}, root or sudo for `run_setup.sh`"]
     if not _is_cpu_only(fields):
         vendor = _value(fields, "GPU Vendor")
         runtime = _runtime_display(
@@ -289,7 +289,7 @@ def requirements(fields: dict[str, str]) -> str:
     software = ", ".join(tools + ([python] if python else []))
     if software:
         bullets.append(
-            f"- {software}. `setup.sh` installs what is missing; Python packages go into a repo-local `.venv`."
+            f"- {software}. `run_setup.sh` installs what is missing; Python packages go into a repo-local `.venv`."
         )
     if _needs_gated_model(fields):
         bullets.append(f"- A Hugging Face token with access to `{GATED_MODEL}`")
@@ -327,21 +327,21 @@ def troubleshooting(fields: dict[str, str]) -> str:
             "- **The SSH session closed during setup:** the first AMD workload on a fresh host may reboot once "
             "to load the AMD GPU driver. Setup prints a 30-second warning first and resumes by itself after boot. "
             "SSH back in and run `tail -f results/reboot_resume.log`; when it prints `SETUP COMPLETE`, run your "
-            "command again. Do not start `setup.sh` again while it is resuming."
+            "command again. Do not start `run_setup.sh` again while it is resuming."
         )
         entries.append(
-            "- **SSH dropped for another reason:** reconnect and run `sudo bash setup.sh --assume-yes` again. "
+            "- **SSH dropped for another reason:** reconnect and run `sudo bash run_setup.sh --assume-yes` again. "
             "It resumes; do not delete `.venv` or `.cache`."
         )
     else:
         entries.append(
-            "- **SSH dropped during setup:** reconnect and run `sudo bash setup.sh --assume-yes` again. "
+            "- **SSH dropped during setup:** reconnect and run `sudo bash run_setup.sh --assume-yes` again. "
             "It resumes; do not delete `.venv` or `.cache`."
         )
     if _needs_gated_model(fields):
         entries.append(
             f"- **Model download refused (401 or 403):** `{GATED_MODEL}` may be gated. Accept its license on "
-            "Hugging Face, then `export HF_TOKEN=<token>` and run setup with `sudo -E bash setup.sh --assume-yes` "
+            "Hugging Face, then `export HF_TOKEN=<token>` and run setup with `sudo -E bash run_setup.sh --assume-yes` "
             "so the token reaches it."
         )
     entries.append(
@@ -364,7 +364,8 @@ def layout(fields: dict[str, str], repo: Path | None) -> str:
         if len(files) == 1:
             src_label = f"src/{files[0]}"
     entries = [
-        ("setup.sh", "installs dependencies and builds the benchmark", True),
+        ("run_setup.sh", "installs dependencies and builds the benchmark", True),
+        ("setup.sh", "runs run_setup.sh (its earlier name)", exists("setup.sh")),
         ("run_benchmark.sh", "runs one profile, parses, validates", True),
         ("show_metrics.sh", "prints this workload's ledger rows", True),
         ("list_runs.sh", "prints every run in the ledger", True),

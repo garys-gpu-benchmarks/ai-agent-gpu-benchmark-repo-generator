@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # File: scripts/install_rag_nvidia.sh
-# Description: NVIDIA RAG extras. Call from setup.sh after the venv exists.
+# Description: NVIDIA RAG extras. Call from run_setup.sh after the venv exists.
 # Ubuntu 24.04 / 232 and Ubuntu 26.04 / 432: torch 2.13.0+cu130 (one PyTorch for all NVIDIA workloads).
 set -euo pipefail
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"

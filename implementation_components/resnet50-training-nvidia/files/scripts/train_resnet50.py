@@ -7,7 +7,7 @@
 # Execution: .venv/bin/python scripts/train_resnet50.py --image-size 64 --batch-size 2 --warmup-iters 1 --num-iterations 3
 # Options: --dataset-name, --precision, --image-size, --batch-size, --num-workers, --optimizer, --learning-rate, --gradient-accumulation, --warmup-iters, --num-iterations, --device-id
 # Requirements: Python 3.12, PyTorch-CUDA, torchvision
-# Environment: Repository-local .venv after setup.sh
+# Environment: Repository-local .venv after run_setup.sh
 # Dependencies: torch, torchvision
 # Variables: none
 # Repository: gpu-bench-nvidia-resnet50-pytorch-training
@@ -22,12 +22,6 @@ import torch
 import torchvision.models
 
 
-# He et al., Deep Residual Learning for Image Recognition (CVPR 2016), Table 1:
-# ResNet-50 is listed as 3.8 x 10^9 FLOPs. Those published figures are
-# multiply-adds (MACs) at 224x224. Convert MACs to FLOPs with 2x. Spatial
-# convolution work scales as (image_size / 224)^2. A training step is
-# approximated as 3x inference (forward + backward + parameter update).
-RESNET50_INFERENCE_MACS_224 = 3.8e9
 # torchvision ResNet-50 parameter count (weights=None, 1000 classes).
 RESNET50_PARAM_COUNT = 25_557_032
 IMAGENET_CLASSES = 1000
@@ -86,10 +80,29 @@ def accumulation_steps(value: object) -> int:
     return max(1, int(float(text)))
 
 
-def training_flops(batch_size: int, image_size: int) -> float:
-    scale = (float(image_size) / 224.0) ** 2
-    inference_flops = 2.0 * RESNET50_INFERENCE_MACS_224 * scale
-    return 3.0 * inference_flops * float(batch_size)
+def counted_step_flops(step) -> object:
+    """FLOPs of one training step (forward + backward), counted by PyTorch.
+
+    torch.utils.flop_counter.FlopCounterMode counts the matrix multiplies and
+    convolutions the step dispatches (TEMPLATE_00_142, open issue M5; the metric
+    was 3 x 2 x 3.8e9 MACs x (image/224)^2 per image, a constant). Elementwise
+    work (batch norm, ReLU, the optimizer) is not counted. The step runs once,
+    untimed, before the benchmark clock starts. Returns an na reason when the
+    counter is unavailable or counts nothing, never a guess.
+    """
+    try:
+        from torch.utils.flop_counter import FlopCounterMode
+    except ImportError as exc:
+        return f"na (FlopCounterMode unavailable: {exc})"
+    try:
+        with FlopCounterMode(display=False) as counter:
+            step()
+        total = float(counter.get_total_flops())
+    except Exception as exc:  # noqa: BLE001 - any counter failure becomes an na reason
+        return f"na (FlopCounterMode failed: {type(exc).__name__})"
+    if total <= 0:
+        return "na (FlopCounterMode counted no FLOPs)"
+    return total
 
 
 def bytes_moved_per_step(batch_size: int, image_size: int) -> float:
@@ -175,6 +188,19 @@ def main() -> int:
     if not batches:
         raise SystemExit("[FAIL] Synthetic DataLoader produced no batches")
 
+    def counted_step():
+        images, labels = batches[0]
+        images = images.to(device, non_blocking=True)
+        labels = labels.to(device, non_blocking=True)
+        optimizer.zero_grad(set_to_none=True)
+        with torch.amp.autocast("cuda", dtype=torch.float16):
+            loss = criterion(model(images), labels)
+        loss.backward()
+
+    step_flops = counted_step_flops(counted_step)
+    optimizer.zero_grad(set_to_none=True)
+    if isinstance(step_flops, str):
+        print(f"FLOPS_NA reason={step_flops}")
     torch.cuda.reset_peak_memory_stats(device)
     total_steps = warmup_iters + num_iterations
     start = torch.cuda.Event(enable_timing=True)
@@ -210,20 +236,24 @@ def main() -> int:
     time_sec = step_time_msec / 1000.0
     if time_sec <= 0.0:
         images_per_sec = 0.0
-        fp16_tflops = 0.0
+        counted_tflops = 0.0
         memory_bandwidth_gb_s = 0.0
     else:
         images_per_sec = finite_nonneg(float(batch_size) / time_sec)
-        fp16_tflops = finite_nonneg(training_flops(batch_size, image_size) / time_sec / 1e12)
+        # FLOPs of one counted step (micro-batch) / measured step time.
+        counted_tflops = (
+            finite_nonneg(step_flops / time_sec / 1e12) if isinstance(step_flops, float) else "na"
+        )
         memory_bandwidth_gb_s = finite_nonneg(
             bytes_moved_per_step(batch_size, image_size) / time_sec / 1e9
         )
     peak_gpu_memory_gb = finite_nonneg(float(torch.cuda.max_memory_allocated(device)) / 1e9)
+    tflops_text = f"{counted_tflops:.6f}" if isinstance(counted_tflops, float) else "na"
 
     print(
         f"resnet50 step_time_msec={step_time_msec:.6f} "
         f"images_per_sec={images_per_sec:.6f} "
-        f"fp16_tflops={fp16_tflops:.6f} "
+        f"counted_tflops={tflops_text} "
         f"memory_bandwidth_gb_s={memory_bandwidth_gb_s:.6f} "
         f"peak_gpu_memory_gb={peak_gpu_memory_gb:.6f}"
     )
@@ -241,7 +271,7 @@ def main() -> int:
         f" num_iterations={num_iterations}"
         f" step_time_msec={step_time_msec:.6f}"
         f" images_per_sec={images_per_sec:.6f}"
-        f" fp16_tflops={fp16_tflops:.6f}"
+        f" counted_tflops={tflops_text}"
         f" memory_bandwidth_gb_s={memory_bandwidth_gb_s:.6f}"
         f" peak_gpu_memory_gb={peak_gpu_memory_gb:.6f}"
         " status=ok"

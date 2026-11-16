@@ -16,7 +16,7 @@ benchmark_specification.json  ──────► single source of truth
         ▼
 generated workload repository
   ├── docs/PRD.md / SPEC.md / README.md   (from *_TEMPLATE.md + benchmark_specification.json)
-  ├── setup.sh / run_benchmark.sh    (ROCm install, reboot-resume, benchmark harness)
+  ├── run_setup.sh / run_benchmark.sh    (ROCm install, reboot-resume, benchmark harness)
   ├── src/, tests/, config/
   └── results/                       (validated against schemas/generation_report.schema.json)
 ```
@@ -27,7 +27,7 @@ This is the single most common point of confusion in the docs, so it gets its ow
 
 **Generation-time (agent-only, optional).** While an AI coding agent is generating and validating a workload repository — Phase 0 in `generation-workflow.md` — it may SSH into a remote Ubuntu/MI300X host to rebuild the environment, install ROCm, and smoke-test the output before handing it back to you. This is a development/debug tool for the agent. It is never part of the generated repository itself, and the SSH details used to reach that host are never written into generated files. See `../AGENTS.md` → "Remote Host Execution" and § 29.1.
 
-**Runtime (end user, always local).** Once a repository is generated, you always run it the same way: `bash setup.sh` and `bash run_benchmark.sh`, executed locally on the Ubuntu target — never from Windows, never over SSH, never with a remote-mode flag. This template intentionally does not support deploying and orchestrating a finished repo from a remote host; that capability existed early in this template's history and was removed. `remote-execution-pattern.md` documents that removal and why generated harnesses must fail fast if legacy remote options are ever supplied.
+**Runtime (end user, always local).** Once a repository is generated, you always run it the same way: `bash run_setup.sh` and `bash run_benchmark.sh`, executed locally on the Ubuntu target — never from Windows, never over SSH, never with a remote-mode flag. This template intentionally does not support deploying and orchestrating a finished repo from a remote host; that capability existed early in this template's history and was removed. `remote-execution-pattern.md` documents that removal and why generated harnesses must fail fast if legacy remote options are ever supplied.
 
 If you're reading a doc that mentions SSH or a remote IP and aren't sure which context it's in, check whether the surrounding text is talking about *building* the repo (generation-time, agent-only) or *running* it (runtime, always local).
 

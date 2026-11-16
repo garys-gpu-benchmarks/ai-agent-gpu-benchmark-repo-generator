@@ -7,7 +7,7 @@
 # Execution: .venv/bin/python scripts/collect_multichase.py --output <raw.txt>
 # Options: --output, --num-numa-nodes, --num-threads, --thread-affinity, --page-size, --stride, --access-pattern, --prefetch-enabled, --warmup-iters, --num-iterations, --profile
 # Requirements: Python 3.10+; gcc; numactl
-# Environment: Local generated repository after setup.sh
+# Environment: Local generated repository after run_setup.sh
 # Dependencies: gcc, numactl, PyYAML
 # Variables: PATH
 # Repository: sys-bench-amd-multichase-numa-latency

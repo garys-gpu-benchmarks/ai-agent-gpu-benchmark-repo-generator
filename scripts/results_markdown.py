@@ -108,6 +108,11 @@ def render_section(row: dict[str, str], *, commit: str = "") -> str:
     command = _clean(row.get("run_benchmark_command_fully_resolved")) or _clean(row.get("run_benchmark_command_submitted"))
     if command:
         lines.append(f"- **Command:** `{command}`")
+    if _clean(row.get("workload_number")) in {"103", "303"}:
+        lines.append(
+            "- **GPU load:** the AMD rocblas-bench hot loop runs at full utilization, "
+            "not the requested `--gpu-load-percent`. Requested 50%, delivered ~100%."
+        )
     lines += ["", "| # | Metric | Result |", "|---|---|---|"]
     count = 0
     for index in range(1, 21):

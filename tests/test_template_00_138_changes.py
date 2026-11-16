@@ -2,10 +2,10 @@
 # File: tests/test_template_00_138_changes.py
 # Description: TEMPLATE_00_138.
 #   1. The generation setup timer survives a ROCm reboot. 301 (TEMPLATE_00_137 batch)
-#      logged "setup.sh took 305 s", then the connection closed and the resumed run
-#      logged a new start: setup.sh exits 0 after scheduling the reboot, and the
+#      logged "run_setup.sh took 305 s", then the connection closed and the resumed run
+#      logged a new start: run_setup.sh exits 0 after scheduling the reboot, and the
 #      timer deleted its start file. The timer now finishes only when .setup_state
-#      exists. The test replays that sequence: a first run whose setup.sh returns
+#      exists. The test replays that sequence: a first run whose run_setup.sh returns
 #      without .setup_state, then a resumed run whose setup completes, and checks the
 #      ledger's setup time covers both.
 #   2. The polling rule allows event-triggered waits; plain sleeps stay <= 120 s.
@@ -23,7 +23,7 @@ ROOT = Path(__file__).resolve().parents[1]
 SCRIPTS = ROOT / "scripts"
 BASH = shutil.which("bash")
 NS = 1_000_000_000
-SETUP_LINE = "bash setup.sh --assume-yes --resume-auto || bash setup.sh --assume-yes"
+SETUP_LINE = "bash run_setup.sh --assume-yes --resume-auto || bash run_setup.sh --assume-yes"
 
 
 def load(name: str):
@@ -67,10 +67,10 @@ class RebootTimerTests(unittest.TestCase):
             repo = Path(tmp)
             (repo / "results").mkdir()
             start_file = repo / "results" / ".generation_setup.start"
-            # 1. First run: setup.sh schedules the reboot and exits 0 without .setup_state.
+            # 1. First run: run_setup.sh schedules the reboot and exits 0 without .setup_state.
             out, env = self.run_block(repo, "true")
             self.assertIn("a reboot is pending", out)
-            self.assertNotIn("setup.sh took", out)
+            self.assertNotIn("run_setup.sh took", out)
             self.assertEqual(env, {"S": "", "E": ""})
             self.assertTrue(start_file.is_file(), "the start file must survive until setup is complete")
             # The reboot and resume take time: move the saved start 330 s into the past.
@@ -83,7 +83,7 @@ class RebootTimerTests(unittest.TestCase):
             took = (int(env["E"]) - int(env["S"])) // NS
             self.assertGreaterEqual(took, 330)
             self.assertFalse(start_file.exists())
-            # 3. The ledger counts that setup.sh time for the row of the smoke run.
+            # 3. The ledger counts that run_setup.sh time for the row of the smoke run.
             ledger = load("update_runtime_ledger")
             setup_ns = int(env["E"]) + NS
             cols = ledger.timing_columns(
@@ -105,7 +105,7 @@ class RebootTimerTests(unittest.TestCase):
             repo = Path(tmp)
             (repo / "results").mkdir()
             out, env = self.run_block(repo, 'touch "$REPO/.setup_state"')
-            self.assertIn("setup.sh took", out)
+            self.assertIn("run_setup.sh took", out)
             self.assertTrue(env["S"] and env["E"])
             self.assertFalse((repo / "results" / ".generation_setup.start").exists())
 

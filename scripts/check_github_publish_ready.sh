@@ -101,7 +101,7 @@ required=(
   .gitattributes
   benchmark_specification.json
   docs/PRD.md
-  setup.sh
+  run_setup.sh
   run_benchmark.sh
   show_metrics.sh
   list_runs.sh
@@ -309,10 +309,10 @@ if [[ -d .git ]]; then
 fi
 
 if [[ "${MODE}" == "published" ]]; then
-  if bash -n setup.sh && bash -n run_benchmark.sh && bash -n show_metrics.sh && bash -n list_runs.sh; then
-    pass "setup.sh, run_benchmark.sh, show_metrics.sh and list_runs.sh parse with bash -n"
+  if bash -n run_setup.sh && bash -n run_benchmark.sh && bash -n show_metrics.sh && bash -n list_runs.sh; then
+    pass "run_setup.sh, run_benchmark.sh, show_metrics.sh and list_runs.sh parse with bash -n"
   else
-    err "setup.sh, run_benchmark.sh, show_metrics.sh or list_runs.sh failed bash -n"
+    err "run_setup.sh, run_benchmark.sh, show_metrics.sh or list_runs.sh failed bash -n"
   fi
   if python3 -m compileall -q scripts >/dev/null 2>&1; then
     pass "Python files under scripts/ compile"

@@ -239,7 +239,7 @@ def remove_template_copy(repo_root: Path, *, dry_run: bool = False) -> int:
         )
         return 1
     if (repo_root / "BenchmarkSpecDefinitions.xlsx").exists() and (repo_root / "scripts" / "create_generated_repo.py").exists() \
-            and not (repo_root / "setup.sh").exists():
+            and not ((repo_root / "run_setup.sh").exists() or (repo_root / "setup.sh").exists()):
         print(f"[FAIL] {repo_root} looks like the generator itself, not a generated repository.")
         return 1
 

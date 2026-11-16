@@ -84,6 +84,25 @@ def parse_args():
     parser.add_argument("--output-format", default="csv")
     return parser.parse_args()
 
+# Workbook dtype names (bf16, f16_r, FP32, ...) mapped to torch dtypes. An
+# unknown name fails instead of falling back, so a run never reports a type it
+# did not use (open issue P1: this collector used one hard-coded type).
+TORCH_DTYPE_NAMES = {
+    "fp16": "float16", "f16": "float16", "f16_r": "float16", "float16": "float16", "half": "float16",
+    "bf16": "bfloat16", "bf16_r": "bfloat16", "bfloat16": "bfloat16",
+    "fp32": "float32", "f32": "float32", "f32_r": "float32", "float32": "float32", "float": "float32",
+}
+
+
+def torch_dtype(name: object):
+    import torch
+
+    key = str(name).strip().lower().replace("-", "_")
+    if key not in TORCH_DTYPE_NAMES:
+        raise SystemExit(f"[FAIL] dtype '{name}' is not supported; use fp16 (f16_r), bf16 (bf16_r) or fp32 (f32_r)")
+    return getattr(torch, TORCH_DTYPE_NAMES[key])
+
+
 def main() -> int:
     args = parse_args()
     params = load_params(args.config)
@@ -103,8 +122,10 @@ def main() -> int:
     if loading.get("missing_keys"):
         print(f"[WARN] {model_name}: {len(loading['missing_keys'])} model weights missing from the checkpoint "
               f"(randomly initialized): {', '.join(sorted(loading['missing_keys'])[:5])}", flush=True)
-    if "16" in str(pv(params, "dtype", args.profile, "f16_r")).lower():
-        model = model.half()
+    dtype_name = pv(params, "dtype", args.profile, "f16_r")
+    dtype = torch_dtype(dtype_name)
+    print(f"[INFO] bert inference: dtype {dtype_name} -> {dtype}", flush=True)
+    model = model.to(dtype=dtype)
     if device.type == "cuda":
         # Without this reset the peak was the FP32 -> FP16 conversion at load
         # (485951488 bytes on every profile), not the inference working set.

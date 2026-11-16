@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # File: scripts/install_sglang_nvidia.sh
-# Description: NVIDIA SGLang extras. Call from setup.sh after the venv exists.
+# Description: NVIDIA SGLang extras. Call from run_setup.sh after the venv exists.
 # Ubuntu 24.04 / 230/231: sglang 0.5.19, torch 2.13.0+cu130, sglang-kernel 0.4.6.post1.
 # Ubuntu 26.04 / 430/431: torch 2.13.0+cu130, sglang 0.5.10.post1 --no-deps,
 # sglang-kernel 0.4.6.post1, launch_server runtime deps, Python 3.14 patch.
@@ -208,7 +208,7 @@ install_legacy_sglang() {
   # torch 2.14.0+cu130; sglang-kernel 0.4.6.post1 then failed to load
   # SM90 common_ops (undefined c10 CUDA symbol).
   # torchaudio==2.13.0+cu130 does not exist on the cu130 wheel index (it
-  # tops out at 2.11.0+cu130) -- that pin made 00_80's 230/231 setup.sh die
+  # tops out at 2.11.0+cu130) -- that pin made 00_80's 230/231 run_setup.sh die
   # before smoke ever ran. torch/torchvision stay at 2.13.0/0.28.0+cu130;
   # only torchaudio is pinned to the newest build actually published there.
   "${PYTHON_BIN}" -m pip install "sglang==0.5.19"

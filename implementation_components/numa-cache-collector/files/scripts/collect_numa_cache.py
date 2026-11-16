@@ -7,7 +7,7 @@
 # Execution: .venv/bin/python scripts/collect_numa_cache.py --output PATH --config PATH
 # Options: --output, --config, --profile, --source-numa-node, --num-threads, --thread-affinity, --page-size, --stride, --access-pattern, --num-iterations
 # Requirements: Python 3.12, PyYAML, cmake, g++, numactl, bin/numa_sweep
-# Environment: Repository-local .venv after setup.sh
+# Environment: Repository-local .venv after run_setup.sh
 # Dependencies: scripts/build.sh, src/numa_sweep.cpp, config/benchmark_config.yaml
 # Variables: none
 # Repository: sys-bench-nvidia-numa-cache-performance

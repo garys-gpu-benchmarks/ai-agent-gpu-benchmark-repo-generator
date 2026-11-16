@@ -47,7 +47,7 @@ RENAMED = {
     416: {"1": "allreduce_busbw_gb_s", "2": "allreduce_algbw_gb_s", "3": "allreduce_latency_at_min_bytes_us"},
     218: {"2": "tflops_fwd", "3": "min_operand_traffic_gb_s"},
     418: {"2": "tflops_fwd", "3": "min_operand_traffic_gb_s"},
-    221: {"3": "fp16_tflops"},
+    221: {"3": "counted_tflops"},  # was fp16_tflops until TEMPLATE_00_142 (M5)
     227: {"1": "decode_throughput_tokens_sec"},
     427: {"1": "decode_throughput_tokens_sec"},
 }

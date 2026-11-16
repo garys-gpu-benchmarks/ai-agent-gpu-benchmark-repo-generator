@@ -70,6 +70,17 @@ def _cli_flag(name: str) -> str:
     return "--" + re.sub(r"[^A-Za-z0-9]+", "-", name).strip("-").lower()
 
 
+def _parameter_description(name: str, exec_desc: str) -> str:
+    # 103/303 record gpu_load_percent and run the GEMM at full utilization.
+    # The phrase lives in the workbook execution description; the table repeats it.
+    if name == "gpu_load_percent" and "requested 50%, delivered ~100%" in exec_desc:
+        return (
+            "Recorded, not a duty cycle. The AMD load is one rocblas-bench hot loop "
+            "at full GPU utilization: requested 50%, delivered ~100%."
+        )
+    return "From Parameter list; see Execution Description With Parameters."
+
+
 def _profile_cell(values: dict, name: str) -> tuple[str, str]:
     if not values:
         return "TBD — confirm against tool documentation", "TBD — confirm against tool documentation"
@@ -153,7 +164,7 @@ def expand_generate(instruction: str, fields: dict[str, str], repo: Path | None 
             tested, default = _profile_cell(profiles, name)
             lines.append(
                 f"| {name} | `{_cli_flag(name)}` | {tested} | {default} | "
-                f"From Parameter list; see Execution Description With Parameters. |"
+                f"{_parameter_description(name, exec_desc)} |"
             )
         if len(lines) == 2:
             return "No workbook parameters are populated for this workload."
@@ -219,11 +230,11 @@ def expand_generate(instruction: str, fields: dict[str, str], repo: Path | None 
         if any(token in framework.lower() for token in ("vllm", "sglang", "diffusers", "bert", "rag")):
             hf_note = " Set HF_TOKEN when the model license requires a Hugging Face token."
         return (
-            f"Prerequisites: {os_ver}; {vendor}; {python}; root or sudo for `setup.sh`. "
+            f"Prerequisites: {os_ver}; {vendor}; {python}; root or sudo for `run_setup.sh`. "
             f"Framework: {framework or 'see Installation and Execution Summary'}."
             f"{hf_note} "
             f"This is a host benchmark, not a laptop `pip install` project.\n\n"
-            f"```mermaid\nflowchart LR\n  setup.sh --> run_benchmark.sh --> parse_results.py --> results/benchmark.db\n```"
+            f"```mermaid\nflowchart LR\n  run_setup.sh --> run_benchmark.sh --> parse_results.py --> results/benchmark.db\n```"
         )
 
     if "two-column" in text and "hardware config" in text and "gpu" in text:
@@ -244,7 +255,7 @@ def expand_generate(instruction: str, fields: dict[str, str], repo: Path | None 
             f"```bash\n"
             f"git clone https://github.com/{org}/{slug}.git\n"
             f"cd {slug}\n"
-            f"sudo bash setup.sh --assume-yes\n"
+            f"sudo bash run_setup.sh --assume-yes\n"
             f"bash run_benchmark.sh --smoke\n"
             f"```\n"
             f"Results are written to `results/benchmark.db` and `results/summary.json`."
@@ -253,7 +264,7 @@ def expand_generate(instruction: str, fields: dict[str, str], repo: Path | None 
     if "local-only" in text or "does not support remote ssh" in text:
         return (
             "This workload is executed on the validation host after the repository is copied there. "
-            "`setup.sh` and `run_benchmark.sh` do not open an outbound SSH session."
+            "`run_setup.sh` and `run_benchmark.sh` do not open an outbound SSH session."
         )
 
     if "overview" in text or "3–5 sentences" in text or "3-5 sentences" in text:
@@ -280,7 +291,7 @@ def expand_generate(instruction: str, fields: dict[str, str], repo: Path | None 
         )
 
     if "installation commands" in text or ("bash code block" in text and "install" in text):
-        return f"```bash\nsudo bash setup.sh --assume-yes\n```\n\n{install or 'TBD — confirm against tool documentation'}"
+        return f"```bash\nsudo bash run_setup.sh --assume-yes\n```\n\n{install or 'TBD — confirm against tool documentation'}"
 
     if "run_benchmark.sh --help" in text or ("bash code block" in text and "smoke" in text):
         return (
@@ -321,7 +332,7 @@ def expand_generate(instruction: str, fields: dict[str, str], repo: Path | None 
 
     if "failure-mode" in text:
         return (
-            "**`setup.sh` missing collector**\n"
+            "**`run_setup.sh` missing collector**\n"
             "Create cannot finish without `scripts/collect_workload.py`.\n\n"
             "**`self_check` overlay rewritten**\n"
             "`Locked overlay rewritten` means the sibling file and the `sha256` in "
@@ -331,7 +342,7 @@ def expand_generate(instruction: str, fields: dict[str, str], repo: Path | None 
             "`create_one_workload.py --validate-only`. Do not replace the overlay with a "
             "new collector, and do not regenerate a non-empty sibling.\n\n"
             "**Remote SSH drop during setup**\n"
-            "Reconnect and resume `bash setup.sh --assume-yes`. Do not wipe `.venv` or `.cache`."
+            "Reconnect and resume `bash run_setup.sh --assume-yes`. Do not wipe `.venv` or `.cache`."
         )
 
     if "test file" in text:

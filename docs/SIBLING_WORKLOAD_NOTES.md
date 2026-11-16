@@ -153,7 +153,7 @@ still raises `No module named 'jsonschema'`. Keep CSV in `raw_output.txt`
 for the leftover-DB parser.
 
 00_70: 24.04 130/131 baseline never reached `launch_server`. `ensure_setup`
-re-ran `setup.sh` every loop because `import sglang` failed. `sgl-kernel`
+re-ran `run_setup.sh` every loop because `import sglang` failed. `sgl-kernel`
 `setup_rocm.py` invoked host `g++` with Clang `--gcc-install-dir` from
 `CXXFLAGS` (`unrecognized command-line option`). Do not put that flag on
 `CXXFLAGS`. Every profile, smoke included, needs the full SGLang build
@@ -198,7 +198,7 @@ line for `memory_read_latency_ns`, not the first float (`0.00049`).
 
 ## 218 / 418 — cuDNN convolution
 
-00_78 NVIDIA: canonical `setup.sh` never installed cuDNN headers.
+00_78 NVIDIA: canonical `run_setup.sh` never installed cuDNN headers.
 `scripts/build.sh` is `nvcc ... src/cudnn_conv.cu -lcudnn` and fails
 with `cudnn.h: No such file or directory`. Setup now apt-installs
 `libcudnn9-*-cuda-12` and `libcudnn9-*-cuda-13` when `src/cudnn_conv.cu`

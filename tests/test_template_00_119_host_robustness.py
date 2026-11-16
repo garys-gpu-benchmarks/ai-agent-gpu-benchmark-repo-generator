@@ -321,7 +321,7 @@ class AptIndexOnceTest(unittest.TestCase):
             self.assertIn("STAMP", out)
 
     def test_every_nvidia_setup_uses_it(self) -> None:
-        paths = [ROOT / "scripts/templates/setup_nvidia_skeleton.sh"] + sorted(COMPONENTS.glob("*-nvidia/files/setup.sh"))
+        paths = [ROOT / "scripts/templates/setup_nvidia_skeleton.sh"] + sorted(COMPONENTS.glob("*-nvidia/files/run_setup.sh"))
         for path in paths:
             text = path.read_text(encoding="utf-8")
             self.assertNotIn("\nDEBIAN_FRONTEND=noninteractive apt-get update -y\n", text, path.name)
@@ -340,7 +340,7 @@ class HuggingFaceDownloadTest(unittest.TestCase):
 
 class SglangSingleTorchTest(unittest.TestCase):
     def test_setup_installs_only_torch_2_13(self) -> None:
-        text = (COMPONENTS / "sglang-prompt-response-nvidia/files/setup.sh").read_text(encoding="utf-8")
+        text = (COMPONENTS / "sglang-prompt-response-nvidia/files/run_setup.sh").read_text(encoding="utf-8")
         self.assertNotIn("torch==2.9.1", text)
         self.assertNotIn("torchvision==0.24.1", text)
         self.assertIn("'torch==2.13.0+cu130'", text)

@@ -38,6 +38,7 @@ Parameters (override the profile's value):
 
 General options:
   --config <file>               Config file (default: config/benchmark_config.yaml)
+  --repeat <n>                  Run the selected profiles n times, in order (default: 1)
   --quiet                       Suppress nonessential stdout
   --log-level <level>           ERROR|WARN|INFO|DEBUG (default: INFO; DEBUG also prints [RUN] commands)
   --specification               Print this workload's specification and exit
@@ -108,11 +109,11 @@ set_log_level "${LOG_LEVEL_VALUE}"
 begin_benchmark_run "${PROFILE}"
 bash scripts/ensure_setup.sh
 mark_benchmark_measure_start
-# /usr/local/cuda first: it is the toolkit setup.sh installed and recorded. A
+# /usr/local/cuda first: it is the toolkit run_setup.sh installed and recorded. A
 # leftover /usr/local/cuda-12.6 ahead of it would run a different nvcc.
 export PATH="/usr/local/cuda/bin:/usr/local/cuda-13.3/bin:${PATH}"
 PYTHON_BIN="${REPO_ROOT}/.venv/bin/python"
-[[ -x "${PYTHON_BIN}" ]] || die "Missing ${PYTHON_BIN}; run setup.sh first."
+[[ -x "${PYTHON_BIN}" ]] || die "Missing ${PYTHON_BIN}; run run_setup.sh first."
 
 yaml_get() {
   "${PYTHON_BIN}" - "${CONFIG_FILE}" "${PROFILE}" "$1" <<'PY'

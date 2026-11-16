@@ -1,11 +1,11 @@
 # ROCm Reboot Install Contract
 
-This document is the required implementation contract for generated workloads whose `setup.sh` installs ROCm components that can reboot the local host.
+This document is the required implementation contract for generated workloads whose `run_setup.sh` installs ROCm components that can reboot the local host.
 
 The goal is that an operator can run:
 
 ```bash
-bash setup.sh
+bash run_setup.sh
 ```
 
 one time on a fresh Ubuntu target and have setup complete without a reboot when the amdgpu driver can be reloaded, or continue automatically after the one fallback reboot when it cannot.
@@ -19,17 +19,17 @@ Apply this contract when `benchmark_specification.json` indicates any of these i
 - ROCm Validation Suite installation
 - Workload tools whose install path calls functions from `scripts/lib/rocm_install.sh`
 
-The generated repository is local-only. Do not implement SSH orchestration, remote prompts, remote metadata collection, or remote `setup.sh` execution paths.
+The generated repository is local-only. Do not implement SSH orchestration, remote prompts, remote metadata collection, or remote `run_setup.sh` execution paths.
 
 ## Canonical Controller
 
-The template file `scripts/templates/setup_rocm_reboot_skeleton.sh` is the single canonical controller for this contract. ROCm workload generation must materialize that file as the generated repository's `setup.sh`; agents must not create a new reboot controller. It detects Ubuntu and pins ROCm `10.1.0` with amdgpu driver `31.60` on both Ubuntu 24.04 (`noble`) and Ubuntu 26.04 (`resolute`), with GPU target `gfx942`. Benchmark virtualenvs use a uv-managed CPython 3.14. A workload may change dependency variables or explicitly set `BENCHMARK_SKIP_RVS`, but may not change stage ordering, resume handling, locking, status hooks, or cleanup.
+The template file `scripts/templates/setup_rocm_reboot_skeleton.sh` is the single canonical controller for this contract. ROCm workload generation must materialize that file as the generated repository's `run_setup.sh`; agents must not create a new reboot controller. It detects Ubuntu and pins ROCm `10.1.0` with amdgpu driver `31.60` on both Ubuntu 24.04 (`noble`) and Ubuntu 26.04 (`resolute`), with GPU target `gfx942`. Benchmark virtualenvs use a uv-managed CPython 3.14. A workload may change dependency variables or explicitly set `BENCHMARK_SKIP_RVS`, but may not change stage ordering, resume handling, locking, status hooks, or cleanup.
 
 The protected installer owns the numbered operations. The controller owns transaction sequencing: it installs the resume service before calling the installer, processes `.rocm_runtime_stage.env` before any installed-ROCm shortcut, exits while a reboot stage remains, and removes the service only after the final setup verification succeeds.
 
 ## Protected Installer Library
 
-Generated `setup.sh` must source and call `scripts/lib/rocm_install.sh`. That file is a dispatcher and sources `scripts/lib/rocm_install_24_04.sh` or `scripts/lib/rocm_install_26_04.sh` from the host Ubuntu release.
+Generated `run_setup.sh` must source and call `scripts/lib/rocm_install.sh`. That file is a dispatcher and sources `scripts/lib/rocm_install_24_04.sh` or `scripts/lib/rocm_install_26_04.sh` from the host Ubuntu release.
 
 Do not duplicate, inline, paraphrase, or replace the ROCm install commands in those libraries. For covered ROCm tasks, no ad-hoc `apt-get`, `amdgpu-install`, repository, or ROCm package install commands may exist outside `scripts/lib/rocm_install.sh`, `scripts/lib/rocm_install_24_04.sh`, and `scripts/lib/rocm_install_26_04.sh`.
 
@@ -57,7 +57,7 @@ It returns failure, and the installer reboots exactly as before, when: `ROCM_REL
 
 ## Reboot Postponed Until Everything Is Installed
 
-When the reload fails, generated `setup.sh` does not reboot in the middle of setup. It exports `ROCM_DEFER_REBOOT=1` before calling `rocm_install_runtime`; on a failed reload the installer then keeps stage `stage3`, appends `ROCM_REBOOT_BOOT_ID=<boot id>` (from `/proc/sys/kernel/random/boot_id`) to `.rocm_runtime_stage.env`, sets `ROCM_REBOOT_PENDING=1`, and returns 0 instead of rebooting.
+When the reload fails, generated `run_setup.sh` does not reboot in the middle of setup. It exports `ROCM_DEFER_REBOOT=1` before calling `rocm_install_runtime`; on a failed reload the installer then keeps stage `stage3`, appends `ROCM_REBOOT_BOOT_ID=<boot id>` (from `/proc/sys/kernel/random/boot_id`) to `.rocm_runtime_stage.env`, sets `ROCM_REBOOT_PENDING=1`, and returns 0 instead of rebooting.
 
 | Run | What happens |
 |---|---|
@@ -75,17 +75,17 @@ Before that upgrade, and before the first `apt-get install` in each setup skelet
 
 If `dpkg --audit` prints anything before those apt commands, setup exits 1 and names the packages. When the audit text includes `linux-image` or `linux-headers`, the message also names the running kernel. Setup and `scripts/self_check_generated_repo.sh` also exit 1 when `/lib/modules` contains any directory other than `uname -r`. On Ubuntu 26.04 that extra directory is the symptom that a newer kernel was installed while dpkg stayed consistent; the next reboot would boot it. Setup does not remove or configure those packages. The modules check is skipped when `/lib/modules` is absent.
 
-Because a reload does not start a new login, generated `setup.sh` calls `grant_gpu_access_this_session` after `rocm_add_repository`: a non-root user who was just added to `render`/`video` gets an ACL on `/dev/kfd` and `/dev/dri/*` for the current boot (setup installs `acl`). If `setfacl` fails, setup warns to log out and back in or run `newgrp render`.
+Because a reload does not start a new login, generated `run_setup.sh` calls `grant_gpu_access_this_session` after `rocm_add_repository`: a non-root user who was just added to `render`/`video` gets an ACL on `/dev/kfd` and `/dev/dri/*` for the current boot (setup installs `acl`). If `setfacl` fails, setup warns to log out and back in or run `newgrp render`.
 
 ## Required CLI Flags
 
-Generated `setup.sh` must support:
+Generated `run_setup.sh` must support:
 
 | Flag | Behavior |
 |---|---|
 | `--assume-yes` | Suppress interactive first-run notice. Used by systemd resume service. |
 | `--resume-auto` | Enable automatic systemd resume after reboot. This is the default. |
-| `--no-resume-auto` | Disable automatic resume; operator must rerun `bash setup.sh` after reboot. |
+| `--no-resume-auto` | Disable automatic resume; operator must rerun `bash run_setup.sh` after reboot. |
 | `--resume-from-service` | Internal flag used only by the systemd oneshot service. Implies `--assume-yes`. |
 | `--skip-rocm` or more granular skip flags | Advanced override to skip workload-inherent ROCm setup. |
 | `--skip-rvs` | Advanced override when RVS is not required or already managed externally. |
@@ -95,7 +95,7 @@ The help text must describe auto-resume behavior and identify `--resume-from-ser
 
 ## First-Run Operator Notice
 
-On an interactive first run, before any reboot-capable ROCm step, `setup.sh` must print a clear notice stating:
+On an interactive first run, before any reboot-capable ROCm step, `run_setup.sh` must print a clear notice stating:
 
 - the amdgpu driver is reloaded in place of a reboot, and setup reboots once only if the reload cannot be verified (`ROCM_RELOAD_INSTEAD_OF_REBOOT=0` always reboots),
 - systemd auto-resume is enabled by default,
@@ -108,7 +108,7 @@ Do not prompt when running with `--assume-yes` or `--resume-from-service`.
 
 ## Systemd Auto-Resume Service
 
-Before calling `rocm_install_runtime`, generated `setup.sh` must install and enable a local systemd oneshot service.
+Before calling `rocm_install_runtime`, generated `run_setup.sh` must install and enable a local systemd oneshot service.
 
 Recommended naming:
 
@@ -120,7 +120,7 @@ Recommended service shape:
 
 ```ini
 [Unit]
-Description=Resume <repo-name> setup.sh after reboot
+Description=Resume <repo-name> run_setup.sh after reboot
 After=network-online.target
 Wants=network-online.target
 
@@ -131,7 +131,7 @@ TimeoutStartSec=0
 TimeoutStopSec=0
 KillMode=process
 WorkingDirectory=/opt/benchmarks/<repo-name>
-ExecStart=/bin/bash /opt/benchmarks/<repo-name>/setup.sh --assume-yes --resume-auto --resume-from-service
+ExecStart=/bin/bash /opt/benchmarks/<repo-name>/run_setup.sh --assume-yes --resume-auto --resume-from-service
 StandardOutput=append:/opt/benchmarks/<repo-name>/results/reboot_resume.log
 StandardError=append:/opt/benchmarks/<repo-name>/results/reboot_resume.log
 
@@ -159,9 +159,9 @@ The ROCm installer library persists its own runtime stage in:
 .rocm_runtime_stage.env
 ```
 
-Generated `setup.sh` must not delete this file until setup is fully complete.
+Generated `run_setup.sh` must not delete this file until setup is fully complete.
 
-Generated `setup.sh` may also write a separate resume log:
+Generated `run_setup.sh` may also write a separate resume log:
 
 ```text
 results/reboot_resume.log
@@ -177,7 +177,7 @@ The resume log should include:
 
 ## Install Status And MOTD
 
-Generated `setup.sh` must provide these hook functions before sourcing or calling ROCm install functions:
+Generated `run_setup.sh` must provide these hook functions before sourcing or calling ROCm install functions:
 
 ```bash
 install_status_log_phase() { ...; }
@@ -208,7 +208,7 @@ At the start of setup, when `amdgpu-dkms` is installed but is not the module now
 
 Immediately before the reboot, print the 30-second warning with the local clock time of the reboot, wait until that time, and then reboot. When `run_benchmark_suite.sh` is an ancestor process, the warning's rerun line is that process's directory and arguments (`cd <cwd> && ./run_benchmark_suite.sh --baseline` when those were the arguments), saved in `results/benchmark_suite_command.txt` so the post-boot completion banner repeats the same command. The warning goes to setup's own output, to `/dev/tty` when that is a different destination, and once through `wall`.
 
-After successful completion, perform one final MOTD sync so the complete step history and `SETUP complete` marker are visible on the next login. The MOTD/status should indicate completion, and the script prints `setup.sh now complete` to its own output. It does not use `wall`: the broadcast rang the terminal bell and printed a "Broadcast message from root" banner on every logged-in terminal. When this run is the systemd resume after the reboot (`--resume-from-service`), that line is followed by a banner naming the repository, the local finish time, and the saved `run_benchmark_suite.sh` command. A run that reloaded amdgpu in place does not print the banner.
+After successful completion, perform one final MOTD sync so the complete step history and `SETUP complete` marker are visible on the next login. The MOTD/status should indicate completion, and the script prints `run_setup.sh now complete` to its own output. It does not use `wall`: the broadcast rang the terminal bell and printed a "Broadcast message from root" banner on every logged-in terminal. When this run is the systemd resume after the reboot (`--resume-from-service`), that line is followed by a banner naming the repository, the local finish time, and the saved `run_benchmark_suite.sh` command. A run that reloaded amdgpu in place does not print the banner.
 
 ## Completion Cleanup
 
@@ -259,7 +259,7 @@ Expected benchmark markers:
 
 | Symptom | Likely cause | Required fix |
 |---|---|---|
-| User must rerun `bash setup.sh` after reboot | systemd resume service was not installed/enabled before `rocm_install_runtime`. | Install the oneshot service before reboot-capable steps. |
+| User must rerun `bash run_setup.sh` after reboot | systemd resume service was not installed/enabled before `rocm_install_runtime`. | Install the oneshot service before reboot-capable steps. |
 | Status log starts over after reboot | setup truncates `results/install_status.txt` or `results/install_commands.txt` on resume. | Preserve both files when `.rocm_runtime_stage.env` or `--resume-from-service` is present. |
 | Setup loops after completion | resume service was not removed after success. | Disable/remove the service only after full success. |
 | `rvs` missing in noninteractive shell | `/opt/rocm/bin` not on `PATH`. | Export `/opt/rocm/bin:$PATH` in scripts that invoke ROCm tools. |

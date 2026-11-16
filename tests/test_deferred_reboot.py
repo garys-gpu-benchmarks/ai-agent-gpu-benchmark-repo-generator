@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # File: tests/test_deferred_reboot.py
 # Description: The postponed amdgpu reboot. When the in-place driver reload fails,
-#              rocm_install_runtime (24.04 and 26.04) does not reboot if setup.sh set
+#              rocm_install_runtime (24.04 and 26.04) does not reboot if run_setup.sh set
 #              ROCM_DEFER_REBOOT=1: it keeps stage3, records the boot ID, and returns
 #              so setup installs everything else and reboots once at the end. A rerun
 #              in the same boot keeps the reboot postponed; the first run after the
@@ -123,7 +123,7 @@ class DeferredRebootInstallerTests(unittest.TestCase):
 
 
 class DeferredRebootSkeletonTests(unittest.TestCase):
-    """Order of the postponed reboot in the ROCm setup.sh template."""
+    """Order of the postponed reboot in the ROCm run_setup.sh template."""
 
     @classmethod
     def setUpClass(cls):
@@ -173,14 +173,14 @@ class DeferredRebootSkeletonTests(unittest.TestCase):
             "If a reboot is required, you will be notified 30 seconds before it occurs.",
             notice,
         )
-        start = self._pos('install_status_log_phase "setup.sh start"')
+        start = self._pos('install_status_log_phase "run_setup.sh start"')
         call = self._pos("print_amdgpu_reboot_may_be_required\n")
         apt = self._pos("run_privileged env DEBIAN_FRONTEND=noninteractive apt-get update -y")
         self.assertLess(start, call)
         self.assertLess(call, apt)
 
     def test_reboot_resume_prints_setup_complete_banner_last(self):
-        complete = self._pos('log_pass "setup.sh now complete"')
+        complete = self._pos('log_pass "run_setup.sh now complete"')
         guard = self._pos('if [[ "${RESUME_FROM_SERVICE}" == 1 ]]; then\n  print_setup_complete_after_reboot')
         self.assertLess(complete, guard)
         banner = self.text[self._pos("print_setup_complete_after_reboot() {") : self._pos("gpu_check_failed() {")]

@@ -80,8 +80,8 @@ Each generated repository uses its own isolated Python environment at `<repo-roo
 
 `.venv`:
 
-- Is created idempotently by `setup.sh`.
-- Is used by `setup.sh`, `run_benchmark.sh`, build helpers, and reboot-resume services.
+- Is created idempotently by `run_setup.sh`.
+- Is used by `run_setup.sh`, `run_benchmark.sh`, build helpers, and reboot-resume services.
 - Is excluded from version control.
 - Must not be replaced with a global package installation.
 - Set `BENCHMARK_PYTHON` when a repository requires a specific installed Python interpreter; its matching `pythonX.Y-venv` package must already be available.
@@ -89,11 +89,11 @@ Each generated repository uses its own isolated Python environment at `<repo-roo
 
 ```bash
 export BENCHMARK_PYTHON=/usr/bin/python3.14
-bash setup.sh
+bash run_setup.sh
 bash run_benchmark.sh --smoke
 ```
 
-If `.venv` is missing, setup creates it rather than installing Python packages globally or silently using another environment. The AI coding agent may run `setup.sh` and install packages during generation when useful, but must set the repository-local `.venv` first. The same rule applies to operators provisioning the repository after generation.
+If `.venv` is missing, setup creates it rather than installing Python packages globally or silently using another environment. The AI coding agent may run `run_setup.sh` and install packages during generation when useful, but must set the repository-local `.venv` first. The same rule applies to operators provisioning the repository after generation.
 
 ## What Must Be Generated Per Workload
 
@@ -104,7 +104,7 @@ The AI agent should create these files only after Phase 0 produces a schema-vali
 - `<Workload Number>-<Repo Base Name>/SPEC.md`
 - `<Workload Number>-<Repo Base Name>/README.md`
 - `<Workload Number>-<Repo Base Name>/config/benchmark_config.yaml`
-- `<Workload Number>-<Repo Base Name>/setup.sh`
+- `<Workload Number>-<Repo Base Name>/run_setup.sh`
 - `<Workload Number>-<Repo Base Name>/run_benchmark.sh`
 - `<Workload Number>-<Repo Base Name>/requirements.txt`
 - workload-specific `<Workload Number>-<Repo Base Name>/scripts/` files
@@ -127,7 +127,7 @@ Do not pre-populate:
 - generated `docs/PRD.md`, `SPEC.md`, or `README.md`
 - `docs/CHANGELOG.md`
 - `docs/GENERATION_REPORT.md`
-- `run_benchmark.sh`, `setup.sh`, or workload-specific `scripts/` at template root
+- `run_benchmark.sh`, `run_setup.sh`, or workload-specific `scripts/` at template root
 - a generated workload subdirectory (for example `sys-bench-stream-ddr5-bandwidth/`)
 - deployment checklists from prior workloads
 - raw or parsed benchmark results

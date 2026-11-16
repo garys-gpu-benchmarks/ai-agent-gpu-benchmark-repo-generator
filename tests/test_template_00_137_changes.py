@@ -35,13 +35,13 @@ def load(name: str):
 
 
 def timer_block(setup_command: str) -> str:
-    """The setup-timer lines of the generation script, with setup.sh replaced."""
+    """The setup-timer lines of the generation script, with run_setup.sh replaced."""
     script = load("create_one_workload")._remote_script("301-x", resume=True, stamp="s")
     start = script.index('SETUP_T="$REPO/results/.generation_setup"')
     # TEMPLATE_00_138 wraps the finish in "if [ -f .setup_state ] ... fi".
     end = script.index("\nfi\n", script.index("keeping start $(cat")) + len("\nfi\n")
     block = script[start:end]
-    setup_line = "bash setup.sh --assume-yes --resume-auto || bash setup.sh --assume-yes"
+    setup_line = "bash run_setup.sh --assume-yes --resume-auto || bash run_setup.sh --assume-yes"
     assert setup_line in block
     return block.replace(setup_line, setup_command)
 
@@ -74,7 +74,7 @@ class SetupTimerTests(unittest.TestCase):
             self.assertEqual(s, int(saved))
             self.assertGreaterEqual((e - s) // 1_000_000_000, 330)
             self.assertIn("keeping start", out)
-            self.assertIn("setup.sh took 3", out)
+            self.assertIn("run_setup.sh took 3", out)
 
     def test_missing_or_stale_start_is_replaced(self) -> None:
         for saved in (None, "123", "garbage"):

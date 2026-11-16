@@ -4,11 +4,13 @@ Primary collector for AMD CPU + System Stress (103 / 303).
 
 ## Init copies and locks
 
-- `scripts/collect_workload.py` (stress-ng + amd-smi / sysfs telemetry). When `gpu_load_percent` > 0 it drives the GPU with the
-  repository-local `rocblas-bench` (FP32 8192³ GEMMs, duty-cycled to the requested percent; log in `gpu_load.log`). If that load
-  never runs or GPU activity never reaches 10%, peak junction temperature and sustained GPU power are published as `na (GPU load
-  did not run: …)` instead of idle readings. (Until 2026-10-19 the load was `python -c "import torch …"`, which died silently
-  because torch is not installed, so these two metrics were idle values.)
+- `scripts/collect_workload.py` (stress-ng + amd-smi / sysfs telemetry). When `gpu_load_percent` > 0 it drives the GPU with one
+  repository-local `rocblas-bench` FP32 8192³ GEMM. `--gpu-load-percent` is recorded and is not a duty cycle: the hot loop runs
+  at full utilization for the whole window (requested 50%, delivered ~100%). `-i` is the budget (duration + 30 s) divided by a
+  5 ms per-iteration floor, and the process plus its children are terminated at the deadline. If that load never runs or GPU
+  activity never reaches 10% for two polls in a row, peak junction temperature and sustained GPU power are published as
+  `na (GPU load did not run: …)` instead of idle readings. (Until 2026-10-19 the load was `python -c "import torch …"`, which
+  died silently because torch is not installed, so these two metrics were idle values.)
 
 ## Mixins expected
 

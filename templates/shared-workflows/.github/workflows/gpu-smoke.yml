@@ -13,7 +13,7 @@
 #     workflow verifies them and never installs a host GPU stack
 #   - one runner agent per GPU host, so a host runs one benchmark at a time
 #   - passwordless sudo for the runner user, used only the first time a
-#     workload's setup.sh builds its repository-local .venv
+#     workload's run_setup.sh builds its repository-local .venv
 name: GPU Smoke
 
 on:
@@ -135,7 +135,7 @@ jobs:
           print(json.dumps(env, indent=2))
           PY
 
-      # run_benchmark.sh calls scripts/ensure_setup.sh, which runs setup.sh
+      # run_benchmark.sh calls scripts/ensure_setup.sh, which runs run_setup.sh
       # only when this runner has no completed .venv for the workload yet.
       - name: Run benchmark
         id: bench

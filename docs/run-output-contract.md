@@ -61,7 +61,7 @@ Generated repositories may format each metric line to include the most useful ag
 
 Generated `run_benchmark.sh` must:
 
-1. Begin with `set -euo pipefail`, resolve the repository root, handle `--help` through a `usage()` function, and invoke `bash scripts/ensure_setup.sh` before any benchmark execution. `--help` must print the help page and exit 0 before `ensure_setup.sh` or any install/benchmark work. The guard runs `bash setup.sh --assume-yes` when supported if `.setup_state` is absent, then refuses to run unless setup completes. Reboot-driven setup is not continued by the benchmark process; after reboot/resume completes, the operator reruns `bash run_benchmark.sh`.
+1. Begin with `set -euo pipefail`, resolve the repository root, handle `--help` through a `usage()` function, and invoke `bash scripts/ensure_setup.sh` before any benchmark execution. `--help` must print the help page and exit 0 before `ensure_setup.sh` or any install/benchmark work. The guard runs `bash run_setup.sh --assume-yes` when supported if `.setup_state` is absent, then refuses to run unless setup completes. Reboot-driven setup is not continued by the benchmark process; after reboot/resume completes, the operator reruns `bash run_benchmark.sh`.
 2. Load workload settings from `config/benchmark_config.yaml` and supported CLI options; do not hardcode workload-specific sweep or threshold values.
 3. Use `.venv/bin/python` when Python is required and add ROCm, compiler, or library paths only when required by the workload.
 4. Create a unique `results/raw/YYYYMMDD_HHMMSSZ_WORKLOAD-<NNN>_SYSTEM-<hostname>/` artifact directory and capture masked environment data, end-of-run `journal_warnings.txt` (`journalctl -p warning`, run-window scoped via `capture_journal_warnings`), stdout, stderr, exit status, and elapsed time. Do not write `system_info.txt`. After the end-of-run summary is assembled, write `metrics_summary.txt` in that same per-run directory via `write_metrics_summary_txt` from `scripts/lib/common.sh`. The file is the Benchmark Summary block without `[INFO]` prefixes: header, Run ID / Status / Samples / Profile / Device, both commands, start/stop/elapsed, Artifacts, SQLite DB, a blank line, one `#N:` metric line per `Metrics` item, and a trailing blank line.
@@ -118,6 +118,7 @@ Parameters (override the profile's value):
 
 General options:
   --config <file>               Config file (default: config/benchmark_config.yaml)
+  --repeat <n>                  Run the selected profiles n times, in order (default: 1)
   --quiet                       Suppress nonessential stdout
   --log-level <level>           ERROR|WARN|INFO|DEBUG (default: INFO; DEBUG also prints [RUN] commands)
   --specification               Print this workload's specification and exit

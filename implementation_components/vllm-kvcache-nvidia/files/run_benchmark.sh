@@ -8,7 +8,7 @@ set -euo pipefail
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_NAME="$(basename "${REPO_ROOT}")"
 cd "${REPO_ROOT}"
-# FlashInfer JIT looks up ninja on PATH. setup.sh installs it into .venv,
+# FlashInfer JIT looks up ninja on PATH. run_setup.sh installs it into .venv,
 # and this script otherwise replaces PATH with CUDA bins only.
 export PATH="${REPO_ROOT}/.venv/bin:/usr/local/cuda/bin:/usr/local/cuda-13.3/bin:${PATH}"
 # shellcheck disable=SC1091
@@ -43,6 +43,7 @@ Parameters (override the profile's value):
 
 General options:
   --config <file>               Config file (default: config/benchmark_config.yaml)
+  --repeat <n>                  Run the selected profiles n times, in order (default: 1)
   --quiet                       Suppress nonessential stdout
   --log-level <level>           ERROR|WARN|INFO|DEBUG (default: INFO; DEBUG also prints [RUN] commands)
   --specification               Print this workload's specification and exit

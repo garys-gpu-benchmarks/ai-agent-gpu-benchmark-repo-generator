@@ -68,7 +68,7 @@ class ParsedRemovedTests(unittest.TestCase):
 
 
 class GenerationSetupTimeTests(unittest.TestCase):
-    """1. The setup.sh that generation runs before the smoke run counts as setup."""
+    """1. The run_setup.sh that generation runs before the smoke run counts as setup."""
 
     def setUp(self) -> None:
         self.ledger = load("update_runtime_ledger")
@@ -80,7 +80,7 @@ class GenerationSetupTimeTests(unittest.TestCase):
 
     def test_separate_setup_is_counted(self) -> None:
         cols = self.columns(BENCHMARK_SEPARATE_SETUP_START_NS=str(T0), BENCHMARK_SEPARATE_SETUP_END_NS=str(T0 + 160 * NS))
-        self.assertEqual(cols["runtime_setup_mm_ss"], "02:41")  # 160 s of setup.sh + 1 s check
+        self.assertEqual(cols["runtime_setup_mm_ss"], "02:41")  # 160 s of run_setup.sh + 1 s check
         self.assertEqual(cols["start_setup_datetime"], cols["start_script_datetime"])
         self.assertEqual(cols["runtime_script_mm_ss"], "03:30")
         self.assertEqual(cols["runtime_benchmark_mm_ss"], "00:03")
@@ -95,7 +95,7 @@ class GenerationSetupTimeTests(unittest.TestCase):
         for resume in (False, True):
             script = mod._remote_script("101-x", resume=resume, stamp="s")
             start = script.index('> "$SETUP_T.start"')
-            setup = script.index("bash setup.sh --assume-yes")
+            setup = script.index("bash run_setup.sh --assume-yes")
             end = script.index('date +%s%N > "$SETUP_T.end"')
             smoke = script.index("bash run_benchmark.sh --smoke")
             self.assertLess(start, setup)
@@ -111,7 +111,7 @@ class PreflightWordingTests(unittest.TestCase):
     def test_no_bootstrap_install_claim(self) -> None:
         text = (SCRIPTS / "remote_host_preflight.py").read_text(encoding="utf-8")
         self.assertNotIn("host bootstrap installs", text)
-        self.assertIn("first NVIDIA workload's setup.sh installs it", text)
+        self.assertIn("first NVIDIA workload's run_setup.sh installs it", text)
 
 
 class CollectorNoticeTests(unittest.TestCase):

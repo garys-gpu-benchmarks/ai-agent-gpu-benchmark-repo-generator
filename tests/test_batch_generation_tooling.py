@@ -243,13 +243,13 @@ class RemoteCopy(unittest.TestCase):
 
 class RebootResume(unittest.TestCase):
     """2026-10-20, workload 301: after the amdgpu reboot the resume service was still
-    inside setup.sh, and the driver exited instead of waiting for it."""
+    inside run_setup.sh, and the driver exited instead of waiting for it."""
 
     def test_resume_waits_for_the_running_setup(self) -> None:
         script = col._remote_script("R", resume=True, stamp="s")
-        self.assertIn("setup.sh already running after reboot; waiting for it to finish", script)
+        self.assertIn("run_setup.sh already running after reboot; waiting for it to finish", script)
         self.assertNotIn("not starting a second copy", script)
-        self.assertIn("bash setup.sh --assume-yes --resume-auto || bash setup.sh --assume-yes", script)
+        self.assertIn("bash run_setup.sh --assume-yes --resume-auto || bash run_setup.sh --assume-yes", script)
 
     def test_first_run_still_refuses_a_second_setup(self) -> None:
         script = col._remote_script("R", resume=False, stamp="s")

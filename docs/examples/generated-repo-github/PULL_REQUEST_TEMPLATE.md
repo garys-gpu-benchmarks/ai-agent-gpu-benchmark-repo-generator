@@ -7,7 +7,7 @@
 ## Validation
 
 - [ ] `bash scripts/check_github_publish_ready.sh` passes
-- [ ] `bash -n setup.sh run_benchmark.sh` passes
+- [ ] `bash -n run_setup.sh run_benchmark.sh` passes
 - [ ] Setup/build changes were tested on an appropriate GPU host when required
 - [ ] Smoke benchmark changes were validated with `bash run_benchmark.sh --smoke` when hardware was available
 

@@ -8,7 +8,7 @@
 # Options: --dry-run (default), --apply, --in-place, --git-init, --github-owner=OWNER
 # Requirements: bash, python3, find, sed
 # Environment: Run from a generated workload repository root.
-# Dependencies: benchmark_specification.json, setup.sh, run_benchmark.sh
+# Dependencies: benchmark_specification.json, run_setup.sh, run_benchmark.sh
 # Variables: none
 # Repository: gpu-bench/sys-bench template
 # License: Apache-2.0
@@ -60,8 +60,8 @@ done
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "${ROOT}"
 
-if [[ ! -f benchmark_specification.json || ! -f setup.sh || ! -f run_benchmark.sh ]]; then
-  echo "[FAIL] Run this from a generated workload root (missing benchmark_specification.json, setup.sh, or run_benchmark.sh)." >&2
+if [[ ! -f benchmark_specification.json || ! -f run_setup.sh || ! -f run_benchmark.sh ]]; then
+  echo "[FAIL] Run this from a generated workload root (missing benchmark_specification.json, run_setup.sh, or run_benchmark.sh)." >&2
   exit 1
 fi
 
@@ -213,7 +213,7 @@ if [[ -d results/raw ]]; then
 fi
 
 # FAISS builder is only used by RAG workloads. Do not ship it in perf/lmbench/etc.
-if ! grep -qiE 'faiss|rag-faiss|end-to-end rag' benchmark_specification.json setup.sh run_benchmark.sh 2>/dev/null; then
+if ! grep -qiE 'faiss|rag-faiss|end-to-end rag' benchmark_specification.json run_setup.sh run_benchmark.sh 2>/dev/null; then
   do_rm scripts/build_faiss_rocm.sh
 fi
 

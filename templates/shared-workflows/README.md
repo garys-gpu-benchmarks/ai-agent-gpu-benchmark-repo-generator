@@ -92,7 +92,7 @@ numbers are only meaningful on a known, quiet machine.
    repository-local `.venv` is built on that workload's first run by
    `run_benchmark.sh` → `scripts/ensure_setup.sh`, and reused afterwards
    (`actions/checkout` runs with `clean: false`). The runner user needs
-   passwordless `sudo` for that first `setup.sh` run.
+   passwordless `sudo` for that first `run_setup.sh` run.
 4. **One runner agent per GPU host.** A runner agent runs one job at a time, so
    this is what keeps two benchmarks from sharing a GPU and skewing each
    other's numbers. (A `concurrency` group in the caller only prevents two runs

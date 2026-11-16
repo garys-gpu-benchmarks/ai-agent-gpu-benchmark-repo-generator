@@ -79,12 +79,12 @@
 - [ ] 3.6  `schemas/benchmark_specification.schema.json` and `schemas/generation_report.schema.json` exist.
 - [ ] 3.7  `scripts/validate_template_inputs.py` exists and is executable.
 - [ ] 3.8  `scripts/parse_results.py` exists.
-- [ ] 3.9  `setup.sh` exists (and `scripts/build.sh` if a build step is required).
+- [ ] 3.9  `run_setup.sh` exists (and `scripts/build.sh` if a build step is required).
 - [ ] 3.9d If `scripts/build.sh` or `Makefile` invokes `hipcc`, it sources `scripts/lib/hipcc_host_gcc.sh` or passes `--gcc-install-dir` (Ubuntu 26.04 Clang 23 otherwise misses `<cstdlib>`). `scripts/lib/hipcc_host_gcc.sh` exists. For 120/320, `src/rochpl.cpp` uses 64-bit host matrix length (not `host_a(n * n)`).
-- [ ] 3.9c `setup.sh` satisfies `docs/host-prerequisite-contract.md`, creates or reuses `.venv`, uses standardized setup markers, and installs only workload-required prerequisites.
-- [ ] 3.9a `setup.sh` is local-only and rejects remote setup options with a clear error.
-- [ ] 3.9b For reboot-driven setup flows, `setup.sh` maintains `results/install_status.txt` and mirrors install status into `/etc/motd`.
-- [ ] 3.9c `setup.sh` appends each executed install command to
+- [ ] 3.9c `run_setup.sh` satisfies `docs/host-prerequisite-contract.md`, creates or reuses `.venv`, uses standardized setup markers, and installs only workload-required prerequisites.
+- [ ] 3.9a `run_setup.sh` is local-only and rejects remote setup options with a clear error.
+- [ ] 3.9b For reboot-driven setup flows, `run_setup.sh` maintains `results/install_status.txt` and mirrors install status into `/etc/motd`.
+- [ ] 3.9c `run_setup.sh` appends each executed install command to
            `results/install_commands.txt` as a bare command line (no timestamp,
            step number, or trailing comment). Preserve the file across reboot
            resume the same way as `results/install_status.txt`.
@@ -95,8 +95,8 @@
 - [ ] 3.11b For a multi-workload prompt, the project root contains `batch_generation_manifest.json`; it lists every requested workload, records each repository result as `passed`, `failed`, `abandoned`, or `timed_out`, records one remote refresh status, records `create_start_time`, `create_end_time`, and the human-readable `create_total_time` for each repository, and passes the batch manifest schema validation.
 - [ ] 3.11c Multi-workload generation was strictly sequential: only `create_generated_repo.py --workload <N>` was used per workload; no later workload directory was created until the current workload finished, failed with user notification, was abandoned, or timed out after 60 minutes of calendar time; `create_generated_batch.py` was not used on the AI Coding Agent chatbox path; status questions were answered without stopping the current unfinished workload; after a workload was recorded the next remaining requested workload started in the same turn.
 - [ ] 3.11d After every requested workload directory was recorded, generation-time scratch was removed from the local project root and from the remote validation host home (`*_create_start_time.txt`, `workload_identities.txt`, `rocm_pip_constraints.txt`, `_fill_generated_docs.py`, `patch_generated_repo.py`, `finish_one_workload.sh`, `process_range.sh`, `_generation_helpers/`, `batch_process*.log`, `batch_process*.stdout`, `retry*.stdout`, root `*_setup.log`). The local project root still has the template directory, each `<Workload Number>-<Repo Base Name>/` directory, `AI_AGENT_PROMPT_SUBMITTED_*.md`, `batch_generation_manifest.json`, and `batch_remote_output.log`. The VM home no longer has leftover helpers or a duplicate batch manifest once the local copy is authoritative. Generated repositories and `/var/opt/benchmarks/runtime_ledger.csv` were not deleted.
-- [ ] 3.11e The AI Coding Agent (ie, Cursor) project-root sibling is the created repository only. Every requested `<Workload Number>-<Repo Base Name>` exists as a sibling of `ai-agent-gpu-benchmark-repo-generator` and contains `setup.sh`, `run_benchmark.sh`, and `config/benchmark_config.yaml`. Remote smoke without that sibling is a fail. A results-only stub (for example under `DIRECTORIES/`) is a fail. `--project-root /root` was not used to relocate output. Nothing was copied from the VM back into that sibling.
-- [ ] 3.11e1 After each remote copy, `/opt/benchmarks/<Workload Number>-<Repo Base Name>` and its subdirectories are `0755` (`drwxr-xr-x`), not world-writable `0777` (`drwxrwxrwx` / lime-green in `ls`). `stat -c '%a' /opt/benchmarks/<Workload Number>-<Repo Base Name>` prints `755`. `scripts/create_one_workload.py` applies `find … -type d -exec chmod 755 {} +` after extract; a manual copy must do the same before `setup.sh`.
+- [ ] 3.11e The AI Coding Agent (ie, Cursor) project-root sibling is the created repository only. Every requested `<Workload Number>-<Repo Base Name>` exists as a sibling of `ai-agent-gpu-benchmark-repo-generator` and contains `run_setup.sh`, `run_benchmark.sh`, and `config/benchmark_config.yaml`. Remote smoke without that sibling is a fail. A results-only stub (for example under `DIRECTORIES/`) is a fail. `--project-root /root` was not used to relocate output. Nothing was copied from the VM back into that sibling.
+- [ ] 3.11e1 After each remote copy, `/opt/benchmarks/<Workload Number>-<Repo Base Name>` and its subdirectories are `0755` (`drwxr-xr-x`), not world-writable `0777` (`drwxrwxrwx` / lime-green in `ls`). `stat -c '%a' /opt/benchmarks/<Workload Number>-<Repo Base Name>` prints `755`. `scripts/create_one_workload.py` applies `find … -type d -exec chmod 755 {} +` after extract; a manual copy must do the same before `run_setup.sh`.
 - [ ] 3.11f The local sibling has no validation-host runtime state: `test ! -d .venv`, `test ! -d .cache`, and no `.venvs/`, `venv/`, `.setup_state`, `.setup.lock`, `.rocm_runtime_stage.env`, `results/raw/` run trees, `build/` products, fio `data/`, cloned `third_party/` builds that the overlay did not ship, `*.deb`, `*.safetensors`, or `__pycache__/`. Those paths may exist on the validation VM only. Do not copy them to the local created repository.
 - [ ] 3.12 `tests/fixtures/` directory exists with `.gitkeep` sentinel. No binary `benchmark.db` is committed — the fixture is generated on-the-fly by `--seed-fixture`.
 - [ ] 3.13 There is no `tests/fixtures/create_fixture_db.py` — `scripts/validate_results.py --seed-fixture` is the replacement.
@@ -121,7 +121,7 @@
 - [ ] 3.26a `run_benchmark.sh` resolves Python interpreter robustly:
            require `.venv/bin/python` after setup; do not fall back to
            global `python3`.
-- [ ] 3.27 All `apt-get` and other privileged calls in `setup.sh` and `scripts/` go through `run_privileged` / `run_noninteractive_root` with `DEBIAN_FRONTEND=noninteractive`; no executed raw `sudo apt-get` (it hangs on sudo's pty when output is redirected).
+- [ ] 3.27 All `apt-get` and other privileged calls in `run_setup.sh` and `scripts/` go through `run_privileged` / `run_noninteractive_root` with `DEBIAN_FRONTEND=noninteractive`; no executed raw `sudo apt-get` (it hangs on sudo's pty when output is redirected).
 - [ ] 3.27a No ad-hoc ROCm installation commands exist outside `scripts/lib/rocm_install.sh`
            and the Ubuntu-specific libraries it sources (`rocm_install_24_04.sh`,
            `rocm_install_26_04.sh`). Verify no direct `amdgpu-install`, ROCm repository add, or
@@ -256,27 +256,27 @@
            around this guidance for readability.
 - [ ] 3.40h1 `results/install_status.txt` timestamps use
            `YYYY-MM-DD HH:MM:SS  PHASE|STEP|SETUP` formatting.
-- [ ] 3.40i On successful local completion, setup prints `setup.sh now complete`
+- [ ] 3.40i On successful local completion, setup prints `run_setup.sh now complete`
            to its own output (no `wall` broadcast) and writes persistent completion status to `/etc/motd`.
            After the reboot, the systemd resume also prints the `SETUP COMPLETE:` banner
            with the repository name, local finish time, and the suite command.
-- [ ] 3.40k For ROCm runtime setup flows, `setup.sh` follows
+- [ ] 3.40k For ROCm runtime setup flows, `run_setup.sh` follows
            `docs/rocm-reboot-install-contract.md`: installs/enables a systemd oneshot
            auto-resume service before reboot-capable ROCm steps, resumes with
            `--assume-yes --resume-from-service`, preserves `results/install_status.txt`
            and `results/install_commands.txt` across resumes, and removes the
            service only after successful completion.
 - [ ] 3.40l Fresh-VM reboot validation confirms setup starts automatically after each
-           ROCm-required reboot without the operator rerunning `bash setup.sh`.
+           ROCm-required reboot without the operator rerunning `bash run_setup.sh`.
 - [ ] 3.40m The generated resume service disables systemd startup and stop timeouts
            (`TimeoutStartSec=0`, `TimeoutStopSec=0`, `KillMode=process`) and setup
            verifies the effective `TimeoutStartUSec` after `systemctl daemon-reload`.
 - [ ] 3.40n Successful resume-service cleanup runs `systemctl reset-failed` so a
            completed setup does not retain a stale failed unit state.
-- [ ] 3.40j In `setup.sh --exec-mode=remote`, setup is controller-driven:
+- [ ] 3.40j In `run_setup.sh --exec-mode=remote`, setup is controller-driven:
            step commands execute via SSH wrappers (retry/backoff + keepalive +
            inter-command delay), and remote mode does not invoke long-running
-           `bash setup.sh` on the target host.
+           `bash run_setup.sh` on the target host.
 
 ### SQLite schema
 - [ ] 3.41 The `runs` table contains all required columns from `AGENTS.md` plus the workload-specific

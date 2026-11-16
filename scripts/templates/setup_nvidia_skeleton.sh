@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # File: scripts/templates/setup_nvidia_skeleton.sh
-# Description: Canonical NVIDIA setup.sh. Installs CUDA host tools, parser deps,
+# Description: Canonical NVIDIA run_setup.sh. Installs CUDA host tools, parser deps,
 # Framework-driven CUDA wheels, overlay helpers, then scripts/build.sh.
-# Do not source scripts/lib/rocm_install.sh. Overlay setup.sh for vLLM/SGLang
+# Do not source scripts/lib/rocm_install.sh. Overlay run_setup.sh for vLLM/SGLang
 # may replace this file; do not recopy this skeleton after overlays.
 set -euo pipefail
 
@@ -22,7 +22,7 @@ export LD_LIBRARY_PATH="${CUDA_HOME}/lib64:${CUDA_HOME}/targets/x86_64-linux/lib
 ASSUME_YES=0
 usage() {
   cat <<'USAGE'
-Usage: bash setup.sh [OPTIONS]
+Usage: bash run_setup.sh [OPTIONS]
 
 Install and verify NVIDIA host prerequisites.
 
@@ -146,7 +146,7 @@ source "${REPO_ROOT}/scripts/lib/align_nvidia_userspace.sh"
 source "${REPO_ROOT}/scripts/lib/nvidia_cuda_toolkit.sh"
 
 if [[ "${ASSUME_YES}" -ne 1 ]]; then
-  echo "setup.sh will install Ubuntu packages and create ${REPO_ROOT}/.venv."
+  echo "run_setup.sh will install Ubuntu packages and create ${REPO_ROOT}/.venv."
   read -r -p "Press Enter to continue or Ctrl-C to abort. "
 fi
 
@@ -409,4 +409,4 @@ fi
   fi
 } > "${REPO_ROOT}/.setup_state"
 log_status "PHASE|SETUP complete"
-echo "[PASS] setup.sh complete"
+echo "[PASS] run_setup.sh complete"

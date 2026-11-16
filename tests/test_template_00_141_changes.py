@@ -9,7 +9,7 @@
      9-10 minute local phase of x02 printed nothing that said which step was slow.
   3. Heartbeat: when the output has not changed it says for how long instead of
      repeating the same "last:" line (330, 332, 431 looked hung).
-  4. setup.sh writes to /dev/tty without the shell's "No such device or address" error
+  4. run_setup.sh writes to /dev/tty without the shell's "No such device or address" error
      (101 in TEMPLATE_00_140).
   5. The batch warns when Excel has the template workbooks open (~$*.xlsx lock files).
   6. Collectors no longer print the CSV they have just written to the raw file (104 and

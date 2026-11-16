@@ -340,9 +340,9 @@ def timing_columns(
     """
     script_ns = _ns_env("BENCHMARK_SCRIPT_START_NS", env)
     setup_ns = _ns_env("BENCHMARK_SETUP_START_NS", env)
-    # Generation runs setup.sh by itself just before run_benchmark.sh (TEMPLATE_00_136),
+    # Generation runs run_setup.sh by itself just before run_benchmark.sh (TEMPLATE_00_136),
     # so the setup inside this run is only the "already complete" check. Count that
-    # earlier setup.sh as this run's setup when its times are exported.
+    # earlier run_setup.sh as this run's setup when its times are exported.
     sep_start = _ns_env("BENCHMARK_SEPARATE_SETUP_START_NS", env)
     sep_end = _ns_env("BENCHMARK_SEPARATE_SETUP_END_NS", env)
     separate = (
@@ -646,7 +646,7 @@ def infer_failure_stage(exit_code: int | str, notes: str, explicit: str = "") ->
         return "validation"
     if "did not become ready" in text or "timed out" in text or "timeout" in text:
         return "timeout"
-    if "ensure_setup" in text or "setup.sh" in text or text.startswith("setup "):
+    if "ensure_setup" in text or "setup.sh" in text or text.startswith("setup "):  # also run_setup.sh
         return "setup"
     if "integrity" in text:
         return "integrity"

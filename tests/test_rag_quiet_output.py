@@ -2,7 +2,7 @@
 
   1. The Mistral load used torch_dtype=, which transformers 4.56+ reports as
      "`torch_dtype` is deprecated! Use `dtype` instead!". It now passes dtype= on
-     4.56+ and torch_dtype= on older releases (setup.sh installs transformers unpinned).
+     4.56+ and torch_dtype= on older releases (run_setup.sh installs transformers unpinned).
   2. Progress bars (Loading weights, Fetching N files, datasets Generating split) and
      library warnings are off; the settings come before the library imports.
   3. The 27-line JSON summary is no longer printed; it stays in raw_output.txt.

@@ -17,6 +17,26 @@ from pathlib import Path
 
 from metric_contract import apply_itl_contract, finalize_serving_publication, guarded_percentile
 
+def mark_measure_start() -> None:
+    """Setup ends here: record when the timed work starts (TEMPLATE_00_141; SGLang clients TEMPLATE_00_142).
+
+    run_benchmark.sh reads BENCHMARK_MEASURE_START_FILE when the benchmark stops and
+    starts the benchmark clock at this time, so model load and warmup count as setup.
+    The first call of a run wins. Outside run_benchmark.sh it does nothing.
+    """
+    import os
+    import time
+
+    path = os.environ.get("BENCHMARK_MEASURE_START_FILE", "")
+    if not path or os.path.exists(path):
+        return
+    try:
+        with open(path, "w", encoding="utf-8") as handle:
+            handle.write(f"{time.time_ns()}\n")
+    except OSError:
+        pass
+
+
 def _f6(value) -> str:
     """6-decimal text for a number; leave an explicit na reason unchanged."""
     if value is None or value == "":
@@ -201,6 +221,9 @@ def main() -> int:
                 f"[WARN] warm-up TTFT still above {settle_ms:.0f} ms after {max_rounds} round(s); timing anyway",
                 flush=True,
             )
+    # The warm-up (SGLang compiles its kernels on the first request, 111-158 s on the
+    # TEMPLATE_00_141 smokes) is setup; the benchmark clock starts here (TEMPLATE_00_142).
+    mark_measure_start()
     results = []
     wall_start = time.perf_counter()
     with ThreadPoolExecutor(max_workers=concurrency) as pool:

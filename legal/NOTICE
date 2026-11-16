@@ -13,7 +13,7 @@ Hugging Face / model weights
   Do not commit tokens, cookies, or downloaded weight caches.
 
 Local execution
-  setup.sh and run_benchmark.sh are local-only. They do not take SSH
+  run_setup.sh and run_benchmark.sh are local-only. They do not take SSH
   hosts, IPs, or private keys. Validate on your own GPU host.
 
 Sibling collector note (105 / 205)

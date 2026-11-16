@@ -1,16 +1,16 @@
 #!/usr/bin/env bash
-# File: setup.sh
+# File: run_setup.sh
 # Version: 1.0.0
 # Maintainer: AI Agent GPU Benchmark Repo Generator
 # Date: 2026-08-24
-# Description: Idempotent local NVIDIA setup for workload 227.
-# Execution: bash setup.sh --assume-yes
+# Description: Idempotent local NVIDIA setup for workload 228.
+# Execution: bash run_setup.sh --assume-yes
 # Options: --assume-yes, --help
 # Requirements: Ubuntu 24.04 or 26.04, bash, apt, NVIDIA driver, CUDA toolkit
 # Environment: Local benchmark host only. Remote SSH execution is not supported.
 # Dependencies: python3-venv, sqlite3, g++, NVCC, nvidia-smi
 # Variables: BENCHMARK_PYTHON, CUDA_HOME
-# Repository: gpu-bench-nvidia-vllm-kvcache-stress
+# Repository: gpu-bench-nvidia-vllm-throughput-latency
 # License: Apache-2.0
 set -euo pipefail
 # NVIDIA host: keep ROCm token strings for self_check (do not execute).
@@ -36,7 +36,7 @@ export LD_LIBRARY_PATH="${CUDA_HOME}/lib64:${LD_LIBRARY_PATH:-}"
 ASSUME_YES=0
 usage() {
   cat <<'USAGE'
-Usage: bash setup.sh [OPTIONS]
+Usage: bash run_setup.sh [OPTIONS]
 
 Install and verify host prerequisites.
 
@@ -101,7 +101,7 @@ verify_cmd() {
 source "${REPO_ROOT}/scripts/lib/nvidia_cuda_toolkit.sh"
 
 if [[ "${ASSUME_YES}" -ne 1 ]]; then
-  echo "setup.sh will install Ubuntu packages and create ${REPO_ROOT}/.venv."
+  echo "run_setup.sh will install Ubuntu packages and create ${REPO_ROOT}/.venv."
   read -r -p "Press Enter to continue or Ctrl-C to abort. "
 fi
 
@@ -207,6 +207,7 @@ verify_cmd "NVCC" nvcc --version
 verify_cmd "CUDA" nvcc --version
 isolate_mismatched_cudnn_tensor_ir
 verify_cmd "nvidia-smi" nvidia-smi
+verify_cmd "cuBLAS (GEMM)" test -e /usr/local/cuda/lib64/libcublas.so -o -e /usr/local/cuda/targets/x86_64-linux/lib/libcublas.so
 verify_cmd "PyTorch-CUDA" .venv/bin/python -c "import torch; assert torch.cuda.is_available(); print(torch.__version__)"
 verify_cmd "TorchAudio-CUDA" .venv/bin/python -c "import torchaudio; print(torchaudio.__version__)"
 verify_cmd "Hugging Face Transformer" .venv/bin/python -c "import transformers; print(transformers.__version__)"
@@ -233,8 +234,8 @@ nvcc_flashinfer_workspace
 bash scripts/build.sh
 
 {
-  printf 'setup_complete=1\nworkload=227\ncompleted_at=%s\n' "$(date -u +'%Y-%m-%dT%H:%M:%SZ')"
+  printf 'setup_complete=1\nworkload=228\ncompleted_at=%s\n' "$(date -u +'%Y-%m-%dT%H:%M:%SZ')"
   nvcc_setup_state_lines
 } > "${REPO_ROOT}/.setup_state"
 log_status "PHASE|SETUP complete"
-echo "[PASS] setup.sh complete"
+echo "[PASS] run_setup.sh complete"

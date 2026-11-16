@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # File: scripts/templates/setup_cpu_system_skeleton.sh
-# Description: Host-only setup.sh for Execution Domain CPU / System. Apt, venv, Framework tools, build.sh.
-# Execution: Copied to generated repo root as setup.sh.
+# Description: Host-only run_setup.sh for Execution Domain CPU / System. Apt, venv, Framework tools, build.sh.
+# Execution: Copied to generated repo root as run_setup.sh.
 set -euo pipefail
 
 if [[ -z "${HOME:-}" ]]; then
@@ -17,7 +17,7 @@ cd "${REPO_ROOT}"
 ASSUME_YES=0
 usage() {
   cat <<'USAGE'
-Usage: bash setup.sh [OPTIONS]
+Usage: bash run_setup.sh [OPTIONS]
 
 Install host prerequisites for a CPU / System workload.
 
@@ -163,11 +163,11 @@ PY
 fi
 
 if [[ "${ASSUME_YES}" -ne 1 ]]; then
-  echo "setup.sh will install Ubuntu packages and create ${REPO_ROOT}/.venv."
+  echo "run_setup.sh will install Ubuntu packages and create ${REPO_ROOT}/.venv."
   read -r -p "Press Enter to continue or Ctrl-C to abort. "
 fi
 
-log_status "PHASE setup.sh start ${REPO_NAME}"
+log_status "PHASE run_setup.sh start ${REPO_NAME}"
 # shellcheck disable=SC1091
 source "${REPO_ROOT}/scripts/lib/keep_running_kernel.sh"
 keep_running_kernel
@@ -302,4 +302,4 @@ fi
 printf 'setup_complete=1\nworkload=%s\nbundle=cpu-system\ncompleted_at=%s\n' \
   "${REPO_NAME}" "$(date -u +'%Y-%m-%dT%H:%M:%SZ')" > "${REPO_ROOT}/.setup_state"
 log_status "PHASE SETUP complete"
-echo "[PASS] setup.sh complete"
+echo "[PASS] run_setup.sh complete"

@@ -66,6 +66,25 @@ def load_model(name: str, dtype: torch.dtype, device: torch.device):
     return model.to(device).eval()
 
 
+# Workbook dtype names (bf16, f16_r, FP32, ...) mapped to torch dtypes. An
+# unknown name fails instead of falling back, so a run never reports a type it
+# did not use (open issue P1: this collector used one hard-coded type).
+TORCH_DTYPE_NAMES = {
+    "fp16": "float16", "f16": "float16", "f16_r": "float16", "float16": "float16", "half": "float16",
+    "bf16": "bfloat16", "bf16_r": "bfloat16", "bfloat16": "bfloat16",
+    "fp32": "float32", "f32": "float32", "f32_r": "float32", "float32": "float32", "float": "float32",
+}
+
+
+def torch_dtype(name: object):
+    import torch
+
+    key = str(name).strip().lower().replace("-", "_")
+    if key not in TORCH_DTYPE_NAMES:
+        raise SystemExit(f"[FAIL] dtype '{name}' is not supported; use fp16 (f16_r), bf16 (bf16_r) or fp32 (f32_r)")
+    return getattr(torch, TORCH_DTYPE_NAMES[key])
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--model-name", default="bert-base-uncased")
@@ -90,7 +109,8 @@ def main() -> int:
     batch = max(1, int(float(args.batch_size)))
     warmup = max(0, int(float(args.warmup_iters)))
     iters = max(1, int(float(args.num_iterations)))
-    dtype = torch.float16
+    dtype = torch_dtype(args.dtype)
+    print(f"[INFO] bert inference: dtype {args.dtype} -> {dtype}", flush=True)
     model = load_model(args.model_name, dtype, device)
     vocab = int(getattr(model.config, "vocab_size", 30522))
     input_ids = torch.randint(0, max(2, vocab - 1), (batch, seq), device=device)

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # File: scripts/lib/nvidia_cuda_toolkit.sh
-# Description: One CUDA toolkit per Ubuntu release for every NVIDIA setup.sh
+# Description: One CUDA toolkit per Ubuntu release for every NVIDIA run_setup.sh
 #              (scripts/templates/setup_nvidia_skeleton.sh and the vLLM/SGLang
 #              overlays). Ubuntu 24.04 and Ubuntu 26.04 both use CUDA 13.3
 #              (TEMPLATE_00_133; 24.04 was 12.8), from NVIDIA's CUDA apt repository. Ubuntu's own
@@ -61,7 +61,7 @@ nvidia_cuda_repo_id() {
 }
 
 # One apt index refresh per host per BENCHMARK_APT_INDEX_MAX_AGE_SEC (default 6 h)
-# (TEMPLATE_00_119). scripts/remote/host_bootstrap.sh and every NVIDIA setup.sh
+# (TEMPLATE_00_119). scripts/remote/host_bootstrap.sh and every NVIDIA run_setup.sh
 # record the time in ${BENCHMARK_HOST_STATE_DIR}/apt_updated_epoch. A host with
 # no stamp (any machine outside batch generation, or a first run) refreshes as
 # before. install_nvidia_cuda_toolkit still refreshes after adding the CUDA repo.
@@ -139,7 +139,7 @@ nvidia_pin_host_driver() {
   record_cmd "write ${NVIDIA_APT_PIN_FILE} (Pin-Priority -1 for Ubuntu NVIDIA driver userspace packages)"
   mkdir -p "$(dirname "${NVIDIA_APT_PIN_FILE}")"
   cat > "${NVIDIA_APT_PIN_FILE}" <<'PIN'
-# Written by a GPU benchmark setup.sh. This host's NVIDIA driver is not managed by
+# Written by a GPU benchmark run_setup.sh. This host's NVIDIA driver is not managed by
 # dpkg (for example it is bind-mounted into a container). Installing these
 # packages would try to replace the driver's files and leave dpkg half-configured.
 # Delete this file to let apt install NVIDIA driver packages on this host again.

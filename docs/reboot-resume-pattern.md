@@ -5,7 +5,7 @@ This template supports two reboot continuation patterns:
 1. **Remote reboot + reconnect polling** (operator runs script locally; target is remote via SSH).
 2. **On-system reboot + continue after login** (script runs on target host; user logs back in and resumes). For generated setup flows, this may use an enabled systemd oneshot resume unit so execution resumes automatically after boot.
 
-For ROCm runtime/repository/RVS setup flows, `docs/rocm-reboot-install-contract.md` is authoritative and must be followed by generated `setup.sh` implementations.
+For ROCm runtime/repository/RVS setup flows, `docs/rocm-reboot-install-contract.md` is authoritative and must be followed by generated `run_setup.sh` implementations.
 
 Reference implementation source:
 

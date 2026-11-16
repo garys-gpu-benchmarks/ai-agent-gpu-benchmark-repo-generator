@@ -22,7 +22,7 @@ LIB = ROOT / "scripts" / "lib" / "nvidia_cuda_toolkit.sh"
 NVCC_LIB = ROOT / "scripts" / "lib" / "nvcc_glibc_throw.sh"
 SELF_CHECK = ROOT / "scripts" / "self_check_generated_repo.sh"
 NVIDIA_SETUPS = [ROOT / "scripts" / "templates" / "setup_nvidia_skeleton.sh"] + sorted(
-    (ROOT / "implementation_components").glob("*-nvidia/files/setup.sh")
+    (ROOT / "implementation_components").glob("*-nvidia/files/run_setup.sh")
 )
 
 FAKE_TOOLS = {
@@ -342,7 +342,7 @@ class NcclCheckTest(unittest.TestCase):
     OVERLAYS = ("sglang-prompt-response", "vllm-kvcache", "vllm-throughput", "vllm-token-generation")
 
     def overlay(self, name: str) -> str:
-        return (ROOT / "implementation_components" / f"{name}-nvidia" / "files" / "setup.sh").read_text(encoding="utf-8")
+        return (ROOT / "implementation_components" / f"{name}-nvidia" / "files" / "run_setup.sh").read_text(encoding="utf-8")
 
     def test_checks_torch_nccl_not_the_system_library(self) -> None:
         for name in self.OVERLAYS:

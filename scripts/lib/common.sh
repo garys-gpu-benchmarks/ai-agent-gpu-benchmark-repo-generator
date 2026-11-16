@@ -20,7 +20,7 @@ LOG_LEVEL="${LOG_LEVEL:-INFO}"
 # When this run_benchmark.sh started, for the ledger's start_script_datetime and
 # runtime_script_mm_ss (TEMPLATE_00_135). Recorded once per process: a second source
 # in the same shell keeps it, and a child run_benchmark.sh (the next profile) gets
-# its own. Child scripts that source this file (setup.sh) cannot change the parent's.
+# its own. Child scripts that source this file (run_setup.sh) cannot change the parent's.
 if [[ "${BENCHMARK_SCRIPT_START_PID:-}" != "$$" ]]; then
   BENCHMARK_SCRIPT_START_NS="$(date +%s%N 2>/dev/null || true)"
   [[ "${BENCHMARK_SCRIPT_START_NS}" =~ ^[0-9]+$ ]] || BENCHMARK_SCRIPT_START_NS="$(date +%s)000000000"
@@ -95,12 +95,20 @@ log() {
 # unchanged, then exit with the first non-zero status. (Before 2026-11-06 the
 # last profile flag silently replaced the others.) Each profile is a normal
 # run: its own results/raw folder and its own ledger row.
+#
+# --repeat N (TEMPLATE_00_142, open issue S7) runs that whole set N times, the
+# way run_benchmark_suite.sh -r N repeats its set: smoke, baseline, extended,
+# then all three again. --repeat is removed from the child's options, and each
+# child gets BENCHMARK_WORKLOAD_REPEAT_INDEX / _TOTAL, which fill the ledger's
+# workload_repeat_index / workload_repeat_total columns. A failed run does not
+# stop the rest; the exit status is the first non-zero one.
 run_profiles_in_order() {
   local script="$1"
   shift
-  local -a profiles=() rest=()
-  local arg profile seen
-  for arg in "$@"; do
+  local -a profiles=() rest=() args=("$@")
+  local arg profile seen repeat_total=1 repeat_given=0 i=0
+  while [[ "${i}" -lt "${#args[@]}" ]]; do
+    arg="${args[${i}]}"
     case "${arg}" in
       --smoke|--baseline|--extended)
         seen=0
@@ -109,22 +117,49 @@ run_profiles_in_order() {
         done
         [[ "${seen}" -eq 1 ]] || profiles+=("${arg}")
         ;;
+      --repeat)
+        repeat_given=1
+        i=$((i + 1))
+        repeat_total="${args[${i}]:-}"
+        ;;
+      --repeat=*)
+        repeat_given=1
+        repeat_total="${arg#--repeat=}"
+        ;;
       *) rest+=("${arg}") ;;
     esac
+    i=$((i + 1))
   done
-  [[ "${#profiles[@]}" -gt 1 ]] || return 0
-  local index=0 code status=0 summary=""
-  for profile in "${profiles[@]}"; do
-    index=$((index + 1))
-    echo "[INFO] ===== Profile ${profile#--} (${index} of ${#profiles[@]}) ====="
-    code=0
-    bash "${script}" "${profile}" "${rest[@]+"${rest[@]}"}" || code=$?
-    if [[ "${code}" -eq 0 ]]; then
-      summary+="${summary:+, }${profile#--} ok"
-    else
-      summary+="${summary:+, }${profile#--} FAILED (exit ${code})"
-      [[ "${status}" -ne 0 ]] || status="${code}"
-    fi
+  if [[ "${repeat_given}" -eq 1 && ! "${repeat_total}" =~ ^[1-9][0-9]*$ ]]; then
+    echo "[FAIL] --repeat must be a whole number of 1 or more (got '${repeat_total}')" >&2
+    exit 2
+  fi
+  [[ "${#profiles[@]}" -gt 1 || "${repeat_given}" -eq 1 ]] || return 0
+  # No profile flag: each repeat runs the script's default profile.
+  [[ "${#profiles[@]}" -gt 0 ]] || profiles=("")
+  local index code status=0 summary="" pass label
+  for ((pass = 1; pass <= repeat_total; pass++)); do
+    index=0
+    for profile in "${profiles[@]}"; do
+      index=$((index + 1))
+      label="${profile#--}"
+      label="${label:-default}"
+      if [[ "${repeat_total}" -gt 1 ]]; then
+        echo "[INFO] ===== Repeat ${pass} of ${repeat_total}: profile ${label} (${index} of ${#profiles[@]}) ====="
+      else
+        echo "[INFO] ===== Profile ${label} (${index} of ${#profiles[@]}) ====="
+      fi
+      code=0
+      BENCHMARK_WORKLOAD_REPEAT_INDEX="${pass}" BENCHMARK_WORKLOAD_REPEAT_TOTAL="${repeat_total}" \
+        bash "${script}" ${profile:+"${profile}"} "${rest[@]+"${rest[@]}"}" || code=$?
+      [[ "${repeat_total}" -gt 1 ]] && label="${label} #${pass}"
+      if [[ "${code}" -eq 0 ]]; then
+        summary+="${summary:+, }${label} ok"
+      else
+        summary+="${summary:+, }${label} FAILED (exit ${code})"
+        [[ "${status}" -ne 0 ]] || status="${code}"
+      fi
+    done
   done
   echo "[INFO] Profiles: ${summary}"
   exit "${status}"
@@ -237,7 +272,7 @@ mark_benchmark_measure_start() {
   # download checks, and, in the server workloads, starting the server and loading
   # the model (those runners call this again once wait_for_server returns).
   # Benchmark is the timed work only. Calling it again moves the start later.
-  # (TEMPLATE_00_139 counted setup only on the first run after setup.sh; reruns showed
+  # (TEMPLATE_00_139 counted setup only on the first run after run_setup.sh; reruns showed
   # setup 00:00 and their server start and model load as benchmark time.)
   BENCHMARK_START_DATETIME="$(iso_utc_now)"
   BENCHMARK_START_NS="$(epoch_ns)"

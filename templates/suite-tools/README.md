@@ -48,7 +48,7 @@ cd __SUITE_INSTALL_ROOT__
 git pull && git submodule update --init --recursive
 ```
 
-The first run of each workload builds its environment with `setup.sh`, which
+The first run of each workload builds its environment with `run_setup.sh`, which
 may ask for your `sudo` password and, for ROCm, may need one reboot. If the
 image's own Ubuntu mirror is unreachable, setup switches apt to
 `archive.ubuntu.com` by itself (originals kept under

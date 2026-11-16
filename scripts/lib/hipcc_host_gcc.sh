@@ -7,7 +7,7 @@
 # Execution: source scripts/lib/hipcc_host_gcc.sh
 # Options: none
 # Requirements: bash 4+; optional GCC 13/14/15 install dir under /usr/lib/gcc
-# Environment: Local ROCm host. Source from common.sh, setup.sh, or scripts/build.sh.
+# Environment: Local ROCm host. Source from common.sh, run_setup.sh, or scripts/build.sh.
 # Dependencies: none
 # Variables: HIPCC_COMPILE_FLAGS_APPEND, HIPFLAGS, PATH, LD_LIBRARY_PATH
 # Repository: gpu-bench/sys-bench template

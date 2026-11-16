@@ -4,13 +4,13 @@ This contract applies to GPU workloads whose `Framework`, installation summary, 
 
 ## Required behavior
 
-1. `setup.sh` must not install unconstrained `torch` or `torchvision` from the default PyPI index for a ROCm workload.
+1. `run_setup.sh` must not install unconstrained `torch` or `torchvision` from the default PyPI index for a ROCm workload.
 2. Parser-only dependencies may remain in `requirements.txt`; accelerator frameworks must be installed explicitly from the official ROCm wheel index.
 3. The wheel index and package versions must be configurable through environment variables and documented in `README.md`, for example:
 
 ### Agent safeguard: verify pins before generating setup
 
-AI coding agents must not copy version pins from an unrelated template example or assume that a version exists on the selected ROCm index. Before committing defaults in a generated `setup.sh`, query the exact index for both packages and select a compatible pair:
+AI coding agents must not copy version pins from an unrelated template example or assume that a version exists on the selected ROCm index. Before committing defaults in a generated `run_setup.sh`, query the exact index for both packages and select a compatible pair:
 
 # For non-vLLM ROCm/PyTorch workloads:
 ```bash

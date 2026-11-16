@@ -58,6 +58,26 @@ NA_NO_CACHE = "na (server reported no cached-token counts)"
 NA_FAILED = "na (request failed)"
 
 
+def mark_measure_start() -> None:
+    """Setup ends here: record when the timed work starts (TEMPLATE_00_141; SGLang clients TEMPLATE_00_142).
+
+    run_benchmark.sh reads BENCHMARK_MEASURE_START_FILE when the benchmark stops and
+    starts the benchmark clock at this time, so model load and warmup count as setup.
+    The first call of a run wins. Outside run_benchmark.sh it does nothing.
+    """
+    import os
+    import time
+
+    path = os.environ.get("BENCHMARK_MEASURE_START_FILE", "")
+    if not path or os.path.exists(path):
+        return
+    try:
+        with open(path, "w", encoding="utf-8") as handle:
+            handle.write(f"{time.time_ns()}\n")
+    except OSError:
+        pass
+
+
 def _fmt(value) -> str:
     """6-decimal text for a number; na text unchanged."""
     return f"{float(value):.6f}" if isinstance(value, (int, float)) else str(value)
@@ -212,6 +232,9 @@ def main() -> int:
             print(f"[INFO] warm-up request {index + 1}/{warmups} (untimed): {time.perf_counter() - began:.1f} s", flush=True)
         except (urllib.error.URLError, OSError, TimeoutError, ValueError) as exc:
             print(f"[WARN] warm-up request {index + 1} failed ({type(exc).__name__}: {exc}); timing anyway", flush=True)
+    # The warm-up (SGLang compiles its kernels on the first request, 111-158 s on the
+    # TEMPLATE_00_141 smokes) is setup; the benchmark clock starts here (TEMPLATE_00_142).
+    mark_measure_start()
     rows = []
     for index in range(num_prompts):
         row = {"request_id": index + 1, "sample_index": index}

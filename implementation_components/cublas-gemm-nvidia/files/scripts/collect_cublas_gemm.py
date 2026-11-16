@@ -7,7 +7,7 @@
 # Execution: .venv/bin/python scripts/collect_cublas_gemm.py --output PATH --config PATH
 # Options: --output, --config, --profile, --function, --dtype, --M, --N, --K, --transposeA, --transposeB, --alpha, --beta, --lda, --ldb, --ldc, --batch-count, --warmup-iters, --num-iterations, --norm-check, --harness
 # Requirements: Python 3.12, PyYAML
-# Environment: Repository-local .venv after setup.sh
+# Environment: Repository-local .venv after run_setup.sh
 # Dependencies: bin/cublas_gemm
 # Variables: PATH
 # Repository: gpu-bench-nvidia-gemm-cublas-micro

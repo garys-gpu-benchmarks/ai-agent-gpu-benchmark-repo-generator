@@ -92,7 +92,11 @@ jobs:
         id: syntax
         if: ${{ !cancelled() && steps.tools.outcome == 'success' }}
         run: |
-          bash -n setup.sh
+          # run_setup.sh since TEMPLATE_00_142; setup.sh is its wrapper (or the
+          # script itself in repositories generated before then).
+          for script in run_setup.sh setup.sh; do
+            if [[ -f "${script}" ]]; then bash -n "${script}"; fi
+          done
           bash -n run_benchmark.sh
           find scripts -name '*.sh' -type f -print0 | xargs -0 -r -n1 bash -n
           python -m compileall -q scripts
@@ -137,13 +141,18 @@ jobs:
           missing=0
           for path in README.md LICENSE legal/NOTICE .gitignore .gitattributes \
                       benchmark_specification.json schemas/benchmark_specification.schema.json \
-                      setup.sh run_benchmark.sh config/benchmark_config.yaml \
+                      run_benchmark.sh config/benchmark_config.yaml \
                       .github/workflows/ci.yml .github/workflows/gpu-smoke.yml; do
             if [[ ! -s "${path}" ]]; then
               echo "::error file=${path}::required file is missing or empty"
               missing=1
             fi
           done
+          # The setup script: run_setup.sh since TEMPLATE_00_142, setup.sh before.
+          if [[ ! -s run_setup.sh && ! -s setup.sh ]]; then
+            echo "::error file=run_setup.sh::required file is missing or empty (run_setup.sh, or setup.sh before TEMPLATE_00_142)"
+            missing=1
+          fi
           if [[ -e .github/workflows/nightly.yml ]]; then
             echo "::error file=.github/workflows/nightly.yml::superseded by gpu-smoke.yml; remove it"
             missing=1

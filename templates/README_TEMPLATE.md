@@ -29,7 +29,7 @@ On an {{OS Version}} host, as root or with sudo:
 ```bash
 git clone https://github.com/{{CI Owner}}/{{CI GitHub Slug}}.git
 cd {{CI GitHub Slug}}
-sudo bash setup.sh --assume-yes
+sudo bash run_setup.sh --assume-yes
 bash run_benchmark.sh --smoke
 ```
 

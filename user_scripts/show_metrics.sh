@@ -227,7 +227,7 @@ fetch_rows() {
 # ------------------------------------------------------------------------------
 short_label_table() {
   # BEGIN GENERATED SHORT LABELS
-  # 160 labels from the Metric_Short_Labels sheet of BenchmarkSpecDefinitions.xlsx
+  # 159 labels from the Metric_Short_Labels sheet of BenchmarkSpecDefinitions.xlsx
   # (scripts/generate_show_metrics.py in the repository generator)
   cat <<'EOF'
 rocm_package_mismatch_count                              PkgMis
@@ -324,7 +324,7 @@ time_to_solution_across_problem_size_n_s                 Solve_s
 percent_of_gpu_fp64_matrix_peak                          MtxPk%
 step_time_ms                                             Step_ms
 images_per_sec                                           Img/s
-modeled_tflops                                           ModlTF
+counted_tflops                                           CntTF
 peak_gpu_memory_GB                                       PkMemGB
 modeled_param_input_traffic_gb_s                         TrfGB/s
 images_sec                                               Img/s
@@ -381,7 +381,6 @@ tflops_fwd                                               TFLOPS
 solver_search_msec                                       Srch_ms
 percent_of_fp64_tensor_peak                              TcPk%
 step_time_msec                                           Step_ms
-fp16_tflops                                              ModlTF
 modeled_weight_feature_traffic_gb_s                      TrfGB/s
 per_image_latency_msec                                   ImLatms
 gpu_utilization_percent                                  GPU%

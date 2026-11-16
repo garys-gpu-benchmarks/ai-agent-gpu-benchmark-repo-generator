@@ -30,7 +30,7 @@ required_paths=(
   "docs/GENERATION_REPORT.md"
   "SPEC.md"
   "README.md"
-  "setup.sh"
+  "run_setup.sh"
   "run_benchmark.sh"
   "requirements.txt"
   "config/hw_sw_info_commands.xlsx"
@@ -121,20 +121,20 @@ if grep -REq 'ruff[^|]*\|\|[[:space:]]*true' .github/workflows; then
 fi
 echo "[PASS] CI callers match the shared-workflows contract"
 
-# NVIDIA setup.sh installs one CUDA toolkit per Ubuntu release from NVIDIA's CUDA
+# NVIDIA run_setup.sh installs one CUDA toolkit per Ubuntu release from NVIDIA's CUDA
 # repository (scripts/lib/nvidia_cuda_toolkit.sh). Ubuntu's nvidia-cuda-toolkit
 # pulls libnvidia-compute-*, which cannot unpack over a bind-mounted host driver
 # and leaves dpkg half-configured for every later workload on that host.
-if grep -q 'align_nvidia_userspace' setup.sh; then
-    if grep -Eq '^[^#]*(apt_install|apt-get install)[^#]*nvidia-cuda-toolkit' setup.sh; then
-        echo "[FAIL] setup.sh installs Ubuntu's nvidia-cuda-toolkit. Call install_nvidia_cuda_toolkit (scripts/lib/nvidia_cuda_toolkit.sh) instead." >&2
+if grep -q 'align_nvidia_userspace' run_setup.sh; then
+    if grep -Eq '^[^#]*(apt_install|apt-get install)[^#]*nvidia-cuda-toolkit' run_setup.sh; then
+        echo "[FAIL] run_setup.sh installs Ubuntu's nvidia-cuda-toolkit. Call install_nvidia_cuda_toolkit (scripts/lib/nvidia_cuda_toolkit.sh) instead." >&2
         exit 1
     fi
-    if ! grep -Eq '^[[:space:]]*install_nvidia_cuda_toolkit[[:space:]]*$' setup.sh; then
-        echo "[FAIL] NVIDIA setup.sh must call install_nvidia_cuda_toolkit (scripts/lib/nvidia_cuda_toolkit.sh)." >&2
+    if ! grep -Eq '^[[:space:]]*install_nvidia_cuda_toolkit[[:space:]]*$' run_setup.sh; then
+        echo "[FAIL] NVIDIA run_setup.sh must call install_nvidia_cuda_toolkit (scripts/lib/nvidia_cuda_toolkit.sh)." >&2
         exit 1
     fi
-    echo "[PASS] NVIDIA setup.sh installs the CUDA toolkit through scripts/lib/nvidia_cuda_toolkit.sh"
+    echo "[PASS] NVIDIA run_setup.sh installs the CUDA toolkit through scripts/lib/nvidia_cuda_toolkit.sh"
 fi
 
 readme_lines="$(wc -l < README.md | tr -d ' ')"
@@ -705,9 +705,9 @@ if workload in {"131", "231", "331"} or "sglang-serving-latency" in repo:
                 "num_prompts = min(num_prompts, concurrency)."
             )
     if workload == "231":
-        setup = Path("setup.sh").read_text(encoding="utf-8", errors="replace")
+        setup = Path("run_setup.sh").read_text(encoding="utf-8", errors="replace")
         if "install_sglang_nvidia.sh" not in setup:
-            raise SystemExit("[FAIL] 231 setup.sh must call scripts/install_sglang_nvidia.sh.")
+            raise SystemExit("[FAIL] 231 run_setup.sh must call scripts/install_sglang_nvidia.sh.")
         if "ninja" not in setup and "ninja-build" not in setup:
             if not Path("scripts/install_sglang_nvidia.sh").is_file():
                 raise SystemExit("[FAIL] 231 must install ninja / ninja-build.")
@@ -784,9 +784,9 @@ if workload in {"130", "230", "330"} or "sglang-prompt-response" in repo:
     if workload in {"130", "330"} and "isolate_repo_python" not in runner:
         raise SystemExit("[FAIL] 130/330 run_benchmark.sh must call isolate_repo_python.")
     if workload == "230":
-        setup = Path("setup.sh").read_text(encoding="utf-8", errors="replace")
+        setup = Path("run_setup.sh").read_text(encoding="utf-8", errors="replace")
         if "install_sglang_nvidia.sh" not in setup:
-            raise SystemExit("[FAIL] 230 setup.sh must call scripts/install_sglang_nvidia.sh.")
+            raise SystemExit("[FAIL] 230 run_setup.sh must call scripts/install_sglang_nvidia.sh.")
         if "prepend_venv_nvidia_libs" not in runner:
             raise SystemExit("[FAIL] 230 run_benchmark.sh must prepend venv nvidia/*/lib.")
     if workload in {"130", "330"}:
@@ -824,7 +824,7 @@ if workload in {"130", "230", "330"} or "sglang-prompt-response" in repo:
                 )
     print("[PASS] 130/230/330 SGLang sequential real-server launch contract (every profile)")
 if workload in {"430", "431"} or ("ubu2604" in repo and "sglang" in repo and "nvidia" in repo):
-    setup = Path("setup.sh").read_text(encoding="utf-8", errors="replace")
+    setup = Path("run_setup.sh").read_text(encoding="utf-8", errors="replace")
     for rel in (
         "scripts/install_sglang_nvidia.sh",
         "scripts/install_sglang_launch_deps.py",
@@ -842,7 +842,7 @@ if workload in {"430", "431"} or ("ubu2604" in repo and "sglang" in repo and "nv
     if runner.is_file() and "attention-backend flashinfer" not in runner.read_text(encoding="utf-8", errors="replace"):
         raise SystemExit("[FAIL] 430/431 run_benchmark.sh must launch SGLang with --attention-backend flashinfer.")
     if "install_sglang_nvidia.sh" not in setup:
-        raise SystemExit("[FAIL] 430/431 setup.sh must call scripts/install_sglang_nvidia.sh.")
+        raise SystemExit("[FAIL] 430/431 run_setup.sh must call scripts/install_sglang_nvidia.sh.")
     sampler_sources = setup + "\n" + helper
     if "create_sampler" not in sampler_sources and "install_sglang_launch_deps.py" not in sampler_sources:
         raise SystemExit("[FAIL] 430/431 setup must verify the SGLang sampler or run install_sglang_launch_deps.py.")
@@ -876,7 +876,7 @@ if workload in {"132", "232", "332", "432"} or "rag-faiss" in repo:
         )
     if "nn.Linear" in text and "AutoModelForCausalLM" not in text:
         raise SystemExit("[FAIL] 132/232/332/432 must not ship a synthetic Linear encoder/generator.")
-    setup = Path("setup.sh").read_text(encoding="utf-8", errors="replace")
+    setup = Path("run_setup.sh").read_text(encoding="utf-8", errors="replace")
     path_file = Path("scripts/rag_model_paths.py")
     if path_file.is_file():
         path_text = path_file.read_text(encoding="utf-8", errors="replace")
@@ -895,7 +895,7 @@ if workload in {"132", "232", "332", "432"} or "rag-faiss" in repo:
             if not Path(rel).is_file():
                 raise SystemExit(f"[FAIL] 232/432 must keep overlay {rel}.")
         if "install_rag_nvidia.sh" not in setup and "prefetch_rag_models.py" not in setup:
-            raise SystemExit("[FAIL] 232/432 setup.sh must call install_rag_nvidia.sh or prefetch_rag_models.py.")
+            raise SystemExit("[FAIL] 232/432 run_setup.sh must call install_rag_nvidia.sh or prefetch_rag_models.py.")
         rag_install = Path("scripts/install_rag_nvidia.sh")
         if rag_install.is_file() and "sentencepiece" not in rag_install.read_text(encoding="utf-8", errors="replace"):
             raise SystemExit("[FAIL] 232/432 scripts/install_rag_nvidia.sh must install sentencepiece (Mistral tokenizer.model).")
@@ -905,7 +905,7 @@ if workload in {"132", "232", "332", "432"} or "rag-faiss" in repo:
             if not Path(rel).is_file():
                 raise SystemExit(f"[FAIL] 132/332 must keep overlay {rel}.")
         if "install_rag_amd.sh" not in setup and "prefetch_rag_models.py" not in setup:
-            raise SystemExit("[FAIL] 132/332 setup.sh must call install_rag_amd.sh or prefetch_rag_models.py.")
+            raise SystemExit("[FAIL] 132/332 run_setup.sh must call install_rag_amd.sh or prefetch_rag_models.py.")
         rag_install = Path("scripts/install_rag_amd.sh")
         if rag_install.is_file() and "sentencepiece" not in rag_install.read_text(encoding="utf-8", errors="replace"):
             raise SystemExit("[FAIL] 132/332 scripts/install_rag_amd.sh must install sentencepiece (Mistral tokenizer.model).")
@@ -928,12 +928,12 @@ rocm_required = vendor != "nvidia" and any(
     token in domain or token in framework for token in ("rocm", "llm serving", "vllm", "amd-smi")
 )
 if vendor == "nvidia":
-    setup = Path("setup.sh").read_text(encoding="utf-8", errors="replace")
+    setup = Path("run_setup.sh").read_text(encoding="utf-8", errors="replace")
     if "rocm_install_runtime" in setup and not setup.split("rocm_install_runtime", 1)[0].rstrip().endswith("#"):
         # Comment tokens for historical self_check are allowed; live ROCm install is not.
         live = [line for line in setup.splitlines() if "rocm_install_runtime" in line and not line.lstrip().startswith("#")]
         if live:
-            raise SystemExit("[FAIL] NVIDIA setup.sh must not execute rocm_install_runtime.")
+            raise SystemExit("[FAIL] NVIDIA run_setup.sh must not execute rocm_install_runtime.")
     needs_torch = any(token in framework for token in ("pytorch", "torchvision", "jax", "transformers", "bert", "distilbert"))
     serving = "vllm" in framework or "sglang" in framework
     if needs_torch and not serving:
@@ -959,7 +959,7 @@ if vendor == "nvidia":
                 raise SystemExit("[FAIL] NVIDIA scripts/build.sh must not prefer cuda_stack_probe.cu over the overlay source.")
     print("[PASS] NVIDIA setup contract is vendor-gated and compile-aware")
 if rocm_required:
-    setup = Path("setup.sh").read_text(encoding="utf-8", errors="replace")
+    setup = Path("run_setup.sh").read_text(encoding="utf-8", errors="replace")
     required_tokens = (
         "source scripts/lib/rocm_install.sh",
         "rocm_install_runtime",
@@ -1007,7 +1007,7 @@ from pathlib import Path
 
 pattern = re.compile(r"(scripts/[A-Za-z0-9_.:/-]+\.(?:py|sh))")
 optional = re.compile(r"\[\[\s+-f\s+(scripts/[A-Za-z0-9_.:/-]+\.(?:py|sh))\s+\]\]")
-for path in (Path("setup.sh"), Path("run_benchmark.sh")):
+for path in (Path("run_setup.sh"), Path("run_benchmark.sh")):
     if path.exists():
         text = path.read_text(encoding="utf-8", errors="replace")
         guarded = set(optional.findall(text))
@@ -1085,7 +1085,7 @@ fi
 VENV_ROOT="$(pwd)/.venv"
 PYTHON_BIN="${VENV_ROOT}/bin/python"
 [[ -x "${PYTHON_BIN}" ]] || {
-    echo "[FAIL] Missing ${PYTHON_BIN}; run setup.sh first." >&2
+    echo "[FAIL] Missing ${PYTHON_BIN}; run run_setup.sh first." >&2
     exit 1
 }
 
