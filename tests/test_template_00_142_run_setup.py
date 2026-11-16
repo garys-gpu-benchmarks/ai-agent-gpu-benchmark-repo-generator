@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
-"""TEMPLATE_00_142 (2026-11-16): setup.sh is now run_setup.sh.
+"""TEMPLATE_00_142 (2026-11-16): the setup script is run_setup.sh.
 
-Generated repositories get the setup script as run_setup.sh (it pairs with
-run_benchmark.sh) and a small setup.sh that runs it with the same options, so
-"bash setup.sh --assume-yes" keeps working for a few templates.
+TEMPLATE_00_143 removed the setup.sh wrapper this file used to install and
+execute. These checks still cover the rename, the resume unit's old name,
+shared CI accepting either name, and ensure_setup.sh running run_setup.sh.
 """
 from __future__ import annotations
 
@@ -18,7 +18,6 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 IC = ROOT / "implementation_components"
 BASH = shutil.which("bash")
-WRAPPER = ROOT / "scripts" / "templates" / "setup_compat_wrapper.sh"
 OLD_NAME = re.compile(r"(?<![A-Za-z0-9_\-])setup\.sh(?![A-Za-z0-9_])")
 
 
@@ -30,19 +29,17 @@ def tracked_text_files() -> list[Path]:
 
 
 class GeneratorNamesTests(unittest.TestCase):
-    # Files that may still say setup.sh: release history, the wrapper itself and
-    # the code that installs or accepts it, and this test.
+    # Files that may still say setup.sh: release history, the shared CI sample
+    # and check that still accept an older published repository's setup.sh,
+    # and these tests.
     ALLOWED = {
         "CHANGELOG.md", "docs/CHANGELOG.md",
-        "scripts/templates/setup_compat_wrapper.sh",
         "templates/shared-workflows/tests/fixtures/sample-workload/setup.sh",
         "templates/shared-workflows/.github/workflows/ci.yml",
-        "scripts/init_generated_repo.py",
-        "scripts/readme_sections.py",
         "scripts/remove_template_copy.py",
         "scripts/update_runtime_ledger.py",
         "tests/test_template_00_142_run_setup.py",
-        "AGENTS.md", "docs/repository-template.md", "README.md",  # describe the wrapper
+        "tests/test_template_00_143_changes.py",
     }
 
     def test_no_file_still_names_setup_sh(self) -> None:
@@ -87,11 +84,11 @@ class GeneratorNamesTests(unittest.TestCase):
         self.assertIn('setup = "bash run_setup.sh --assume-yes"', text)
         self.assertIn('"run_setup.sh"', (ROOT / "scripts" / "init_generated_repo.py").read_text(encoding="utf-8"))
 
-    def test_init_installs_the_wrapper(self) -> None:
+    def test_init_does_not_write_setup_sh(self) -> None:
         text = (ROOT / "scripts" / "init_generated_repo.py").read_text(encoding="utf-8")
-        self.assertIn('COMPAT_WRAPPER_REL = Path("scripts") / "templates" / "setup_compat_wrapper.sh"', text)
-        self.assertIn('wrapper = repo_root / "setup.sh"', text)
-        self.assertNotIn("TEMPLATE_00_", WRAPPER.read_text(encoding="utf-8"))  # published file
+        self.assertIsNone(OLD_NAME.search(text))
+        self.assertNotIn("setup_compat_wrapper", text)
+        self.assertFalse((ROOT / "scripts" / "templates" / "setup_compat_wrapper.sh").exists())
 
     def test_shared_ci_accepts_either_name(self) -> None:
         text = (ROOT / "templates" / "shared-workflows" / ".github" / "workflows" / "ci.yml").read_text(encoding="utf-8")
@@ -100,29 +97,7 @@ class GeneratorNamesTests(unittest.TestCase):
 
 
 @unittest.skipIf(BASH is None, "bash is not installed")
-class WrapperTests(unittest.TestCase):
-    def repo(self, tmp: str, body: str) -> Path:
-        root = Path(tmp)
-        shutil.copy(WRAPPER, root / "setup.sh")
-        (root / "run_setup.sh").write_text("#!/usr/bin/env bash\n" + body, encoding="utf-8")
-        return root
-
-    def test_wrapper_passes_options_and_exit_status(self) -> None:
-        with tempfile.TemporaryDirectory() as tmp:
-            root = self.repo(tmp, 'echo "run_setup: $*"\nexit 3\n')
-            out = subprocess.run([BASH, "setup.sh", "--assume-yes", "--resume-auto"], cwd=root,
-                                 capture_output=True, text=True, timeout=30)
-            self.assertEqual(out.returncode, 3)
-            self.assertEqual(out.stdout.strip(), "run_setup: --assume-yes --resume-auto")
-            self.assertIn("[INFO] setup.sh is now run_setup.sh", out.stderr)
-
-    def test_wrapper_works_from_another_folder(self) -> None:
-        with tempfile.TemporaryDirectory() as tmp, tempfile.TemporaryDirectory() as other:
-            root = self.repo(tmp, 'echo "ran in $(cd "$(dirname "$0")" && pwd)"\n')
-            out = subprocess.run([BASH, str(root / "setup.sh")], cwd=other, capture_output=True, text=True, timeout=30)
-            self.assertEqual(out.returncode, 0, out.stderr)
-            self.assertIn(str(root.resolve()), out.stdout)
-
+class EnsureSetupTests(unittest.TestCase):
     def test_ensure_setup_runs_run_setup(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)

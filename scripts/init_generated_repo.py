@@ -59,8 +59,6 @@ OPTIONAL_SOURCE_FILES = ["benchmark_specification.json"]
 
 SHARED_DIRS = [".claude", "schemas", "docs", "scripts", "config"]
 
-COMPAT_WRAPPER_REL = Path("scripts") / "templates" / "setup_compat_wrapper.sh"
-
 REQUIRED_PATHS = [
     "run_setup.sh",
     "run_benchmark.sh",
@@ -451,13 +449,6 @@ def main() -> int:
             continue
         if not path.exists():
             path.touch()
-    # setup.sh became run_setup.sh in TEMPLATE_00_142. A small setup.sh that
-    # runs run_setup.sh keeps "bash setup.sh --assume-yes" working for a few
-    # templates (older instructions, scripts and the reboot resume service of a
-    # repository regenerated in the same folder).
-    wrapper = repo_root / "setup.sh"
-    shutil.copy2(source_root / COMPAT_WRAPPER_REL, wrapper)
-    wrapper.chmod(wrapper.stat().st_mode | 0o111)
     materialize_generated_harness(repo_root)
     _write_generation_manifest(repo_root, source_root, resolved_components)
     if apply_component_gaps(repo_root, source_root / "implementation_components") != 0:

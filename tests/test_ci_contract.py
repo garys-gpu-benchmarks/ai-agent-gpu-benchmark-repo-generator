@@ -122,9 +122,10 @@ class EmitterTests(unittest.TestCase):
                         "tests/fixtures/sample-workload/schemas/benchmark_specification.schema.json"):
                 self.assertTrue((shared / rel).is_file(), rel)
             suite = Path(tmp) / "gpu-bench-suite"
-            for rel in ("run_benchmark_suite.sh", "get_benchmark_results.sh", "list_runs.sh",
-                        "show_metrics.sh", "README.md"):
+            for rel in ("get_benchmark_results.sh", "list_runs.sh", "show_metrics.sh", "README.md"):
                 self.assertTrue((suite / rel).is_file(), rel)
+            # GPU-host only: it ships in the bundles, not in gpu-bench-suite (TEMPLATE_00_144).
+            self.assertFalse((suite / "run_benchmark_suite.sh").exists())
             self.assertFalse((suite / "scripts").exists(), "suite tools sit at the top of gpu-bench-suite (2026-11-07)")
             for path in list(shared.rglob("*")) + list(suite.rglob("*")):
                 if path.is_file():

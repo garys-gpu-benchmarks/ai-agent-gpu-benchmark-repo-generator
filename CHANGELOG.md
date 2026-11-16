@@ -1,5 +1,25 @@
 # Changelog
 
+## 2026-11-16 — TEMPLATE_00_144: gpu-bench-suite holds the laptop tools only
+
+`gpu-bench-suite` is what an operator clones on a laptop. It also carried `run_benchmark_suite.sh`, which runs only on the GPU host, so a reader could think the suite runs from the laptop. Its copy had also drifted from the bundles' copy: it defaulted to all three profiles (many hours), while each bundle's copy defaults to `--smoke`. The host already gets the runner from its bundle, or from generation's remote copy.
+
+- **Emit (`scripts/ci_contract.py`).** `SUITE_TOOL_SCRIPTS` is `show_metrics.sh`, `list_runs.sh`, `get_benchmark_results.sh`. `scripts/emit_shared_workflows.py` no longer writes `run_benchmark_suite.sh` to `gpu-bench-suite/`. The master copy stays in `user_scripts/`.
+- **Publish (`user_scripts/publish_benchmarks_to_github.sh`).** Step 5b checks for `get_benchmark_results.sh` instead of `run_benchmark_suite.sh`, and deletes the `run_benchmark_suite.sh` an earlier run left in the local `gpu-bench-suite/` (the emit step never deletes files), so the push removes it from GitHub. Step 7 takes the bundles' copy from the generator's `user_scripts/run_benchmark_suite.sh` (byte-identical to the copy last published from gpu-bench-suite; the script has no placeholders), falling back to a copy next to the publish script as before.
+- **Unchanged.** Generation still installs all four suite tools in `/opt/benchmarks` on the VM. Bundles still carry `run_benchmark_suite.sh` with their smoke default and workload-numbered examples. The project-folder operator tools were already the three laptop tools.
+- **Docs.** `templates/suite-tools/README.md` lists the three laptop tools, says to clone it on the laptop, and says the host gets everything from its bundle. `README.md` (data-flow diagram, suite-tools paragraph, `user_scripts/` row) says the same.
+- **Checks:** `tests/test_template_00_144_changes.py` (5 tests): the emit list, the master copy still present, the bundles' source in the publish script, the removal of the old copy, and the README table. `tests/test_ci_contract.py` now requires `gpu-bench-suite` to have no `run_benchmark_suite.sh`.
+- **Publishing.** The TEMPLATE_00_143 workloads (Project536–539) are published with this generator: the change touches only `gpu-bench-suite` and the publish script, not anything inside a workload.
+
+## 2026-11-16 — TEMPLATE_00_143: generated repositories no longer include setup.sh
+
+Nothing calls the compatibility wrapper. `run_benchmark.sh` goes through `scripts/ensure_setup.sh` to `run_setup.sh`, the ROCm resume unit runs `run_setup.sh`, and the suite never calls `setup.sh`.
+
+- **Generation (`scripts/init_generated_repo.py`).** A generated repository gets `run_setup.sh` and no `setup.sh`. `scripts/templates/setup_compat_wrapper.sh` is deleted.
+- **Docs.** The wrapper row is gone from `README.md`, `AGENTS.md`, `docs/repository-template.md`, and the generated README layout in `scripts/readme_sections.py`.
+- **Unchanged for older published repositories.** Shared CI still syntax-checks and requires whichever of `run_setup.sh` or `setup.sh` is present. `remove_template_copy.py` still accepts either name. `scripts/ensure_setup.sh`, the `probe_setup.sh` helpers, and the resume unit name `<repo>-setup-resume.service` are unchanged. The shared-workflows sample workload still has both files so that CI check stays exercised.
+- **Checks:** `tests/test_template_00_143_changes.py` generates workload 101 and requires `run_setup.sh`, no `setup.sh` anywhere in the tree, and no `setup.sh` in the generated `README.md` or `SPEC.md`. `tests/test_template_00_142_run_setup.py` no longer installs or runs the wrapper.
+
 ## 2026-11-16 — TEMPLATE_00_142 (continued): generated 103/303 docs say the AMD load is full utilization
 
 The sentence was only in the already-generated 103 and 303 repositories. A new generation builds SPEC.md, README.md and RESULTS_REFERENCE.md from the workbook and `scripts/results_markdown.py`, which still said no rocBLAS load was started.

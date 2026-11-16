@@ -39,9 +39,11 @@ SUITE_TOOLS_REL = Path("templates") / "suite-tools"
 # Master copies of the operator scripts, in one place at the generator root.
 # Generation never copies this folder into a workload (init_generated_repo.py
 # SHARED_DIRS). The suite tools below are emitted to the top of gpu-bench-suite/.
+# run_benchmark_suite.sh is not one of them (TEMPLATE_00_144): it runs only on
+# the GPU host, where each bundle (and generation's remote copy) puts it in
+# /opt/benchmarks. gpu-bench-suite holds the laptop tools.
 USER_SCRIPTS_REL = Path("user_scripts")
 SUITE_TOOL_SCRIPTS = (
-    "run_benchmark_suite.sh",
     "show_metrics.sh",
     "list_runs.sh",
     "get_benchmark_results.sh",

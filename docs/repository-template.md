@@ -70,7 +70,6 @@ Do not invent new top-level directories unless the change is required by the ben
 │   ├── benchmark_specification.schema.json # Contract for benchmark_specification.json structure and required fields
 │   └── generation_report.schema.json    # Contract for results/generation_manifest.json
 ├── run_setup.sh                        # Idempotent environment bootstrap
-├── setup.sh                            # Wrapper: runs run_setup.sh (its name before TEMPLATE_00_142)
 ├── run_benchmark.sh                # Main benchmark entrypoint
 ├── requirements.txt                # Direct Python runtime dependencies for this workload
 ├── .gitignore                      # Ignore generated artifacts (build, results, venvs)

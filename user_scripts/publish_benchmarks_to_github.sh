@@ -18,8 +18,9 @@ if grep -q $'\r' "$0"; then echo "This file has Windows (CRLF) line endings. Fix
 #   4 bundle repositories       bundle-<vendor>-ubuntu-<2404|2604>, each holding
 #                               its 32 workloads as pinned git submodules
 #   shared-workflows            the CI every workload calls (@v1)
-#   gpu-bench-suite             operator tools (run_benchmark_suite.sh,
-#                               get_benchmark_results.sh)
+#   gpu-bench-suite             laptop operator tools (get_benchmark_results.sh,
+#                               list_runs.sh, show_metrics.sh); run_benchmark_suite.sh
+#                               is in the bundles only (TEMPLATE_00_144)
 #   the generator               ai-agent-gpu-benchmark-repo-generator
 #   the profile repository      github.com/garymichaelbass/garymichaelbass
 #                               receives BenchmarkSpecDefinitions.xlsx and
@@ -1109,10 +1110,12 @@ fi
 #   Self-test must pass before the tag moves: the first release of a major
 #   tag is vN.0.0, each later change the next vN.x.0, and vN is moved to it.
 #
-# gpu-bench-suite: operator tools at the top of the repository (run_benchmark_suite.sh
-#   for the GPU host, get_benchmark_results.sh, list_runs.sh and show_metrics.sh for
-#   the laptop or the host; in scripts/ before 2026-11-07). Tagged with this run's
-#   version. Step 7 copies its run_benchmark_suite.sh into every bundle.
+# gpu-bench-suite: operator tools at the top of the repository
+#   (get_benchmark_results.sh, list_runs.sh and show_metrics.sh, for the laptop or
+#   the host; in scripts/ before 2026-11-07). Tagged with this run's version.
+#   run_benchmark_suite.sh runs only on the GPU host, so since TEMPLATE_00_144 it
+#   is not in gpu-bench-suite: step 7 copies the generator's
+#   user_scripts/run_benchmark_suite.sh into every bundle.
 #
 # Runs every time; nothing is pushed or tagged when nothing changed.
 
@@ -1195,7 +1198,7 @@ if [[ -z "${TOOLS_REPO}" ]]; then
 else
   TOOLS_DIR="${WORKSPACE}/${TOOLS_REPO}"
   emit_repo suite-tools "${TOOLS_DIR}"
-  [[ -f "${TOOLS_DIR}/run_benchmark_suite.sh" ]] || stop "the generator did not write run_benchmark_suite.sh in ${TOOLS_DIR}"
+  [[ -f "${TOOLS_DIR}/get_benchmark_results.sh" ]] || stop "the generator did not write get_benchmark_results.sh in ${TOOLS_DIR}"
   cd "${TOOLS_DIR}" || stop "cannot open ${TOOLS_DIR}"
   # The tools moved from scripts/ to the top of the repository, and
   # show_ledger_runs.sh was renamed list_runs.sh (both 2026-11-07). The emit
@@ -1204,6 +1207,10 @@ else
   rm -f scripts/run_benchmark_suite.sh scripts/get_benchmark_results.sh scripts/list_runs.sh \
     scripts/show_metrics.sh scripts/show_ledger_runs.sh
   rmdir scripts 2>/dev/null || true
+  # run_benchmark_suite.sh left gpu-bench-suite in TEMPLATE_00_144 (it runs only
+  # on the GPU host and ships in every bundle). Remove the copy an earlier run
+  # emitted; commit_all records the removal on GitHub.
+  rm -f run_benchmark_suite.sh
   [[ -d .git ]] || git init -q -b main || stop "git init failed in ${TOOLS_DIR}"
   use_github_repo "${TOOLS_REPO}" "Operator tools for the GPU benchmark suite: run every workload on a GPU host, collect the results to your laptop" || stop "could not create ${ORG}/${TOOLS_REPO}"
   commit_all "Initial operator tools from ${GENREPO} ${VERSION}" "Update from ${GENREPO} ${VERSION}" || stop "committing ${TOOLS_REPO} failed"
@@ -1220,10 +1227,11 @@ else
   echo "${TOOLS_REPO} is published: https://github.com/${ORG}/${TOOLS_REPO}"
 fi
 
-# Where the bundles get run_benchmark_suite.sh: the generator's copy, or, for
-# a generator without suite tools, a copy next to this script.
-SUITE_SCRIPT="${TOOLS_DIR:+${TOOLS_DIR}/run_benchmark_suite.sh}"
-[[ -n "${SUITE_SCRIPT}" && -f "${SUITE_SCRIPT}" ]] || SUITE_SCRIPT="${SCRIPT_DIR}/run_benchmark_suite.sh"
+# Where the bundles get run_benchmark_suite.sh: the generator's master copy in
+# user_scripts/ (gpu-bench-suite no longer carries it, TEMPLATE_00_144), or, for
+# an older generator without one, a copy next to this script.
+SUITE_SCRIPT="${GEN}/${GENREPO}/user_scripts/run_benchmark_suite.sh"
+[[ -f "${SUITE_SCRIPT}" ]] || SUITE_SCRIPT="${SCRIPT_DIR}/run_benchmark_suite.sh"
 # show_metrics.sh comes along the same way, so a cloned bundle has it in
 # /opt/benchmarks (the README says so).
 METRICS_SCRIPT="${TOOLS_DIR:+${TOOLS_DIR}/show_metrics.sh}"

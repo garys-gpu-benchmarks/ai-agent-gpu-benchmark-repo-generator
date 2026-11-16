@@ -33,7 +33,7 @@ Instead of manually assembling setup scripts, SPEC files, PRDs, CI workflows, an
 
 - **Rich Template Library** — Includes templates for PRD, README, SPEC, scripts, scaffolding, CI workflows, and GitHub files.
 - **Detailed Reference Materials** — Generates `README.md`, `SPEC.md`, `docs/PRD.md`, and `docs/GENERATION_REPORT.md` customized per benchmark.
-- **Consistent Repository Structure** — Every generated repo has `run_setup.sh`, `run_benchmark.sh`, `show_metrics.sh` and `list_runs.sh` at the top (and `setup.sh`, which runs `run_setup.sh` under its earlier name), plus `config/`, `scripts/`, `schemas/`, `docs/`, `tests/fixtures/` (CI creates `benchmark.db` there with `--seed-fixture`; it is not committed), and `results/`.
+- **Consistent Repository Structure** — Every generated repo has `run_setup.sh`, `run_benchmark.sh`, `show_metrics.sh` and `list_runs.sh` at the top, plus `config/`, `scripts/`, `schemas/`, `docs/`, `tests/fixtures/` (CI creates `benchmark.db` there with `--seed-fixture`; it is not committed), and `results/`.
 - **Local Template Copy During Generation** — `create_generated_repo.py` materializes a nested `ai-agent-gpu-benchmark-repo-generator_copy/` while a workload is generated. `create_one_workload.py` removes it once the workload passes (`--keep-template-copy` keeps it); for other paths run `python3 scripts/remove_template_copy.py --repo-root <repo>`. Finished repositories therefore do not carry the copy, whose deep paths exceed the Windows 260-character limit. While it exists, the tree is gitignored and must not be published to GitHub.
 
 ### Results & Observability
@@ -184,7 +184,6 @@ gpu-bench/
         ├── README.md
         ├── RESULTS_REFERENCE.md          # results of the generation smoke run
         ├── run_setup.sh
-        ├── setup.sh                      # runs run_setup.sh (its earlier name)
         ├── run_benchmark.sh
         ├── show_metrics.sh
         ├── list_runs.sh
@@ -201,7 +200,7 @@ gpu-bench/
 ```text
 config/ci_contract.yaml ──► templates/workload/.github/workflows/   ──► 2 thin callers in each of the 128 workload repos
    (owner, tag, inputs,     templates/shared-workflows/            ──► shared-workflows repo  (published once, tagged v1)
-    runner labels, tools)   user_scripts/ + templates/suite-tools/                 ──► gpu-bench-suite repo   (run_benchmark_suite.sh, show_metrics.sh, list_runs.sh, get_benchmark_results.sh)
+    runner labels, tools)   user_scripts/ + templates/suite-tools/                 ──► gpu-bench-suite repo   (show_metrics.sh, list_runs.sh, get_benchmark_results.sh; run_benchmark_suite.sh goes to the bundles)
 ```
 
 | Where | File | Runs on | When |
@@ -266,7 +265,7 @@ Every script you run by hand has its one master copy in [`user_scripts/`](user_s
 | `promote_results_reference.sh` | your laptop (Git Bash) | Replaces each workload's committed `RESULTS_REFERENCE.md` with a passed run collected by `get_benchmark_results.sh` (for example a baseline suite), before publishing |
 | `publish_benchmarks_to_github.sh` | your laptop (Git Bash) | Publishes the workloads, bundles, generator and workbook (run a copy from `Publishing\`) |
 
-The first four are the suite tools: `scripts/emit_shared_workflows.py` emits them to the top of `gpu-bench-suite/` (with `templates/suite-tools/README.md`), generation installs them at `/opt/benchmarks` and in the project folder, and every bundle carries them. `user_scripts/` itself is never copied into a workload.
+The first four are the suite tools: generation installs them at `/opt/benchmarks`, and every bundle carries them. `scripts/emit_shared_workflows.py` emits the three laptop tools (`show_metrics.sh`, `list_runs.sh`, `get_benchmark_results.sh`) to the top of `gpu-bench-suite/` (with `templates/suite-tools/README.md`), and generation copies those three to the project folder; `run_benchmark_suite.sh` runs only on the GPU host, so it is not in `gpu-bench-suite` (TEMPLATE_00_144). `user_scripts/` itself is never copied into a workload.
 
 `show_metrics.sh` prints one row per run in fixed 7-character metric columns, with an Exit column (ledger exit code) after Idx, at most 93 characters wide. Two sheets of `BenchmarkSpecDefinitions.xlsx` supply its text: `Metric_Short_Labels` (one row per workload metric; the column headings, at most 7 characters) and `Workload_Short_Names` (one row per workload; the Name column, at most 12 characters, for example `RAG Sweep` for "RAG Pipeline Sweep"). After changing either, run `python3 scripts/generate_show_metrics.py`; it checks both sheets against `Workload_Definitions` (metric keys from the `Metrics` column, full workload names, no short name used twice in a batch, one short name per full name) and rewrites the two tables in the script. `--check` reports drift without writing (CI runs it), and `--add-missing` adds rows for new metrics and workloads, marked `auto: review`.
 
@@ -287,7 +286,7 @@ Keep private keys, passwords, API tokens, SSH commands containing secrets, and o
 | `config/ci_contract.yaml` | CI contract: GitHub owner, `shared-workflows` tag, caller inputs, runner labels, tool versions, bundle names (generation-only) |
 | `templates/workload/.github/workflows/` | Thin caller workflows rendered into every generated repo |
 | `templates/shared-workflows/` | The reusable workflows, self-test and docs, emitted once to the `shared-workflows` repo |
-| `user_scripts/` | The scripts you run by hand: the four suite tools (`run_benchmark_suite.sh`, `show_metrics.sh`, `list_runs.sh`, `get_benchmark_results.sh`, emitted to the `gpu-bench-suite` repo), `promote_results_reference.sh` and `publish_benchmarks_to_github.sh` |
+| `user_scripts/` | The scripts you run by hand: the four suite tools (`run_benchmark_suite.sh`, `show_metrics.sh`, `list_runs.sh`, `get_benchmark_results.sh`; all but `run_benchmark_suite.sh` are emitted to the `gpu-bench-suite` repo), `promote_results_reference.sh` and `publish_benchmarks_to_github.sh` |
 | `templates/suite-tools/` | The `gpu-bench-suite` README template |
 | `docs/` | Phase-by-phase generation workflow and machine-checkable contracts |
 | `schemas/` | JSON Schemas that generated artifacts must validate against |

@@ -163,7 +163,6 @@ sqlite3 results/benchmark.db "SELECT ...;"
 
 - `run_benchmark.sh` — root-level primary entrypoint
 - `run_setup.sh` — root-level installation and build entrypoint
-- `setup.sh` — a three-line wrapper that runs `run_setup.sh` with the same options (the setup script was `setup.sh` before TEMPLATE_00_142). `init_generated_repo.py` writes it from `scripts/templates/setup_compat_wrapper.sh`; it is expected output: do not edit it, remove it, or put setup logic in it.
 - `benchmark_specification.json` — single source of truth for benchmark metadata
 - `schemas/` — machine-checkable JSON contracts for benchmark definition and generation manifest
 - `config/` — sweep parameters, optional thresholds or baselines, machine and hardware-profile definitions

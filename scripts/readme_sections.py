@@ -365,7 +365,6 @@ def layout(fields: dict[str, str], repo: Path | None) -> str:
             src_label = f"src/{files[0]}"
     entries = [
         ("run_setup.sh", "installs dependencies and builds the benchmark", True),
-        ("setup.sh", "runs run_setup.sh (its earlier name)", exists("setup.sh")),
         ("run_benchmark.sh", "runs one profile, parses, validates", True),
         ("show_metrics.sh", "prints this workload's ledger rows", True),
         ("list_runs.sh", "prints every run in the ledger", True),

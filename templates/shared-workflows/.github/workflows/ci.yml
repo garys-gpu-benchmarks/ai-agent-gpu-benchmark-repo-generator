@@ -92,8 +92,8 @@ jobs:
         id: syntax
         if: ${{ !cancelled() && steps.tools.outcome == 'success' }}
         run: |
-          # run_setup.sh since TEMPLATE_00_142; setup.sh is its wrapper (or the
-          # script itself in repositories generated before then).
+          # run_setup.sh since TEMPLATE_00_142. Repositories published before
+          # that have setup.sh; check whichever of the two is present.
           for script in run_setup.sh setup.sh; do
             if [[ -f "${script}" ]]; then bash -n "${script}"; fi
           done
@@ -148,7 +148,7 @@ jobs:
               missing=1
             fi
           done
-          # The setup script: run_setup.sh since TEMPLATE_00_142, setup.sh before.
+          # The setup script: run_setup.sh since TEMPLATE_00_142, setup.sh in older published repositories.
           if [[ ! -s run_setup.sh && ! -s setup.sh ]]; then
             echo "::error file=run_setup.sh::required file is missing or empty (run_setup.sh, or setup.sh before TEMPLATE_00_142)"
             missing=1
