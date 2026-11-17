@@ -6,6 +6,7 @@
 #   function, for every platform, and checks it.
 from __future__ import annotations
 
+import hashlib
 import re
 import shutil
 import subprocess
@@ -35,14 +36,19 @@ def shipped_scripts(text: str) -> set[str]:
 class BundleReadmeToolsTests(unittest.TestCase):
     def render(self, script: Path, digit: str) -> str:
         text = script.read_text(encoding="utf-8")
+        template = ROOT / "templates" / "suite-tools" / "BUNDLE_README_TEMPLATE.md"
         program = "\n".join([
             "set -u",
             'platform() { echo "Platform $1"; }',
             "ORG=example-org VERSION=v9.9.9",
+            'BUNDLE_README_TEMPLATE=$1',
             function_source(text, "bundle_readme"),
             f'bundle_readme {digit} bundle-test 32 "- **{digit}01** - row"',
         ])
-        result = subprocess.run([BASH, "-c", program], capture_output=True, text=True, timeout=30)
+        result = subprocess.run(
+            [BASH, "-c", program, "bash", str(template)],
+            capture_output=True, text=True, timeout=30,
+        )
         self.assertEqual(result.returncode, 0, result.stderr)
         # A backtick left unescaped inside a double-quoted string runs as a command
         # (2026-10-20: "With `--show-output`," printed as "With ,"); bash reports it here.
@@ -70,6 +76,39 @@ class BundleReadmeToolsTests(unittest.TestCase):
                 self.assertIn("--smoke --baseline --extended    # everything, all 3 profiles", result.stdout)
                 self.assertIn(f"-w {digit}01,{digit}07,{digit}21 --baseline", result.stdout)
                 self.assertIn(f"-w {digit}05 --smoke --show-output", result.stdout)
+
+    def test_bundle_suite_script_matches_the_published_copy(self) -> None:
+        """The bundle copy is the master with workload numbers rewritten.
+
+        These are the bytes bundle_suite_script wrote before the master itself
+        defaulted to smoke (TEMPLATE_00_145). The published script must stay
+        the same.
+        """
+        expected = {
+            "1": "9009f3541964895c7d5eec9bdde3f712cb6b5d382ebd63c9a3b68773dab4bc21",
+            "2": "0b03945f1114704b0db4adf64135675acf8d465a911d78aab1d28f1e006e07a3",
+            "3": "358403a842bd55765d0afa9f9bec7a42e5bac6267ebe95824ae79723a5dc5b02",
+            "4": "3b9c19bc4df6dd8dc2bd620ce0266b1c5371aeb0955dfe44c86264db2f96dbe3",
+        }
+        text = PUBLISH[0].read_text(encoding="utf-8")
+        suite = ROOT / "user_scripts" / "run_benchmark_suite.sh"
+        master = suite.read_text(encoding="utf-8")
+        self.assertIn('\nprofiles_arg="smoke"\n', master)
+        self.assertIn("Default: --smoke   (full run: --smoke --baseline --extended)", master)
+        self.assertIn("all workloads, smoke profile (the default)", master)
+        for digit, digest in expected.items():
+            program = "\n".join([
+                "set -u",
+                function_source(text, "bundle_suite_script"),
+                f'bundle_suite_script {digit} <"$1"',
+            ])
+            with self.subTest(platform=digit):
+                result = subprocess.run(
+                    [BASH, "-c", program, "bash", str(suite)],
+                    capture_output=True, timeout=30,
+                )
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertEqual(hashlib.sha256(result.stdout).hexdigest(), digest)
 
     def test_ships_the_expected_scripts(self) -> None:
         for script in PUBLISH:

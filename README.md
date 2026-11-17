@@ -94,7 +94,7 @@ Steps to generate your first benchmark repository:
    pip install jsonschema openpyxl PyYAML
    ```
 
-   Generated repositories are written in `workspace/`, next to the generator. Use a dedicated folder like this one: generation also copies the operator tools (`get_benchmark_results.sh`, `list_runs.sh`, `show_metrics.sh`) to the folder above it (`~/gpu-bench/`).
+   Generated repositories are written in `workspace/`, next to the generator. Use a dedicated folder like this one: generation also copies the operator tools (`get_benchmark_results.sh`, `list_runs.sh`, `show_metrics.sh`) to the folder above it (`~/gpu-bench/`). The workspace itself also receives those three scripts, `run_benchmark_suite.sh` and a `README.md`, the same top-level files as a cloned bundle (TEMPLATE_00_145).
 
 4. **Open the workspace in your AI coding agent**: open `workspace`, the folder that *contains* `ai-agent-gpu-benchmark-repo-generator`, not the generator folder itself. In Cursor, use **File → Open Folder** and Agent mode; on Windows, make Git Bash the default terminal.
 
@@ -172,6 +172,11 @@ gpu-bench/
 ├── list_runs.sh
 ├── show_metrics.sh
 └── workspace/
+    ├── README.md                            # bundle README for the workloads in this folder
+    ├── get_benchmark_results.sh             # suite scripts, same bytes as user_scripts/
+    ├── list_runs.sh
+    ├── run_benchmark_suite.sh
+    ├── show_metrics.sh
     ├── ai-agent-gpu-benchmark-repo-generator/
     ├── AI_AGENT_PROMPT_SUBMITTED_101_20260805_080015.md
     ├── batch_progress.log                   # one line per finished workload; agents wait on it
@@ -265,11 +270,11 @@ Every script you run by hand has its one master copy in [`user_scripts/`](user_s
 | `promote_results_reference.sh` | your laptop (Git Bash) | Replaces each workload's committed `RESULTS_REFERENCE.md` with a passed run collected by `get_benchmark_results.sh` (for example a baseline suite), before publishing |
 | `publish_benchmarks_to_github.sh` | your laptop (Git Bash) | Publishes the workloads, bundles, generator and workbook (run a copy from `Publishing\`) |
 
-The first four are the suite tools: generation installs them at `/opt/benchmarks`, and every bundle carries them. `scripts/emit_shared_workflows.py` emits the three laptop tools (`show_metrics.sh`, `list_runs.sh`, `get_benchmark_results.sh`) to the top of `gpu-bench-suite/` (with `templates/suite-tools/README.md`), and generation copies those three to the project folder; `run_benchmark_suite.sh` runs only on the GPU host, so it is not in `gpu-bench-suite` (TEMPLATE_00_144). `user_scripts/` itself is never copied into a workload.
+The first four are the suite tools: generation installs them at `/opt/benchmarks`, and every bundle carries them. `scripts/emit_shared_workflows.py` emits the three laptop tools (`show_metrics.sh`, `list_runs.sh`, `get_benchmark_results.sh`) to the top of `gpu-bench-suite/` (with `templates/suite-tools/README.md`), and generation copies those three to the project folder; `run_benchmark_suite.sh` runs only on the GPU host, so it is not in `gpu-bench-suite` (TEMPLATE_00_144). Generation also copies all four, plus a bundle `README.md`, into the project root (TEMPLATE_00_145). `user_scripts/` itself is never copied into a workload.
 
 `show_metrics.sh` prints one row per run in fixed 7-character metric columns, with an Exit column (ledger exit code) after Idx, at most 93 characters wide. Two sheets of `BenchmarkSpecDefinitions.xlsx` supply its text: `Metric_Short_Labels` (one row per workload metric; the column headings, at most 7 characters) and `Workload_Short_Names` (one row per workload; the Name column, at most 12 characters, for example `RAG Sweep` for "RAG Pipeline Sweep"). After changing either, run `python3 scripts/generate_show_metrics.py`; it checks both sheets against `Workload_Definitions` (metric keys from the `Metrics` column, full workload names, no short name used twice in a batch, one short name per full name) and rewrites the two tables in the script. `--check` reports drift without writing (CI runs it), and `--add-missing` adds rows for new metrics and workloads, marked `auto: review`.
 
-Generating a workload (`scripts/create_generated_repo.py`) also regenerates `show_metrics.sh` from the sheet and puts a copy of `get_benchmark_results.sh`, `list_runs.sh` and `show_metrics.sh` in the project folder, one level above the folder that holds the generator and the workloads (for example `Project<NNN>_.../get_benchmark_results.sh` next to `Project<NNN>_.../TEMPLATE_00_<XXX>/`). Run it from there; it writes `DIRECTORIES/` and `RUNTIME_LEDGERS/` beside itself. An existing copy that differs is kept. Of these, only `show_metrics.sh` and `list_runs.sh` are also copied into each workload, at its top level next to `run_benchmark.sh` (`WORKLOAD_TOOLS`); none of the user scripts belong in `scripts/`, because everything in `scripts/` is copied into every workload. When a workload is loaded onto the VM, `scripts/create_one_workload.py` installs `user_scripts/show_metrics.sh`, `run_benchmark_suite.sh`, `get_benchmark_results.sh` and `list_runs.sh` at `/opt/benchmarks/` (run without `--host` there, `get_benchmark_results.sh` and `list_runs.sh` read that machine). A published bundle does the same: `user_scripts/publish_benchmarks_to_github.sh` copies all four, so `git clone ... /opt/benchmarks` leaves them there.
+Generating a workload (`scripts/create_generated_repo.py`) also regenerates `show_metrics.sh` from the sheet and puts a copy of `get_benchmark_results.sh`, `list_runs.sh` and `show_metrics.sh` in the project folder, one level above the folder that holds the generator and the workloads (for example `Project<NNN>_.../get_benchmark_results.sh` next to `Project<NNN>_.../TEMPLATE_00_<XXX>/`). Run it from there; it writes `DIRECTORIES/` and `RUNTIME_LEDGERS/` beside itself. An existing copy that differs is kept. It also writes `README.md` and the four suite scripts (`get_benchmark_results.sh`, `list_runs.sh`, `run_benchmark_suite.sh`, `show_metrics.sh`) into the project root, next to the workloads (TEMPLATE_00_145). Those scripts are the `user_scripts/` masters, byte for byte. The README is the bundle README (`templates/suite-tools/BUNDLE_README_TEMPLATE.md`) filled in for the platform of the workloads in that folder; a folder with more than one platform says so instead of guessing a platform. An existing file that differs is kept. The copies one level above are unchanged. The project-root `run_benchmark_suite.sh` is the master copy: with no profile option it runs smoke. A full run is `--smoke --baseline --extended`. A published bundle's copy is the same script with that bundle's workload numbers in the examples, and the README text describes that bundle copy. Of these, only `show_metrics.sh` and `list_runs.sh` are also copied into each workload, at its top level next to `run_benchmark.sh` (`WORKLOAD_TOOLS`); none of the user scripts belong in `scripts/`, because everything in `scripts/` is copied into every workload. When a workload is loaded onto the VM, `scripts/create_one_workload.py` installs `user_scripts/show_metrics.sh`, `run_benchmark_suite.sh`, `get_benchmark_results.sh` and `list_runs.sh` at `/opt/benchmarks/` (run without `--host` there, `get_benchmark_results.sh` and `list_runs.sh` read that machine). A published bundle does the same: `user_scripts/publish_benchmarks_to_github.sh` copies all four, so `git clone ... /opt/benchmarks` leaves them there.
 
 ## Security
 
@@ -287,7 +292,7 @@ Keep private keys, passwords, API tokens, SSH commands containing secrets, and o
 | `templates/workload/.github/workflows/` | Thin caller workflows rendered into every generated repo |
 | `templates/shared-workflows/` | The reusable workflows, self-test and docs, emitted once to the `shared-workflows` repo |
 | `user_scripts/` | The scripts you run by hand: the four suite tools (`run_benchmark_suite.sh`, `show_metrics.sh`, `list_runs.sh`, `get_benchmark_results.sh`; all but `run_benchmark_suite.sh` are emitted to the `gpu-bench-suite` repo), `promote_results_reference.sh` and `publish_benchmarks_to_github.sh` |
-| `templates/suite-tools/` | The `gpu-bench-suite` README template |
+| `templates/suite-tools/` | The `gpu-bench-suite` README template (`README.md`) and the bundle README template (`BUNDLE_README_TEMPLATE.md`) |
 | `docs/` | Phase-by-phase generation workflow and machine-checkable contracts |
 | `schemas/` | JSON Schemas that generated artifacts must validate against |
 | `scripts/` | Generation, validation, and smoke-check tooling |

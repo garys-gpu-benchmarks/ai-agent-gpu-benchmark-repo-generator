@@ -261,8 +261,9 @@ Keep only required local project-root deliverables:
 - `batch_generation_manifest.json`
 - `batch_remote_output.log` (the remote setup and smoke output of the whole batch; the only copy of a failure's full log)
 - `batch_progress.log` (one line per workload record or failure, the Successful time line and the final `[DONE]` line)
+- `README.md`, `get_benchmark_results.sh`, `list_runs.sh`, `run_benchmark_suite.sh` and `show_metrics.sh` (the bundle root; TEMPLATE_00_145)
 
-Generation also installs the operator tools (`get_benchmark_results.sh`, `list_runs.sh`, `show_metrics.sh`) in the folder above the project root, as README.md describes. They are expected output, not scratch: leave them there and do not report them as files outside the project root.
+Generation also installs the operator tools (`get_benchmark_results.sh`, `list_runs.sh`, `show_metrics.sh`) in the folder above the project root, as README.md describes. They are expected output, not scratch: leave them there and do not report them as files outside the project root. Generation also writes a bundle root into the project root itself: `README.md`, `get_benchmark_results.sh`, `list_runs.sh`, `run_benchmark_suite.sh` and `show_metrics.sh` (TEMPLATE_00_145). The scripts match `user_scripts/`. The README is filled in from `templates/suite-tools/BUNDLE_README_TEMPLATE.md` for the one platform whose workloads are in the folder; when the folder holds more than one platform, the README says so and does not pick one. An existing file there that differs is kept. These files are expected output, not scratch.
 
 No `<Workload Number>-<Repo Base Name>/` directory should still contain a nested `*_copy/`; run `python3 scripts/remove_template_copy.py --repo-root <project-root>/<Workload Number>-<Repo Base Name>` for any that do.
 

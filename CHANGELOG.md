@@ -1,5 +1,17 @@
 # Changelog
 
+## 2026-11-17 — TEMPLATE_00_145: the project root looks like a bundle root
+
+After a batch the project root held the workloads, the generator and the batch logs. It did not hold the files a cloned bundle has at the top, so the local folder did not match `/opt/benchmarks` after `git clone --recurse-submodules` of a bundle.
+
+- **Project root (`scripts/create_generated_repo.py`).** At the end of each workload, generation writes `README.md`, `get_benchmark_results.sh`, `list_runs.sh`, `run_benchmark_suite.sh` and `show_metrics.sh` into the project root (the folder that holds the workloads). The four scripts are the `user_scripts/` masters, byte for byte and executable. An existing file that differs is kept, with the same message as the operator tools. The README is replaced when it is the page generation wrote for this folder with one fewer workload, so a batch's README grows with the workloads; a page the user edited is kept.
+- **One README text (`templates/suite-tools/BUNDLE_README_TEMPLATE.md`).** The bundle README moved out of `bundle_readme()` in `user_scripts/publish_benchmarks_to_github.sh`. Publish and generation both fill in that file. For one platform (1xx, 2xx, 3xx or 4xx) the page is that platform's bundle README, listing the workload directories present, with `@VERSION@` set to the template version (`TEMPLATE_00_145`, or `local` when the path has none). When the folder holds more than one platform, the README says so and names each platform; it does not guess one. The published bundle README is unchanged: the new function's output matches the old function for all four platforms.
+- **Two local copies.** The three laptop tools are still also copied to the folder above the project root. `docs/OPEN_ISSUES.md` A8 notes that those two copies can drift.
+- **Suite default.** `user_scripts/run_benchmark_suite.sh` defaults to smoke, the same default a published bundle already had, so the project root, `/opt/benchmarks` after generation, and each bundle match. Publish rewrites only the example workload numbers (101 in the AMD 24.04 bundle, 201, 301 or 401 in the others) and still checks that the bundle copy defaults to smoke. The published bundle script is unchanged: the new edit's output matches the old edit for all four platforms. The README text is that bundle page, whose options table says the default is `--smoke`.
+- **Not published with a workload.** Step 1 of the publish script still copies only `[1-4][0-9][0-9]-*` directories. The new files sit beside those directories. `templates/` is not one of `init_generated_repo.py` `SHARED_DIRS`, so the template is not copied into a workload.
+- **Docs.** `AGENTS.md`, `docs/AI_AGENT_INSTRUCTIONS.md`, `docs/generation-workflow.md`, `docs/repository-template.md`, `docs/SUBMISSION_CHECKLIST.md`, `.cursor/rules/generate-workloads.mdc` and `README.md` list the bundle root as something generation leaves in the project root. The copies one level above are unchanged.
+- **Checks:** `tests/test_template_00_145_changes.py`.
+
 ## 2026-11-16 — TEMPLATE_00_144: gpu-bench-suite holds the laptop tools only
 
 `gpu-bench-suite` is what an operator clones on a laptop. It also carried `run_benchmark_suite.sh`, which runs only on the GPU host, so a reader could think the suite runs from the laptop. Its copy had also drifted from the bundles' copy: it defaulted to all three profiles (many hours), while each bundle's copy defaults to `--smoke`. The host already gets the runner from its bundle, or from generation's remote copy.

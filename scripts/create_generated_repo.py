@@ -25,12 +25,14 @@ import time
 import sys
 from pathlib import Path
 
+from bundle_readme import ORG, readme_for_directories
 from generated_repo_directory import generated_repo_directory_name
 from remove_template_copy import reliable_temp_dir, rmtree_reliable
 from prompt_workflow import (
     available_workloads,
     parse_workloads,
 )
+from results_markdown import template_version_from_path
 
 
 TEMPLATE_COPY_SUFFIX = "_copy"
@@ -236,10 +238,22 @@ def _copy_template(source: Path, destination: Path) -> None:
 # copied into a workload. The VM copy is separate: create_one_workload.py and
 # the bundle publish both install show_metrics.sh and run_benchmark_suite.sh
 # at /opt/benchmarks.
+# install_project_root_bundle also writes all four suite scripts and a bundle
+# README into the project root itself (the folder that holds the workloads).
 OPERATOR_TOOLS = (
     "user_scripts/get_benchmark_results.sh",
     "user_scripts/list_runs.sh",
     "user_scripts/show_metrics.sh",
+)
+
+# Byte-identical to user_scripts/. run_benchmark_suite.sh defaults to smoke
+# (a full run is --smoke --baseline --extended). Publish rewrites only the
+# example workload numbers in a bundle's copy.
+PROJECT_ROOT_SUITE_SCRIPTS = (
+    "get_benchmark_results.sh",
+    "list_runs.sh",
+    "run_benchmark_suite.sh",
+    "show_metrics.sh",
 )
 
 
@@ -291,6 +305,104 @@ def install_workload_tools(source_root: Path, repo_root: Path) -> list[Path]:
         dst.chmod(dst.stat().st_mode | 0o111)
         installed.append(dst)
         print(f"[INFO] Installed {src.name} in the workload: {dst}")
+    return installed
+
+
+def _workload_directories(project_root: Path) -> list[str]:
+    """Workload folders at the project root: 101-..., 201-..., 301-..., 401-..."""
+    names = []
+    if not project_root.is_dir():
+        return names
+    for path in project_root.iterdir():
+        name = path.name
+        if (
+            path.is_dir()
+            and len(name) >= 4
+            and name[0] in "1234"
+            and name[1:3].isdigit()
+            and name[3] == "-"
+        ):
+            names.append(name)
+    return sorted(names)
+
+
+def _keep_or_write(
+    dst: Path,
+    data: bytes,
+    *,
+    rel: str,
+    executable: bool,
+    earlier: tuple[bytes, ...] = (),
+) -> Path | None:
+    """Write data unless dst exists and is neither data nor an earlier generator render."""
+    if dst.exists():
+        current = dst.read_bytes().replace(b"\r\n", b"\n")
+        if current == data:
+            return None
+        if current not in earlier:
+            print(
+                f"[INFO] Kept existing {dst}; it differs from {rel}. "
+                "Delete it to get the generator's copy."
+            )
+            return None
+    dst.write_bytes(data)
+    if executable:
+        dst.chmod(dst.stat().st_mode | 0o111)
+    print(f"[INFO] Installed project-root suite file: {dst}")
+    return dst
+
+
+def install_project_root_bundle(source_root: Path, project_root: Path) -> list[Path]:
+    """Write the four suite scripts and a bundle README into the project root.
+
+    The scripts are the user_scripts masters (LF, executable). The README is
+    rendered from the same template the publish script uses, for the one
+    platform whose workloads are in the folder. More than one platform produces
+    a page that says so, instead of guessing. An existing file that differs
+    from this render, and is not the render from when the folder held one
+    fewer workload, is kept.
+    """
+    installed: list[Path] = []
+    for name in PROJECT_ROOT_SUITE_SCRIPTS:
+        rel = f"user_scripts/{name}"
+        src = source_root / rel
+        if not src.is_file():
+            print(f"[WARN] Suite script missing from the template: {rel}")
+            continue
+        written = _keep_or_write(
+            project_root / name,
+            src.read_bytes().replace(b"\r\n", b"\n"),
+            rel=rel,
+            executable=True,
+        )
+        if written is not None:
+            installed.append(written)
+    names = _workload_directories(project_root)
+    if not names:
+        print("[WARN] No workload directories in the project root; bundle README not written.")
+        return installed
+    version = template_version_from_path(source_root) or "local"
+    readme = readme_for_directories(
+        names, org=ORG, version=version, generator_root=source_root
+    ).encode("utf-8")
+    earlier = []
+    if len(names) >= 2:
+        for skip in names:
+            subset = [name for name in names if name != skip]
+            earlier.append(
+                readme_for_directories(
+                    subset, org=ORG, version=version, generator_root=source_root
+                ).encode("utf-8")
+            )
+    written = _keep_or_write(
+        project_root / "README.md",
+        readme,
+        rel="templates/suite-tools/BUNDLE_README_TEMPLATE.md",
+        executable=False,
+        earlier=tuple(earlier),
+    )
+    if written is not None:
+        installed.append(written)
     return installed
 
 
@@ -507,6 +619,7 @@ def main() -> int:
         _took("show_metrics.sh label refresh", started)
         install_workload_tools(source_root, repo_root)
         install_operator_tools(source_root, project_root)
+        install_project_root_bundle(source_root, project_root)
         print(f"[PASS] Created generated repository: {repo_root}")
         print(f"[PASS] Active template copy: {active_copy}")
         print(

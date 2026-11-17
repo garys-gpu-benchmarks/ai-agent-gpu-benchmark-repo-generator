@@ -37,7 +37,7 @@ readonly RULE_RUN="=============================================================
 # ------------------------------------------------------------------------------
 root_dir=""
 # Used when no --smoke/--baseline/--extended is given.
-profiles_arg="smoke,baseline,extended"
+profiles_arg="smoke"
 declare -a profile_flags=()
 workloads_arg=""
 repeat_count=1
@@ -75,7 +75,7 @@ Options:
       --extended         Run the extended profile (longer runs).
                          Give more than one to run them in the order given,
                          e.g. --baseline --extended.
-                         Default: --smoke --baseline --extended
+                         Default: --smoke   (full run: --smoke --baseline --extended)
   -w, --workloads LIST   Workloads to run, by number, comma-separated.
                          Ranges are allowed. Default: every workload found.
                          Examples: 101,107,121   301-310   101-105,120
@@ -99,8 +99,8 @@ Times are shown in the system time zone. To use another, set TZ, e.g.
   TZ=America/Chicago ./${SCRIPT_NAME}
 
 Examples:
-  ./${SCRIPT_NAME}                                  # all workloads, all 3 profiles
-  ./${SCRIPT_NAME} --smoke                          # quick check of everything
+  ./${SCRIPT_NAME}                                  # all workloads, smoke profile (the default)
+  ./${SCRIPT_NAME} --smoke --baseline --extended    # everything, all 3 profiles (many hours)
   ./${SCRIPT_NAME} -w 101,107,121 --baseline        # three workloads, baseline only
   ./${SCRIPT_NAME} -w 105 --smoke --show-output     # one workload, output on screen
   ./${SCRIPT_NAME} -r 20                            # soak test: everything, 20 times

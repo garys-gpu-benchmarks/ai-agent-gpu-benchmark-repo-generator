@@ -125,7 +125,7 @@ class SuiteListTests(unittest.TestCase):
         self.assertIn("Profiles:  baseline\n", self.dry_run("--baseline") + "\n")
         self.assertIn("Profiles:  baseline extended\n", self.dry_run("--baseline", "--extended") + "\n")
         self.assertIn("Profiles:  extended smoke\n", self.dry_run("--extended", "--smoke") + "\n")  # order as typed
-        self.assertIn("Profiles:  smoke baseline extended\n", self.dry_run() + "\n")  # the default
+        self.assertIn("Profiles:  smoke\n", self.dry_run() + "\n")  # the default
 
     def test_profile_flags_run_in_the_order_given(self) -> None:
         self.workload("101-alpha")
@@ -153,6 +153,8 @@ class SuiteListTests(unittest.TestCase):
         self.assertIn("--show-output", result.stdout)
         for flag in ("--smoke  ", "--baseline  ", "--extended  "):
             self.assertIn(f"      {flag}", result.stdout)
+        self.assertIn("Default: --smoke   (full run: --smoke --baseline --extended)", result.stdout)
+        self.assertIn("all workloads, smoke profile (the default)", result.stdout)
         self.assertIn("-w 101,107,121 --baseline", result.stdout)
         self.assertNotIn("-p,", result.stdout)
         self.assertNotIn("--profiles", result.stdout)
