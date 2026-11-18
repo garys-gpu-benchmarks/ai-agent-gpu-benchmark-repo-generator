@@ -32,7 +32,8 @@ from prompt_workflow import (
     available_workloads,
     parse_workloads,
 )
-from results_markdown import template_version_from_path
+from generator_version import generator_version
+from host_exec import resolve_host_bash
 
 
 TEMPLATE_COPY_SUFFIX = "_copy"
@@ -381,7 +382,7 @@ def install_project_root_bundle(source_root: Path, project_root: Path) -> list[P
     if not names:
         print("[WARN] No workload directories in the project root; bundle README not written.")
         return installed
-    version = template_version_from_path(source_root) or "local"
+    version = generator_version(source_root) or "local"
     readme = readme_for_directories(
         names, org=ORG, version=version, generator_root=source_root
     ).encode("utf-8")
@@ -459,7 +460,8 @@ def main() -> int:
     if remote_ip and args.refresh_remote and not args.skip_remote_refresh:
         print(f"[INFO] Refreshing remote validation VM at {remote_ip}")
         _run(
-            ["bash", str(source_root / "scripts/refresh_remote_vm.sh"), remote_ip, "--confirm"],
+            # Git Bash on Windows, never WSL (a bare "bash" can start System32\bash.exe).
+            [resolve_host_bash(), str(source_root / "scripts/refresh_remote_vm.sh"), remote_ip, "--confirm"],
             source_root,
         )
     elif remote_ip:

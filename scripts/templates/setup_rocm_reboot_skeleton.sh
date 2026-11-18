@@ -1,15 +1,15 @@
 #!/usr/bin/env bash
 # File: scripts/templates/setup_rocm_reboot_skeleton.sh
-# Version: 1.3.0
+# Version: 1.4.0
 # Maintainer: AI Agent GPU Benchmark Repo Generator
-# Date: 2026-08-26
+# Date: 2026-11-17
 # Description: Reusable local-only run_setup.sh skeleton for ROCm workloads with systemd reboot auto-resume.
 # Execution: Copy to generated repo root as run_setup.sh, then adapt workload skip flags if needed.
 # Options: --skip-rocm, --skip-rvs, --assume-yes, --resume-auto, --no-resume-auto, --resume-from-service, --help
 # Requirements: Ubuntu 24.04 or Ubuntu 26.04; bash; selected Python interpreter; sudo/systemd for ROCm installation.
 # Environment: Local benchmark host; remote execution is not supported.
 # Dependencies: scripts/lib/common.sh, scripts/lib/rocm_install.sh (dispatches to rocm_install_24_04.sh or rocm_install_26_04.sh), python3-venv, sqlite3, autotools
-# Variables: BENCHMARK_PYTHON, BENCHMARK_SKIP_ROCM, BENCHMARK_SKIP_RVS, BENCHMARK_BUILD_FAISS_ROCM, BENCHMARK_INSTALL_RUST, BENCHMARK_INSTALL_PYTORCH, BENCHMARK_INSTALL_TORCHVISION, BENCHMARK_INSTALL_AITER, BENCHMARK_INSTALL_SGLANG, SGLANG_SOURCE_DIR, SGLANG_REPO_URL, ROCM_VERSION, UBUNTU_CODENAME, GFX_TARGET, ROCM_RELOAD_INSTEAD_OF_REBOOT, PYTORCH_ROCM_INDEX_URL, PYTORCH_VERSION, TORCHVISION_VERSION, PYTORCH_INSTALL_SPEC, TORCHVISION_INSTALL_SPEC, AITER_IMPORT_TIMEOUT_SEC
+# Variables: BENCHMARK_PYTHON, BENCHMARK_SKIP_ROCM, BENCHMARK_SKIP_RVS, BENCHMARK_BUILD_FAISS_ROCM, BENCHMARK_INSTALL_RUST, BENCHMARK_INSTALL_PYTORCH, BENCHMARK_INSTALL_TORCHVISION, BENCHMARK_INSTALL_AITER, BENCHMARK_INSTALL_SGLANG, SGLANG_SOURCE_DIR, SGLANG_REPO_URL, ROCM_VERSION, UBUNTU_CODENAME, GFX_TARGET, ROCM_RELOAD_INSTEAD_OF_REBOOT, PYTORCH_ROCM_INDEX_URL, ROCM_PIP_RETRY_ATTEMPTS, ROCM_PIP_RETRY_DELAY_SEC, PYTORCH_VERSION, TORCHVISION_VERSION, PYTORCH_INSTALL_SPEC, TORCHVISION_INSTALL_SPEC, AITER_IMPORT_TIMEOUT_SEC
 # Repository: gpu-bench/sys-bench template
 # License: Apache-2.0
 
@@ -270,6 +270,69 @@ run_privileged() {
   # output is redirected (the 26.04 benchmark-loop hang). Pipes/heredocs are kept.
   run_noninteractive_root "$@"
 }
+
+# BEGIN rocm_pip_retry
+# The AMD wheel index (whl-next) can leave a pinned +rocm or +git build out of
+# one listing. TEMPLATE_00_143 workload 328 on Ubuntu 26.04 (2026-11-17) failed
+# setup because torch's triton==3.8.0+git669b31ac.rocm10.1.0 was missing from
+# pip's candidates; workload 329 installed the same wheel ten seconds later.
+# Every pip command that reads PYTORCH_ROCM_INDEX_URL goes through these
+# helpers. Only that omission and network timeouts are retried; any other pip
+# error fails on the first attempt, as before.
+ROCM_PIP_RETRY_ATTEMPTS="${ROCM_PIP_RETRY_ATTEMPTS:-3}"
+ROCM_PIP_RETRY_DELAY_SEC="${ROCM_PIP_RETRY_DELAY_SEC:-20}"
+
+rocm_pip_output_is_retryable() {
+  grep -Eq 'No matching distribution found for [^[:space:]]+\+(rocm|git)|Could not find a version that satisfies the requirement [^[:space:]]+\+(rocm|git)|ReadTimeoutError|ConnectTimeoutError|Read timed out|Connection timed out' "$1"
+}
+
+# Run a pip command (all arguments) and show its output as it runs. On a
+# retryable failure, wait ROCM_PIP_RETRY_DELAY_SEC and run it again, up to
+# ROCM_PIP_RETRY_ATTEMPTS times. Returns pip's exit code.
+rocm_pip_retry() {
+  local attempt=1 status=0 pip_log
+  pip_log="$(mktemp)"
+  while :; do
+    # Run as an if condition so neither set -e nor an ERR trap ends setup on a
+    # failed attempt; PIPESTATUS[0] is pip's exit code, not tee's.
+    if "$@" 2>&1 | tee "${pip_log}"; then
+      rm -f "${pip_log}"
+      return 0
+    else
+      status=${PIPESTATUS[0]}
+    fi
+    if ((attempt >= ROCM_PIP_RETRY_ATTEMPTS)) || ! rocm_pip_output_is_retryable "${pip_log}"; then
+      rm -f "${pip_log}"
+      return "${status}"
+    fi
+    log_warn "pip attempt ${attempt} of ${ROCM_PIP_RETRY_ATTEMPTS} could not get a ROCm wheel from the index; retrying in ${ROCM_PIP_RETRY_DELAY_SEC} s."
+    sleep "${ROCM_PIP_RETRY_DELAY_SEC}"
+    attempt=$((attempt + 1))
+  done
+}
+
+# Ask PYTORCH_ROCM_INDEX_URL which versions of a package it publishes, and
+# retry while the query fails or the listing lacks the wanted version.
+# Returns 0 when the version is listed, 1 when the index answered without it,
+# 2 when the last query failed.
+rocm_index_lists_version() {
+  local package="$1" wanted="$2" attempt=1 listing query_ok
+  while :; do
+    query_ok=1
+    listing="$("${PYTHON_BIN}" -m pip index versions "${package}" --index-url "${PYTORCH_ROCM_INDEX_URL}" 2>&1)" || query_ok=0
+    if ((query_ok)) && grep -Fq "${wanted}" <<< "${listing}"; then
+      return 0
+    fi
+    if ((attempt >= ROCM_PIP_RETRY_ATTEMPTS)); then
+      ((query_ok)) && return 1
+      return 2
+    fi
+    log_warn "${package} ${wanted} not listed at ${PYTORCH_ROCM_INDEX_URL} (attempt ${attempt} of ${ROCM_PIP_RETRY_ATTEMPTS}); retrying in ${ROCM_PIP_RETRY_DELAY_SEC} s."
+    sleep "${ROCM_PIP_RETRY_DELAY_SEC}"
+    attempt=$((attempt + 1))
+  done
+}
+# END rocm_pip_retry
 
 install_status_sync_motd() {
   local tmp
@@ -773,7 +836,7 @@ if grep -Eq '^[[:space:]]*(torch|torchvision|torchaudio)(\[.*\])?([<>=].*)?$' re
   grep -Eq 'stable.repo.amd.com/rocm/whl-next|download.pytorch.org/whl/rocm' requirements.txt || \
     die "ROCm workload requirements must reference the official ROCm wheel index."
 fi
-"${PYTHON_BIN}" -m pip install -r requirements.txt --extra-index-url "${PYTORCH_ROCM_INDEX_URL}"
+rocm_pip_retry "${PYTHON_BIN}" -m pip install -r requirements.txt --extra-index-url "${PYTORCH_ROCM_INDEX_URL}"
 install_status_log_step python "created ${VENV_ROOT} and installed requirements"
 
 install_rocm_bundled_amdsmi() {
@@ -824,7 +887,7 @@ PY
       log_warn "Spec vLLM URL is not cp314; installing the ROCm 10.1.0 cp314 wheel."
       wheel_url="${VLLM_AMD_CP314_WHEEL_URL}"
     fi
-    "${PYTHON_BIN}" -m pip install \
+    rocm_pip_retry "${PYTHON_BIN}" -m pip install \
       --index-url "${PYTORCH_ROCM_INDEX_URL}" \
       --extra-index-url https://pypi.org/simple \
       ${PYTORCH_INSTALL_SPEC} ${TORCHVISION_INSTALL_SPEC} ${TORCHAUDIO_INSTALL_SPEC}
@@ -852,7 +915,7 @@ for raw in requires("vllm") or []:
     if requirement.name.lower() not in excluded:
         print(str(requirement))
 PY
-    "${PYTHON_BIN}" -m pip install \
+    rocm_pip_retry "${PYTHON_BIN}" -m pip install \
       -r "${REPO_ROOT}/.vllm_requirements.txt" \
       --extra-index-url "${VLLM_WHEEL_INDEX_URL}" \
       --extra-index-url "${PYTORCH_ROCM_INDEX_URL}" ||
@@ -911,18 +974,16 @@ fi
 
 install_rocm_pytorch() {
   local torch_version="${PYTORCH_VERSION}"
-  local torch_versions
-  torch_versions="$("${PYTHON_BIN}" -m pip index versions torch --index-url "${PYTORCH_ROCM_INDEX_URL}" 2>&1)" \
-    || die "Unable to query PyTorch versions at ${PYTORCH_ROCM_INDEX_URL}."
-  grep -Fq "${torch_version}" <<< "${torch_versions}" \
-    || die "PyTorch ${torch_version} is not published at ${PYTORCH_ROCM_INDEX_URL}."
+  local probe_status=0
+  rocm_index_lists_version torch "${torch_version}" || probe_status=$?
+  ((probe_status != 2)) || die "Unable to query PyTorch versions at ${PYTORCH_ROCM_INDEX_URL}."
+  ((probe_status == 0)) || die "PyTorch ${torch_version} is not published at ${PYTORCH_ROCM_INDEX_URL}."
   read -r -a torch_packages <<< "${PYTORCH_INSTALL_SPEC}"
   if [[ "${BENCHMARK_INSTALL_TORCHVISION}" == 1 ]]; then
-    local torchvision_versions
-    torchvision_versions="$("${PYTHON_BIN}" -m pip index versions torchvision --index-url "${PYTORCH_ROCM_INDEX_URL}" 2>&1)" \
-      || die "Unable to query torchvision versions at ${PYTORCH_ROCM_INDEX_URL}."
-    grep -Fq "${TORCHVISION_VERSION}" <<< "${torchvision_versions}" \
-      || die "torchvision ${TORCHVISION_VERSION} is not published at ${PYTORCH_ROCM_INDEX_URL}."
+    probe_status=0
+    rocm_index_lists_version torchvision "${TORCHVISION_VERSION}" || probe_status=$?
+    ((probe_status != 2)) || die "Unable to query torchvision versions at ${PYTORCH_ROCM_INDEX_URL}."
+    ((probe_status == 0)) || die "torchvision ${TORCHVISION_VERSION} is not published at ${PYTORCH_ROCM_INDEX_URL}."
     read -r -a torchvision_packages <<< "${TORCHVISION_INSTALL_SPEC}"
     torch_packages+=("${torchvision_packages[@]}")
   fi
@@ -933,7 +994,7 @@ install_rocm_pytorch() {
   # numpy with torch, as install_pytorch_nvidia.sh does: without it every torch import
   # warned "Failed to initialize NumPy: No module named 'numpy'" (x04 and 13 other AMD
   # smoke runs per batch in TEMPLATE_00_139/140), and tensor.numpy() would fail.
-  "${PYTHON_BIN}" -m pip install --index-url "${PYTORCH_ROCM_INDEX_URL}" \
+  rocm_pip_retry "${PYTHON_BIN}" -m pip install --index-url "${PYTORCH_ROCM_INDEX_URL}" \
     --extra-index-url https://pypi.org/simple "${find_links_args[@]}" \
     "${torch_packages[@]}" "${TORCHAUDIO_INSTALL_SPEC}" numpy
   if [[ "${GPU_CHECKS_AFTER_REBOOT}" == 1 ]]; then
@@ -1011,7 +1072,7 @@ if [[ "${BENCHMARK_INSTALL_JAX}" == 1 ]]; then
   # jax and jaxlib come from PyPI. The ROCm 10 plugin and PJRT come from whl-next.
   JAX_ROCM_PLUGIN_SPEC="${JAX_ROCM_PLUGIN_SPEC:-jax_rocm10_plugin==0.11.1+rocm10.1.0}"
   JAX_ROCM_PJRT_SPEC="${JAX_ROCM_PJRT_SPEC:-jax_rocm10_pjrt==0.11.1+rocm10.1.0}"
-  "${PYTHON_BIN}" -m pip install --index-url "${PYTORCH_ROCM_INDEX_URL}" \
+  rocm_pip_retry "${PYTHON_BIN}" -m pip install --index-url "${PYTORCH_ROCM_INDEX_URL}" \
     --extra-index-url https://pypi.org/simple \
     "${JAX_ROCM_PLUGIN_SPEC}" "${JAX_ROCM_PJRT_SPEC}" ||
     die "JAX ROCm plugin wheel install failed."

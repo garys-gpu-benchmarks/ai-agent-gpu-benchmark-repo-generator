@@ -24,7 +24,7 @@ grep -Fq "${TORCHVISION_VERSION}" <<< "${torchvision_versions}"
 
 Do not pipe `pip index` directly into `grep -q` while `set -o pipefail` is active: `grep` can close the pipe after a match and make pip report a `BrokenPipeError`, producing a false "version unavailable" failure.
 
-The generated setup must fail early with an actionable message if either requested version is unavailable. Record the verified pair in the generated README and keep both versions overrideable through environment variables. Never leave an example pin in production setup code without checking that the index actually publishes it.
+The AMD index can briefly omit a pinned `+rocm` or `+git` build from one listing (TEMPLATE_00_143 workload 328, 2026-11-17). The ROCm setup skeleton therefore runs every pip command and version check against `PYTORCH_ROCM_INDEX_URL` through `rocm_pip_retry` / `rocm_index_lists_version`: up to `ROCM_PIP_RETRY_ATTEMPTS` (3) tries, `ROCM_PIP_RETRY_DELAY_SEC` (20) seconds apart, for that omission or a network timeout only. The generated setup must fail early with an actionable message if either requested version is unavailable. Record the verified pair in the generated README and keep both versions overrideable through environment variables. Never leave an example pin in production setup code without checking that the index actually publishes it.
 
 Ubuntu 24.04 and Ubuntu 26.04 / ROCm 10.1.0. Both releases use the same wheel index and the gfx942 device extra. Do not install unconstrained `torch` from PyPI and do not install `torch[device-all]`.
 

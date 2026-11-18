@@ -31,6 +31,7 @@ import time
 from pathlib import Path
 
 from generated_repo_directory import generated_repo_directory_name
+from host_exec import resolve_host_bash
 from prompt_workflow import (
     available_workloads,
     parse_workloads,
@@ -203,7 +204,8 @@ def main() -> int:
     if remote_ip and args.refresh_remote:
         refresh = subprocess.run(
             [
-                "bash",
+                # Git Bash on Windows, never WSL (a bare "bash" can start System32\bash.exe).
+                resolve_host_bash(),
                 str(template_root / "scripts/refresh_remote_vm.sh"),
                 remote_ip,
                 "--confirm",

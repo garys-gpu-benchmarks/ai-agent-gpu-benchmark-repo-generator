@@ -872,3 +872,10 @@ grep '"Model Context Protocols"' benchmark_specification.json
 ```
 
 The output must match the servers you confirmed active during the run. If the field lists a server you did not use (e.g., `Grafana` on a benchmark that has no metric-push step), document why it was not needed as an inline comment in your execution log — do not silently skip it without acknowledgement.
+
+## Generator Version
+
+`VERSION` at the generator root holds the template version (for example `TEMPLATE_00_146`). `scripts/generator_version.py` reads it for every label that names the generator: the project-root bundle README, `RESULTS_REFERENCE.md`, the prompt traceability comment, and `user_scripts/promote_results_reference.sh`. A copy without `VERSION` falls back to a `TEMPLATE_00_NNN` folder in its path, then to `local` or `unknown`; nothing fails for lack of a version.
+
+- **New template:** after copying the generator into the next `TEMPLATE_00_NNN` folder, update `VERSION` and add that version's dated heading at the top of `CHANGELOG.md` before any other change. `tests/test_template_00_146_changes.py` fails until both agree, and generation warns when `VERSION` and a `TEMPLATE_00_NNN` folder name differ.
+- **Tests:** compare against `generator_version()` and never type the current template number into an assertion about output that carries the generator version. A typed-in number passes in one template folder and fails in every later one.

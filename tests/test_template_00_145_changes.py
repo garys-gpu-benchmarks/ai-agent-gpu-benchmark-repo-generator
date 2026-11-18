@@ -21,6 +21,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "scripts"))
 
 import bundle_readme  # noqa: E402
+from generator_version import generator_version  # noqa: E402
 from create_generated_repo import (  # noqa: E402
     PROJECT_ROOT_SUITE_SCRIPTS,
     install_operator_tools,
@@ -155,7 +156,8 @@ class ProjectRootBundleTests(unittest.TestCase):
         self.assertIn("bundle-amd-ubuntu-2404", text)
         self.assertIn("https://github.com/garys-gpu-benchmarks/bundle-amd-ubuntu-2404", text)
         self.assertIn("| 107 | [stream-ddr5-bandwidth](", text)
-        self.assertIn("pinned to its tested TEMPLATE_00_145 release", text)
+        # The version comes from VERSION (TEMPLATE_00_146), never a typed-in number.
+        self.assertIn(f"pinned to its tested {generator_version(ROOT) or 'local'} release", text)
         self.assertNotIn("More than one platform", text)
         # The other three bundles are linked; this bundle's own slug is not in that list.
         header = text.split("## Requirements", 1)[0]

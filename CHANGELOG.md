@@ -1,5 +1,41 @@
 # Changelog
 
+## 2026-11-18 — TEMPLATE_00_146: STREAM smoke (107, 207, 307, 407) runs 368 iterations
+
+`BenchmarkSpecDefinitions.xlsx`, `Parameters_SmokeBaselineExtend`: workloads 107, 207, 307 and 407 (`sys-bench-{amd,nvidia}-stream-ddr5-bandwidth-ubu{2404,2604}`) smoke `num_iterations` (STREAM `NTIMES`) is 368, was 2. 307 changes with 107 and 407 with 207 because `tests/test_nvidia_sibling_parity.py` requires each vendor's 24.04 and 26.04 siblings to share every profile value; NVIDIA is set to the same value so all four STREAM smoke runs keep matching, as they did before. `scripts/sync_matrix_profile_commands.py` refreshed the `Workload_Definitions` smoke command. Threads (4), array size (10,000,000) and the baseline and extended profiles are unchanged.
+
+Reason: `bash run_benchmark.sh --smoke` took about 0.9 s, almost all of it fixed overhead. The saved 107 smoke runs (Project536 TEMPLATE_00_143 and Project546 TEMPLATE_00_145, Cursor and GitHub installs, MI300X droplet, Xeon Platinum 8568Y+) suggested about 7.8 ms per pass of Copy, Scale, Add and Triad at 4 threads and 10M elements (1.6 + 2.1 + 2.1 + 2.0 ms), which gave 285. Measured on the AMD 24.04 droplet on 2026-11-18, 285 iterations took 2.6 s (Elapsed time, three runs), so 283 extra passes add 1.7 s (about 6.0 ms each). 2 + 283 × 2.2 / 1.7 ≈ 368 gives about 3.1 s on AMD. The NVIDIA value was not timed: no 207/407 smoke result was measured for this change, so their smoke time depends on the host's STREAM speed. STREAM still reports the best time of each kernel, excluding the first pass.
+
+## 2026-11-17 — TEMPLATE_00_146: the VM refresh starts Git Bash on Windows, never WSL bash
+
+`scripts/create_generated_repo.py` and `scripts/create_generated_batch.py` started the optional destructive VM refresh (`--refresh-remote --confirm-remote-refresh`) with a bare `"bash"`. Windows looks in System32 before PATH, so on a laptop with WSL installed that is WSL's `bash.exe`, not Git Bash (the TEMPLATE_00_146 pip-retry tests hit exactly this on the generation laptop). Both now use `host_exec.resolve_host_bash()`, which every SSH and scp command already used: `GIT_BASH`, then the Git for Windows install paths, never System32/WSL; on Linux and macOS, `bash` on PATH. `scripts/update_runtime_ledger.py` keeps its bare `bash`: it runs on the benchmark VM. The `implementation_components/*` build calls also run on the VM and are unchanged.
+
+- **README:** the requirements line says the generator runs its commands in Git Bash on Windows, never WSL bash, and uses the system `bash` on Linux and macOS.
+- **Checks:** `tests/test_template_00_146_changes.py` (both refresh calls use `resolve_host_bash()`; no other laptop-side `scripts/*.py` starts a bare `"bash"`).
+
+## 2026-11-17 — TEMPLATE_00_146: the generator version comes from VERSION, not the folder name
+
+The generator read its own version from the folder it sat in (`.../TEMPLATE_00_145/ai-agent-gpu-benchmark-repo-generator`). A clone in any other folder, such as `/mydev`, labelled its output `local` or `unknown`, a copy in a mislabelled folder reported the wrong version without warning, and `tests/test_template_00_145_changes.py` failed in every later template folder because it expected the typed-in `TEMPLATE_00_145`.
+
+- **`VERSION`** at the generator root holds `TEMPLATE_00_146`. It is copied into the nested `_copy`, published with the generator, and not copied into workloads.
+- **`scripts/generator_version.py`** reads `VERSION`; without it, the nearest `TEMPLATE_00_NNN` folder in the path; otherwise `""`, and each caller keeps its label for that (`local`, `unknown`, or no generator note). With `warn=True` it reports a `VERSION` that disagrees with a `TEMPLATE_00_NNN` folder name; a warning only.
+- **Callers:** `create_generated_repo.py` (bundle README), `create_one_workload.py` (`RESULTS_REFERENCE.md`; warns at start), `run_from_prompt.py` (prompt traceability comment; warns at batch start), and `user_scripts/promote_results_reference.sh` (reads `<repos>/ai-agent-gpu-benchmark-repo-generator/VERSION`, the generator that made those workloads, before the folder path; `--template-version` still overrides). `remove_template_copy.py` only matches the nested copy's folder name and is unchanged.
+- **Tests and rule:** `tests/test_template_00_145_changes.py` compares the README against `generator_version()`. `tests/test_template_00_146_changes.py` checks that `VERSION` matches the newest CHANGELOG heading (fails after a copy until both are updated), the VERSION-then-folder order, the mismatch warning, and that every reader uses the shared function. `AGENTS.md`, new section "Generator Version": update `VERSION` and CHANGELOG first in a new template, and never type the current template number into a test.
+
+## 2026-11-17 — TEMPLATE_00_146: ROCm setup retries when the AMD wheel index omits a pinned build
+
+`scripts/templates/setup_rocm_reboot_skeleton.sh` (copied to every ROCm `run_setup.sh`, now version 1.4.0): every pip command that reads `PYTORCH_ROCM_INDEX_URL` (`https://stable.repo.amd.com/rocm/whl-next/`) runs through `rocm_pip_retry`: the requirements install, the vLLM torch install and extra deps, `install_rocm_pytorch`, and the JAX ROCm plugin. The torch and torchvision `pip index versions` checks run through `rocm_index_lists_version`. A command is retried up to `ROCM_PIP_RETRY_ATTEMPTS` (3) times, `ROCM_PIP_RETRY_DELAY_SEC` (20) seconds apart, only when pip reports no matching distribution for a `+rocm` or `+git` version, or a network timeout; the version check retries while the listing lacks the pinned version. Any other pip error fails on the first attempt, as before, and the final failure keeps the existing `die` messages. Indexes are unchanged (whl-next stays `--index-url`, PyPI stays `--extra-index-url`); Triton is not re-pinned to PyPI and `--no-index` is not used.
+
+Reason: the published TEMPLATE_00_143 workload 328 (`vllm-throughput-latency`, Ubuntu 26.04, MI300X, 2026-11-17 14:24 UTC) failed setup with `No matching distribution found for triton==3.8.0+git669b31ac.rocm10.1.0 (from torch)`. Workload 329 installed the same wheel from pip's cache ten seconds later, and a rerun of 328 passed. Setup had no retry, so one incomplete index answer failed the workload.
+
+- **Checks:** `tests/test_template_00_146_changes.py` (every AMD-index pip install is wrapped; retry, no retry and give-up cases run in bash with a fake pip).
+
+## 2026-11-17 — TEMPLATE_00_146: NVIDIA clean-image gate runs only when install code changes
+
+`docs/AI_AGENT_INSTRUCTIONS.md`, "Clean-image acceptance before publishing an NVIDIA batch": the gate is required only when a batch changes NVIDIA install code (setup skeleton, x27–x30 overlay setup, CUDA/vLLM/SGLang versions, host bootstrap) since the last recorded pass; otherwise it is optional and not a publish blocker. When required it runs x27–x30 each as the first and only workload on a fresh 24.04 and 26.04 image (a container with the host driver bind-mounted is acceptable). The full suite from a clean state is the after-publish `git clone --recurse-submodules` + `--smoke` run, now listed for every publish. Reason: the TEMPLATE_00_145 workloads had NVIDIA install code identical to the published v1.0.42, and a review session still reported the full gate as blocking.
+
+- **Checks:** `tests/test_template_00_146_changes.py`.
+
 ## 2026-11-17 — TEMPLATE_00_145: the project root looks like a bundle root
 
 After a batch the project root held the workloads, the generator and the batch logs. It did not hold the files a cloned bundle has at the top, so the local folder did not match `/opt/benchmarks` after `git clone --recurse-submodules` of a bundle.

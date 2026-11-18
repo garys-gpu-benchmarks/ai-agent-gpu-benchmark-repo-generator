@@ -20,7 +20,8 @@ from host_exec import normalize_remote_root, normalize_ssh_command, run_host_bas
 from framework_registry import resolve_flags
 from platform_policy import match_policy
 from remove_template_copy import remove_template_copy
-from results_markdown import REFERENCE_NAME, reference_from_actual, template_version_from_path
+from generator_version import generator_version
+from results_markdown import REFERENCE_NAME, reference_from_actual
 from text_io import ensure_gitkeep
 
 TEMPLATE_COPY_SUFFIX = "_copy"
@@ -785,7 +786,7 @@ def fetch_results_reference(ssh: str, repo: Path, template_root: Path) -> bool:
     try:
         page = reference_from_actual(
             text,
-            template_version=template_version_from_path(template_root),
+            template_version=generator_version(template_root),
             generated=utc_now()[:10],
             profiles=("smoke",),
         )
@@ -937,6 +938,7 @@ def main() -> int:
     args = parse_args()
     REMOTE_ROOT = normalize_remote_root(args.remote_root)
     template_root = Path(args.template_root).resolve()
+    generator_version(template_root, warn=True)
     project_root = Path(args.project_root).resolve() if args.project_root else template_root.parent
     BATCH_LOG = project_root / BATCH_LOG_NAME
     print(f"[INFO] remote setup and smoke output is written to {BATCH_LOG}", flush=True)

@@ -90,6 +90,12 @@ fi
 [[ "${profiles}" =~ ^(smoke|baseline|extended)(,(smoke|baseline|extended))*$ ]] \
   || die "--profiles takes smoke, baseline and/or extended, comma-separated"
 
+# The generator that made the workloads: its VERSION file (beside the workloads in a
+# project root or publish run folder), then the folder path (TEMPLATE_00_146).
+if [[ -z "${template_version}" && -f "${repos_dir}/ai-agent-gpu-benchmark-repo-generator/VERSION" ]]; then
+  template_version=$(tr -d '[:space:]' < "${repos_dir}/ai-agent-gpu-benchmark-repo-generator/VERSION")
+  [[ "${template_version}" =~ ^TEMPLATE_[0-9]+_[0-9]+$ ]] || template_version=""
+fi
 if [[ -z "${template_version}" ]]; then
   template_version=$(cd "${repos_dir}" && pwd -P | tr '/' '\n' | grep -E '^TEMPLATE_[0-9]+_[0-9]+$' | tail -n 1 || true)
 fi

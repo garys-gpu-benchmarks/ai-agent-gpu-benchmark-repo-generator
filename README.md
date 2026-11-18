@@ -58,7 +58,7 @@ Instead of manually assembling setup scripts, SPEC files, PRDs, CI workflows, an
 ## Requirements
 
 - An AI coding agent capable of following multi-file, multi-phase written instructions (agent-agnostic rules defined in `AGENTS.md`).
-- Git, and on Windows Git Bash (included with [Git for Windows](https://gitforwindows.org/)); the generator runs its commands in bash.
+- Git, and on Windows Git Bash (included with [Git for Windows](https://gitforwindows.org/)): on Windows the generator runs its commands in Git Bash, never WSL bash; on Linux and macOS it uses the system `bash`.
 - Python 3.12+ locally, for the extraction/validation scripts. From this directory: `pip install -e "config[dev]"` (or `pip install jsonschema openpyxl PyYAML`).
 - `BenchmarkSpecDefinitions.xlsx` populated with your workload matrix (a starter copy is included). Author smoke/baseline/extended values on the `Parameters_SmokeBaselineExtend` sheet; `Workload_Definitions` command columns are generated from that sheet. Close the workbook in Excel before generating; the batch warns when it is open.
 - For benchmark installation and execution, a local or cloud-hosted GPU host: Ubuntu 24.04 (workloads 101–132 and 201–232) or Ubuntu 26.04 (301–332 and 401–432), with an AMD Instinct MI300X (AMD workloads; `run_setup.sh` installs ROCm 10.1.0 for gfx942) or an NVIDIA data-center GPU with 80+ GB of memory, H100 or newer (NVIDIA workloads; `run_setup.sh` installs CUDA 13.3 on both Ubuntu releases). Cloud providers may charge for compute, storage, networking, and related services.
