@@ -122,6 +122,7 @@ class HeadlineTagTest(unittest.TestCase):
         self.assertNotIn("first_case", qd8[0])
 
 
+@unittest.skipIf(sys.platform == "win32", "/dev device paths and mount lists exist only on the Linux VM")
 class FioTargetGuardTest(unittest.TestCase):
     def setUp(self) -> None:
         self.modules = [

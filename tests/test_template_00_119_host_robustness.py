@@ -21,6 +21,11 @@ ROOT = Path(__file__).resolve().parents[1]
 COMPONENTS = ROOT / "implementation_components"
 
 
+# Git Bash on Windows, never System32's WSL bash.exe (TEMPLATE_00_147, OPEN_ISSUES T1).
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from host_bash import HOST_BASH, bash_path  # noqa: E402
+
+
 def load_collector(component: str):
     path = COMPONENTS / component / "files" / "scripts" / "collect_workload.py"
     sys.modules.setdefault("yaml", types.ModuleType("yaml"))
@@ -255,7 +260,7 @@ class HostBootstrapTest(unittest.TestCase):
             path = ROOT / "scripts" / rel
             self.assertTrue(path.is_file(), rel)
             if path.suffix == ".sh":
-                self.assertEqual(subprocess.run(["bash", "-n", str(path)]).returncode, 0, rel)
+                self.assertEqual(subprocess.run([HOST_BASH, "-n", str(path)]).returncode, 0, rel)
 
     def test_bootstrap_always_exits_zero_and_disables_globbing(self) -> None:
         text = (ROOT / "scripts/remote/host_bootstrap.sh").read_text(encoding="utf-8")
@@ -301,12 +306,12 @@ class AptIndexOnceTest(unittest.TestCase):
 
                 (state / "apt_updated_epoch").write_text(str(int(_time.time()) - stamp_age), encoding="utf-8")
             script = (
-                f'export PATH="{fake_bin}:$PATH"; export BENCHMARK_HOST_STATE_DIR="{state}"; '
+                f'export PATH="{bash_path(fake_bin)}:$PATH"; export BENCHMARK_HOST_STATE_DIR="{state}"; '
                 f'source "{ROOT}/scripts/lib/nvidia_cuda_toolkit.sh"; '
                 + ('compgen() { return 0; }; ' if lists else 'compgen() { return 1; }; ')
                 + "nvidia_apt_update_once; echo RC=$?; cat \"$BENCHMARK_HOST_STATE_DIR/apt_updated_epoch\" >/dev/null && echo STAMP"
             )
-            done = subprocess.run(["bash", "-c", script], capture_output=True, text=True)
+            done = subprocess.run([HOST_BASH, "-c", script], capture_output=True, text=True)
             return done.stdout + done.stderr
 
     def test_fresh_stamp_skips(self) -> None:

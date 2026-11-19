@@ -21,7 +21,7 @@ from pathlib import Path  # noqa: E402
 
 import batch_progress  # noqa: E402
 from generated_repo_directory import find_generated_repo  # noqa: E402
-from log_generator_repair import read_entries, repairs_path  # noqa: E402
+from log_generator_repair import ensure_log, read_entries, repairs_path  # noqa: E402
 from generator_version import generator_version  # noqa: E402
 from prompt_workflow import available_workloads, ensure_prompt_metadata, parse_workloads  # noqa: E402
 
@@ -250,6 +250,8 @@ def main(argv: list[str] | None = None) -> int:
         f"{batch_progress.progress_path(project_root)}",
         flush=True,
     )
+    # The repair log always exists, saying "none" until a repair is logged (OPEN_ISSUES A4).
+    ensure_log(template_root)
     repairs_before = len(read_entries(template_root))
     command = [
         sys.executable,

@@ -189,8 +189,9 @@ def record(
     }
     if output_tail:
         attempt["output_tail"] = list(output_tail)
-    if transient_retry:
-        attempt["transient_retry"] = transient_retry
+    # Always present (TEMPLATE_00_147, OPEN_ISSUES A4): "none" says no temporary-failure
+    # retry happened, which a missing key could not tell apart from "not recorded".
+    attempt["transient_retry"] = transient_retry or "none"
     attempts.append(attempt)
     entry: dict[str, object] = {
         "workload": workload,
@@ -275,14 +276,29 @@ def classify_transient(output: str, install_tail: list[str]) -> str:
     return ""
 
 
+# Which process lines (ps -eo pid=,comm=,args=) use apt. Identical to
+# _apt_lock_holder_filter in scripts/lib/apt_mirror_fallback.sh. The updater
+# /usr/bin/unattended-upgrade counts only as the program run (or python3's script); the boot-time helper unattended-upgrade-shutdown
+# --wait-for-signal never does: it holds no lock and never exits, and "pgrep -f
+# unattended-upgr" matched it, so a VM never looked idle and 103 was not retried
+# (2026-11-19, Project556).
+APT_BUSY_AWK = r'''{ a = $3; sub(/.*\//, "", a); b = $4; if (b ~ /^-/) b = $5; sub(/.*\//, "", b) } $2 ~ /^(apt|apt-get|aptitude|dpkg)$/ { print $1, $2; exit } a == "unattended-upgrade" || (a ~ /^python3/ && b == "unattended-upgrade") { print $1, "unattended-upgrade"; exit }'''
+
+
+def remote_idle_script(name: str) -> str:
+    """Prints BUSY while apt, dpkg, the updater or this repository's run_setup.sh runs, else IDLE."""
+    return (
+        "busy=$(ps -eo pid=,comm=,args= 2>/dev/null | awk '" + APT_BUSY_AWK + "'); "
+        "if [ -n \"$busy\" ] || (pgrep -af 'run_setup.sh' | grep -F '"
+        + f"{REMOTE_ROOT}/{name}"
+        + "' | grep -v grep >/dev/null); then echo BUSY; else echo IDLE; fi"
+    )
+
+
 def wait_remote_idle(ssh: str, name: str, *, timeout: int = 900) -> bool:
     """Wait until no apt, dpkg or this repository's run_setup.sh is running on the VM."""
     deadline = time.time() + timeout
-    script = (
-        "pgrep -x apt-get >/dev/null || pgrep -x apt >/dev/null || pgrep -x dpkg >/dev/null || "
-        f"pgrep -f unattended-upgr >/dev/null || (pgrep -af 'run_setup.sh' | grep -F '{REMOTE_ROOT}/{name}' | grep -v grep >/dev/null) "
-        "&& echo BUSY || echo IDLE"
-    )
+    script = remote_idle_script(name)
     while time.time() < deadline:
         try:
             result = ssh_run(ssh, script, timeout=60)

@@ -15,6 +15,10 @@ HEADER = (
     "One line per change to a generator file made while a batch was running.\n"
     "Format: UTC time | workload | file | reason\n\n"
 )
+# Written when the log has no entries yet (TEMPLATE_00_147, OPEN_ISSUES A4), so the file
+# always exists and says "none" instead of being absent. Not a "- " line, so read_entries
+# never counts it; the first entry replaces it.
+NONE_LINE = "No generator repairs logged yet (none).\n"
 
 
 def repairs_path(template_root: Path) -> Path:
@@ -28,6 +32,15 @@ def read_entries(template_root: Path) -> list[str]:
     return [line for line in path.read_text(encoding="utf-8").splitlines() if line.startswith("- ")]
 
 
+def ensure_log(template_root: Path) -> Path:
+    """Create results/generator_repairs.md with the header and NONE_LINE when it is missing."""
+    path = repairs_path(template_root)
+    if not path.is_file():
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(HEADER + NONE_LINE, encoding="utf-8", newline="\n")
+    return path
+
+
 def append_entry(template_root: Path, file: str, reason: str, workload: str = "") -> str:
     path = repairs_path(template_root)
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -35,6 +48,7 @@ def append_entry(template_root: Path, file: str, reason: str, workload: str = ""
     clean_reason = " ".join(reason.split())
     line = f"- {stamp} | {workload or '-'} | {file.replace(chr(92), '/')} | {clean_reason}"
     existing = path.read_text(encoding="utf-8") if path.is_file() else HEADER
+    existing = existing.replace(NONE_LINE, "")
     if not existing.endswith("\n"):
         existing += "\n"
     path.write_text(existing + line + "\n", encoding="utf-8", newline="\n")

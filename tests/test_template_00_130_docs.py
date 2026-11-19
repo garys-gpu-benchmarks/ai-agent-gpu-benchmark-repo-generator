@@ -14,6 +14,7 @@ from __future__ import annotations
 import json
 import re
 import unittest
+import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -49,6 +50,11 @@ STALE = (
     "`scripts/publish_benchmarks_to_github.sh` copies",
     "one of the six values",
 )
+
+
+# Git Bash on Windows, never System32's WSL bash.exe (TEMPLATE_00_147, OPEN_ISSUES T1).
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from host_bash import HOST_BASH, path_first  # noqa: E402
 
 
 def text(rel: str) -> str:
@@ -189,7 +195,7 @@ class NetworkSpeedInventoryTests(unittest.TestCase):
                 fake.write_text(f"#!/usr/bin/env bash\necho \"{out}\"\nexit {curl_rc}\n", encoding="utf-8")
                 fake.chmod(0o755)
                 env = dict(os.environ, PATH=f"{tmp}:{os.environ.get('PATH', '')}")
-                result = subprocess.run(["bash", "-o", "pipefail", "-c", command], capture_output=True,
+                result = subprocess.run([HOST_BASH, "-o", "pipefail", "-c", path_first(tmp) + command], capture_output=True,
                                         text=True, env=env, timeout=30)
             self.assertEqual(result.returncode, want_rc, (out, result.stdout))
             self.assertIn(want_text, result.stdout)

@@ -15,6 +15,7 @@ import stat
 import subprocess
 import tempfile
 import unittest
+import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -25,6 +26,11 @@ CUDNN_BUILD = COMPONENTS / "cudnn-convolution-nvidia" / "files" / "scripts" / "b
 
 LAUNCH = re.compile(r"<<<[^>]*>>>")
 LAUNCH_CHECK_WINDOW = 5
+
+
+# Git Bash on Windows, never System32's WSL bash.exe (TEMPLATE_00_147, OPEN_ISSUES T1).
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from host_bash import HOST_BASH  # noqa: E402
 
 
 def kernel_sources() -> list[Path]:
@@ -96,7 +102,7 @@ class NvccArchFlagsTest(unittest.TestCase):
             env = {"PATH": f"{bindir}:/usr/bin:/bin", "HOME": tmp}
             env.update(env_extra or {})
             script = f'source "{NVCC_LIB}"; nvcc_arch_flags; printf "%s\\n" "${{NVCC_ARCH_FLAGS[*]}}"'
-            done = subprocess.run(["bash", "-c", script], env=env, capture_output=True, text=True, check=True)
+            done = subprocess.run([HOST_BASH, "-c", script], env=env, capture_output=True, text=True, check=True)
             return done.stdout.strip(), done.stderr
 
     def test_detects_h100_from_nvidia_smi(self) -> None:

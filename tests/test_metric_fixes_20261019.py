@@ -166,6 +166,7 @@ echo "collective=$5 num_gpus=1 bytes=$1 algbw_gb_s=10.0 busbw_gb_s=0.0 latency_u
 """
 
 
+@unittest.skipIf(sys.platform == "win32", "the stand-in bin/nccl_bw cannot run on Windows; the collector runs only on the Linux VM")
 class NcclSingleGpu(unittest.TestCase):
     def test_one_gpu_stops_after_the_first_round(self) -> None:
         import os

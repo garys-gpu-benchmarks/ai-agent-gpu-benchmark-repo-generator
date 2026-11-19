@@ -347,6 +347,34 @@ def evaluate(values: dict[str, str], workloads: list[str], kernels: dict[str, st
     return warnings, notes
 
 
+HOST_KEY_FAILED = "Host key verification failed"
+
+
+def _ssh_host(ssh: str) -> str:
+    """The host the SSH command logs in to, as ssh-keygen -R names it ([host]:port off port 22)."""
+    match = re.search(r"@(\[[^\]]+\]|[^\s:@]+)", ssh or "")
+    host = match.group(1).strip("[]") if match else "<host>"
+    port = re.search(r"(?:^|\s)-p\s*(\d+)", ssh or "")
+    return f"[{host}]:{port.group(1)}" if port and port.group(1) != "22" else host
+
+
+def host_key_hint(ssh: str, output: str, *, show_host: bool = True) -> str:
+    """The fix for "Host key verification failed", or "" when the output does not say it.
+
+    A droplet rebuilt at the same address has a new host key, and the batch's SSH has no
+    terminal to answer the question (TEMPLATE_00_147). show_host=False writes <host>
+    instead of the address, for anything saved to a file (no lab IP in files).
+    """
+    if HOST_KEY_FAILED.lower() not in (output or "").lower():
+        return ""
+    host = _ssh_host(ssh) if show_host else "<host>"
+    return (
+        f"SSH refused the VM: {HOST_KEY_FAILED}. A VM rebuilt at the same address has a new host key. "
+        f"Remove the old key with  ssh-keygen -R {host}  then connect once with  "
+        "-o StrictHostKeyChecking=accept-new  (docs/AI_AGENT_INSTRUCTIONS.md) and run the preflight again."
+    )
+
+
 def measure_ssh_call(run: Callable[[str], object], attempts: int = 3) -> float:
     timings = []
     for _ in range(attempts):
@@ -374,7 +402,14 @@ def run_preflight(
         ssh_call_s = measure_ssh_call(lambda script: ssh_run(ssh, script, timeout=60))
         result = ssh_run(ssh, PROBE_SCRIPT, timeout=240)
         values = parse_probe(getattr(result, "stdout", "") or "")
-        if not values:
+        ssh_output = f"{getattr(result, 'stdout', '') or ''}\n{getattr(result, 'stderr', '') or ''}"
+        if not values and host_key_hint(ssh, ssh_output):
+            # The screen gets the address to paste; the manifest gets <host>.
+            print(f"[WARN] {host_key_hint(ssh, ssh_output)}", flush=True)
+            report["status"] = "host_key_changed"
+            report["host_key_hint"] = host_key_hint(ssh, ssh_output, show_host=False)
+            report["warnings"] = ["The VM refused SSH because its host key changed; the fix is printed above."]
+        elif not values:
             report["status"] = "probe_failed"
             report["warnings"] = ["The remote preflight probe returned nothing; continuing without it."]
         kernels = workbook_values(template_root / "BenchmarkSpecDefinitions.xlsx", workloads, "kernel_version")

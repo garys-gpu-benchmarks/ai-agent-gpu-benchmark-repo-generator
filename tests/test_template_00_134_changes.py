@@ -125,7 +125,11 @@ class ConsoleLogTest(unittest.TestCase):
         self.assertIn("[stderr] oops", text)
         console = out.getvalue()
         self.assertIn("[216] still running", console)
-        self.assertNotIn("second", console)
+        # Only heartbeat lines reach the console, never the output itself. A heartbeat
+        # names the last line ("last: second" when Git Bash is slow to exit on Windows,
+        # TEMPLATE_00_147), so check line starts, not the word.
+        for line in console.splitlines():
+            self.assertTrue(line.startswith("[216] still running "), line)
 
     def test_stream_timeout_raises_like_subprocess_run(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

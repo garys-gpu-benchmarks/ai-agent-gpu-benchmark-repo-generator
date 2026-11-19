@@ -96,6 +96,7 @@ def write_exec(path: Path, text: str) -> None:
     path.chmod(path.stat().st_mode | stat.S_IEXEC | stat.S_IXGRP | stat.S_IXOTH)
 
 
+@unittest.skipIf(sys.platform == "win32", "the collector imports resource, which Windows lacks; it runs only on the Linux VM")
 class LinuxPerfPmuCollectorTest(unittest.TestCase):
     def run_collector(self, mode: str | None = "intel", vendor_stall: str | None = None, extra_args=(), **env_extra):
         tmp = tempfile.TemporaryDirectory()

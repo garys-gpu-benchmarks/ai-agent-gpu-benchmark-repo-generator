@@ -6,6 +6,7 @@ import glob
 import subprocess
 import tempfile
 import unittest
+import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -25,13 +26,18 @@ echo "status=${{PIPESTATUS[0]}}"
 """
 
 
+# Git Bash on Windows, never System32's WSL bash.exe (TEMPLATE_00_147, OPEN_ISSUES T1).
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from host_bash import HOST_BASH  # noqa: E402
+
+
 def run(level: str) -> tuple[str, str]:
     with tempfile.TemporaryDirectory() as tmp:
         script = Path(tmp) / "t.sh"
         script.write_text(SCRIPT.format(root=ROOT), encoding="utf-8")
         run_dir = Path(tmp) / "run"
         run_dir.mkdir()
-        out = subprocess.run(["bash", str(script), level, str(run_dir)], capture_output=True, text=True, check=True)
+        out = subprocess.run([HOST_BASH, str(script), level, str(run_dir)], capture_output=True, text=True, check=True)
         return out.stdout, (run_dir / "run.log").read_text(encoding="utf-8")
 
 

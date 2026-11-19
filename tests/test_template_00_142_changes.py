@@ -35,6 +35,11 @@ SGLANG_CLIENTS = [
 AGENT_DOCS = ["docs/AI_AGENT_INSTRUCTIONS.md", ".cursor/rules/generate-workloads.mdc", "AGENTS.md"]
 
 
+# Git Bash on Windows, never System32's WSL bash.exe (TEMPLATE_00_147, OPEN_ISSUES T1).
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from host_bash import HOST_BASH  # noqa: E402
+
+
 class SglangClockTests(unittest.TestCase):
     def test_clock_starts_after_the_warm_up(self) -> None:
         for rel in SGLANG_CLIENTS:
@@ -79,7 +84,7 @@ class HeartbeatProgressTests(unittest.TestCase):
             root = Path(tmp)
             out = io.StringIO()
             with contextlib.redirect_stdout(out):
-                host_exec._stream_to_log(["bash", "-c", "echo working; sleep 6.5"], cwd=None, timeout=None,
+                host_exec._stream_to_log([HOST_BASH, "-c", "echo working; sleep 6.5"], cwd=None, timeout=None,
                                          env=dict(os.environ), log_path=root / "l.log", label="431 setup+smoke",
                                          heartbeat_s=1.0, progress_root=root)
             progress_lines = (root / "batch_progress.log").read_text(encoding="utf-8").splitlines()

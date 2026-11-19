@@ -118,6 +118,9 @@ if [[ "${ASSUME_YES}" -ne 1 ]]; then
 fi
 
 log_status "PHASE|SETUP start ${REPO_NAME}"
+# A freshly booted VM's apt-daily / unattended-upgrades can hold the apt and dpkg
+# locks; wait for them before the first apt step (TEMPLATE_00_147, OPEN_ISSUES A7).
+declare -f wait_for_apt_locks >/dev/null 2>&1 && { wait_for_apt_locks || true; }
 nvidia_pin_host_driver
 # Skips the refresh when this host refreshed its apt index in the last 6 h.
 nvidia_apt_update_once

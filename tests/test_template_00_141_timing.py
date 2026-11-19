@@ -18,6 +18,7 @@ import re
 import subprocess
 import tempfile
 import unittest
+import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -47,8 +48,13 @@ IN_PROCESS = [
 ]
 
 
+# Git Bash on Windows, never System32's WSL bash.exe (TEMPLATE_00_147, OPEN_ISSUES T1).
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from host_bash import HOST_BASH  # noqa: E402
+
+
 def run_bash(script: str, *args: str) -> list[str]:
-    result = subprocess.run(["bash", "-c", script, "clock", *args], capture_output=True, text=True,
+    result = subprocess.run([HOST_BASH, "-c", script, "clock", *args], capture_output=True, text=True,
                             timeout=60, check=True)
     return result.stdout.splitlines()
 
@@ -106,7 +112,7 @@ class CollectorMeasureStartTests(unittest.TestCase):
     def test_record_stop_reads_the_collector_time(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             env = dict(os.environ, TMPDIR=tmp)
-            result = subprocess.run(["bash", "-c", COLLECTOR_SCRIPT, "clock", tmp, str(COMMON)],
+            result = subprocess.run([HOST_BASH, "-c", COLLECTOR_SCRIPT, "clock", tmp, str(COMMON)],
                                     capture_output=True, text=True, timeout=60, check=True, env=env)
             self.assertEqual(result.stdout.splitlines(),
                              ["unchanged", "1000", "removed", "iso", "earlier ignored"], result.stderr)

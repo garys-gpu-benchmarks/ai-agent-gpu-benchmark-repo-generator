@@ -128,8 +128,8 @@ warn_missing_kernel_perf() {
   os_id="$(. /etc/os-release && printf '%s' "${VERSION_ID:-unknown}")"
   common_pkg="linux-tools-${kernel%-*}"
   flavor_pkg="linux-tools-${kernel}"
-  log_status "WARN kernel-matched perf is missing for kernel ${kernel} on Ubuntu ${os_id}; PMU metrics will be na"
-  echo "[WARN] Kernel-matched perf is missing for kernel ${kernel} on Ubuntu ${os_id}; the PMU metrics will be na." >&2
+  log_status "WARN kernel-matched perf is missing for kernel ${kernel} on Ubuntu ${os_id}; PMU metrics may be na if the generic perf cannot read the counters"
+  echo "[WARN] Kernel-matched perf is missing for kernel ${kernel} on Ubuntu ${os_id}; PMU metrics may be na if the generic perf cannot read the counters." >&2
   echo "[WARN] For counters, install ${common_pkg} and ${flavor_pkg} from the Ubuntu release that built kernel ${kernel} (do not add that release to this machine's apt sources), then rerun." >&2
 }
 
@@ -154,6 +154,9 @@ log_status "PHASE|SETUP start ${REPO_NAME}"
 # shellcheck disable=SC1091
 source "${REPO_ROOT}/scripts/lib/keep_running_kernel.sh"
 keep_running_kernel
+# A freshly booted VM's apt-daily / unattended-upgrades can hold the apt and dpkg
+# locks; wait for them before the first apt step (TEMPLATE_00_147, OPEN_ISSUES A7).
+declare -f wait_for_apt_locks >/dev/null 2>&1 && { wait_for_apt_locks || true; }
 nvidia_pin_host_driver
 # Skips the refresh when this host refreshed its apt index in the last 6 h.
 nvidia_apt_update_once

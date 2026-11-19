@@ -197,6 +197,7 @@ class SuiteTests(unittest.TestCase):
     def ctx_lines(self, stdout: str) -> list[str]:
         return [line for line in stdout.splitlines() if line.startswith("CTX ")]
 
+    @unittest.skipIf(sys.platform == "win32", "the suite ID starts with hostname -s, which Windows hostname does not support; the suite runs on the Linux VM")
     def test_suite_id_pass_and_download(self) -> None:
         result = self.suite("200 209715200 52428800.000")
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)

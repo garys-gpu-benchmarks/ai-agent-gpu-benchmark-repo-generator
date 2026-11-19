@@ -16,7 +16,13 @@
 #                                     or http://ports.ubuntu.com/ubuntu-ports/ off amd64/i386).
 #   BENCHMARK_HOST_STATE_DIR          state and backups (default /var/lib/gpu-benchmark-host).
 #   BENCHMARK_APT_INDEX_MAX_AGE_SEC   how long a check stays valid (default 21600).
+#   BENCHMARK_APT_LOCK_WAIT_SEC       longest wait for another apt/dpkg process (default 300; 0 = no wait).
+#   BENCHMARK_APT_LOCK_POLL_SEC       seconds between lock checks (default 5).
 #   APT_MIRROR_SOURCES_FILES, APT_MIRROR_OS_RELEASE   test overrides.
+# wait_for_apt_locks (TEMPLATE_00_147, OPEN_ISSUES A7): on a freshly booted VM Ubuntu's own
+# apt-daily / unattended-upgrades can hold the apt and dpkg locks; 330's first suite smoke
+# failed in 3 s with "Could not get lock /var/lib/apt/lists/lock". ensure_ubuntu_apt_mirror
+# waits for them first, and setups that run apt before it call wait_for_apt_locks themselves.
 # What changes: only URIs of the Ubuntu archive itself, in /etc/apt/sources.list.d/ubuntu.sources
 # and /etc/apt/sources.list. security.ubuntu.com, ports.ubuntu.com, archive.ubuntu.com and
 # third-party repositories (NVIDIA, ROCm, PPAs) are never touched. The original files are
@@ -107,7 +113,56 @@ _apt_mirror_update() {
   return "${rc}"
 }
 
+# Reads "PID COMM ARGS" lines (ps -eo pid=,comm=,args=) and prints "PID NAME" of the first
+# process that uses apt: apt, apt-get, aptitude or dpkg, or the updater itself, only when
+# it is the program run (/usr/bin/unattended-upgrade, or python3 running that script);
+# a command line that merely mentions it (bash -c "...", grep) does not count. Never
+# unattended-upgrade-shutdown --wait-for-signal: Ubuntu starts that helper at every boot,
+# it only waits for shutdown and holds no lock, and its 15-character process name
+# "unattended-upgr" made every setup wait the full 300 s (2026-11-19, Project556).
+# scripts/create_one_workload.py (wait_remote_idle) uses the same filter.
+_apt_lock_holder_filter() {
+  awk '{ a = $3; sub(/.*\//, "", a); b = $4; if (b ~ /^-/) b = $5; sub(/.*\//, "", b) } $2 ~ /^(apt|apt-get|aptitude|dpkg)$/ { print $1, $2; exit } a == "unattended-upgrade" || (a ~ /^python3/ && b == "unattended-upgrade") { print $1, "unattended-upgrade"; exit }'
+}
+
+# Prints "PID NAME" of one running apt or dpkg user (apt-daily, the updater, another
+# setup), or nothing when none runs or ps is missing.
+_apt_lock_holder() {
+  command -v ps >/dev/null 2>&1 || return 0
+  ps -eo pid=,comm=,args= 2>/dev/null | _apt_lock_holder_filter
+}
+
+# Waits until no apt/dpkg process runs, up to BENCHMARK_APT_LOCK_WAIT_SEC (default 300 s),
+# printing the PID it waits for. Returns 0 when apt is free, 1 when the wait ran out
+# (the caller's apt step then reports the lock as before).
+wait_for_apt_locks() {
+  local limit="${BENCHMARK_APT_LOCK_WAIT_SEC:-300}" poll="${BENCHMARK_APT_LOCK_POLL_SEC:-5}"
+  local holder waited=0 announced=0
+  [[ "${limit}" =~ ^[0-9]+$ ]] || limit=300
+  [[ "${poll}" =~ ^[0-9]+$ ]] || poll=5
+  (( limit == 0 )) && return 0
+  while holder="$(_apt_lock_holder)" && [[ -n "${holder}" ]]; do
+    if (( waited >= limit )); then
+      _apt_mirror_log "WARN|SETUP apt/dpkg still busy after ${limit} s (PID ${holder}); continuing"
+      echo "[WARN] Another apt/dpkg process (PID ${holder}) is still running after ${limit} s; continuing." >&2
+      return 1
+    fi
+    if (( announced == 0 )); then
+      _apt_mirror_log "STEP|SETUP waiting for another apt/dpkg process (PID ${holder}) to finish"
+      echo "[INFO] Waiting up to ${limit} s for another apt/dpkg process to finish (PID ${holder})." >&2
+      announced=1
+    fi
+    sleep "${poll}"
+    waited=$((waited + (poll > 0 ? poll : 1)))
+  done
+  if (( announced )); then
+    _apt_mirror_log "STEP|SETUP apt/dpkg is free after ${waited} s"
+  fi
+  return 0
+}
+
 ensure_ubuntu_apt_mirror() {
+  wait_for_apt_locks || true
   [[ "${BENCHMARK_APT_MIRROR_FALLBACK:-1}" == "0" ]] && return 2
   local os_release="${APT_MIRROR_OS_RELEASE:-/etc/os-release}"
   grep -qE '^ID=("?)ubuntu\1$' "${os_release}" 2>/dev/null || return 2

@@ -24,7 +24,6 @@ import bundle_readme  # noqa: E402
 from generator_version import generator_version  # noqa: E402
 from create_generated_repo import (  # noqa: E402
     PROJECT_ROOT_SUITE_SCRIPTS,
-    install_operator_tools,
     install_project_root_bundle,
 )
 from init_generated_repo import SHARED_DIRS  # noqa: E402
@@ -213,13 +212,13 @@ class ProjectRootBundleTests(unittest.TestCase):
         self.assertIn("| 201 |", text)
         self.assertNotIn("benchmark bundle\n", text.split("## Benchmarks", 1)[0])
 
-    def test_parent_folder_still_gets_only_the_three_laptop_tools(self) -> None:
+    def test_parent_folder_gets_nothing(self) -> None:
+        # TEMPLATE_00_147 (OPEN_ISSUES A8): the laptop tools are only in the project root.
         self._add("107-sys-bench-amd-stream-ddr5-bandwidth-ubu2404")
         with contextlib.redirect_stdout(io.StringIO()):
-            install_operator_tools(ROOT, self.project)
             install_project_root_bundle(ROOT, self.project)
         for name in ("get_benchmark_results.sh", "list_runs.sh", "show_metrics.sh"):
-            self.assertTrue((self.parent / name).is_file(), name)
+            self.assertFalse((self.parent / name).exists(), name)
             self.assertTrue((self.project / name).is_file(), name)
         self.assertFalse((self.parent / "run_benchmark_suite.sh").exists())
         self.assertFalse((self.parent / "README.md").exists())
@@ -247,8 +246,12 @@ class PublishDoesNotTakeTheProjectRootTests(unittest.TestCase):
                 for name in ("README.md", "get_benchmark_results.sh", "list_runs.sh",
                              "run_benchmark_suite.sh", "show_metrics.sh"):
                     self.assertIn(name, text)
-        issues = (ROOT / "docs" / "OPEN_ISSUES.md").read_text(encoding="utf-8")
-        self.assertIn("| A8 | 00_145 |", issues)
+        # docs/OPEN_ISSUES.md is gitignored and publish step 9 deletes it, so a
+        # published clone (the generator's GitHub CI) has none: check it only here.
+        issues = ROOT / "docs" / "OPEN_ISSUES.md"
+        if issues.is_file():
+            # A8 is listed as open, or as fixed (TEMPLATE_00_147 moved it to Fixed as F36).
+            self.assertRegex(issues.read_text(encoding="utf-8"), r"\| A8 \| 00_145 \||\| 00_145 \| A8: ")
 
 
 if __name__ == "__main__":

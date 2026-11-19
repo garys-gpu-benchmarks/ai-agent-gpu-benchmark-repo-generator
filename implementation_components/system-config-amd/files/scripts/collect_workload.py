@@ -60,6 +60,10 @@ def parse_args():
     parser.add_argument("--output-format", default="csv")
     return parser.parse_args()
 
+# Both must fail for the run to fail: either one answering shows a GPU.
+GPU_PROBES = ("rocminfo", "amd-smi")
+
+
 def run_command(command):
     try:
         completed = subprocess.run(command, check=False, capture_output=True, text=True)
@@ -276,6 +280,20 @@ def main() -> int:
         })
         (Path(args.run_dir) / f"{name}.txt").write_text(text, encoding="utf-8")
     write_csv(args.raw_file, header, rows)
+    # No GPU answered (TEMPLATE_00_147): on 2026-11-16 an AMD droplet's GPU never
+    # initialized at boot ("Doesn't get ack from pf"); rocminfo and amd-smi both failed
+    # and this workload still passed, because hipcc reports the ROCm version without a
+    # GPU. The probe outputs above stay in the run folder for the diagnosis.
+    gpu_codes = {name: code for name, code, _text in checks if name in GPU_PROBES}
+    if len(gpu_codes) == len(GPU_PROBES) and all(code != 0 for code in gpu_codes.values()):
+        print(
+            "[FAIL] No AMD GPU answered: rocminfo exited "
+            f"{gpu_codes['rocminfo']} and amd-smi static exited {gpu_codes['amd-smi']}. "
+            "The ROCm tools are installed, but the GPU is not usable. Check `sudo dmesg | grep -i amdgpu`; "
+            "a GPU that did not initialize at boot usually comes back after a reboot.",
+            file=sys.stderr,
+        )
+        return 1
     return 0
 
 

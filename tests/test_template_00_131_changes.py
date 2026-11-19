@@ -39,6 +39,11 @@ esac
 '''
 
 
+# Git Bash on Windows, never System32's WSL bash.exe (TEMPLATE_00_147, OPEN_ISSUES T1).
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from host_bash import HOST_BASH, bash_path, path_first  # noqa: E402
+
+
 @unittest.skipIf(shutil.which("bash") is None, "bash is not installed")
 class PreflightDownloadProbeTests(unittest.TestCase):
     def run_probe(self, hf: str, pt: str, index: str = INDEX) -> tuple[dict[str, str], list[str]]:
@@ -48,8 +53,8 @@ class PreflightDownloadProbeTests(unittest.TestCase):
             fake.chmod(0o755)
             log = Path(tmp) / "urls.txt"
             env = dict(os.environ, PATH=f"{tmp}:{os.environ.get('PATH', '')}", HOME=tmp,
-                       FAKE_LOG=str(log), FAKE_INDEX=index, FAKE_HF=hf, FAKE_PT=pt)
-            out = subprocess.run(["bash", "-c", rhp.PROBE_SCRIPT], capture_output=True, text=True,
+                       FAKE_LOG=bash_path(log), FAKE_INDEX=index, FAKE_HF=hf, FAKE_PT=pt)
+            out = subprocess.run([HOST_BASH, "-c", path_first(tmp) + rhp.PROBE_SCRIPT], capture_output=True, text=True,
                                  env=env, timeout=120).stdout
             urls = log.read_text(encoding="utf-8").splitlines() if log.exists() else []
         return rhp.parse_probe(out), urls
@@ -163,7 +168,7 @@ class InventoryCollectorTests(unittest.TestCase):
                 env = dict(os.environ, PATH=f"{tmp}:{os.environ.get('PATH', '')}")
                 if fail:
                     env["FAKE_FAIL"] = fail
-                subprocess.run(["bash", "-c", f'source "{fn}"; run_one hardware "$1" test "{out}"', "_", cmd],
+                subprocess.run([HOST_BASH, "-c", f'source "{fn}"; run_one hardware "$1" test "{out}"', "_", cmd],
                                env=env, capture_output=True, text=True, timeout=60)
                 text = out.read_text(encoding="utf-8")
                 self.assertIn(expected, text, (cmd, text[:400]))

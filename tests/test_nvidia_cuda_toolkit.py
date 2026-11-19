@@ -15,6 +15,7 @@ import re
 import subprocess
 import tempfile
 import unittest
+import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -68,6 +69,11 @@ exit 0
 }
 
 
+# Git Bash on Windows, never System32's WSL bash.exe (TEMPLATE_00_147, OPEN_ISSUES T1).
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from host_bash import HOST_BASH, path_first  # noqa: E402
+
+
 class FakeHost:
     def __init__(self, version_id: str = "24.04") -> None:
         self._tmp = tempfile.TemporaryDirectory()
@@ -105,7 +111,7 @@ class FakeHost:
 
     def run(self, script: str) -> subprocess.CompletedProcess[str]:
         return subprocess.run(
-            ["bash", "-c", f"set -euo pipefail\nsource '{LIB}'\n{script}"],
+            [HOST_BASH, "-c", f"{path_first(self.bin)}set -euo pipefail\nsource '{LIB}'\n{script}"],
             env=self.env(), text=True, capture_output=True, check=False,
         )
 
@@ -367,7 +373,7 @@ class NcclCheckTest(unittest.TestCase):
                     'log_status() { echo "$1"; }', body,
                     'verify_cmd "NCCL" .venv/bin/python -c "import torch; assert torch.cuda.nccl.version()"',
                 ])
-                result = subprocess.run(["bash", "-c", script], cwd=tmp, text=True, capture_output=True, check=False)
+                result = subprocess.run([HOST_BASH, "-c", script], cwd=tmp, text=True, capture_output=True, check=False)
                 self.assertEqual(result.returncode, expected, result.stdout + result.stderr)
 
 
@@ -388,7 +394,7 @@ class UnsupportedCompilerTest(unittest.TestCase):
             nvcc.chmod(0o755)
             env = dict(os.environ, PATH=f"{base / 'bin'}:{os.environ.get('PATH', '')}", REPO_ROOT=str(base / "repo"))
             result = subprocess.run(
-                ["bash", "-c", f"source '{NVCC_LIB}'; nvcc_pin_toolkit() {{ :; }}; nvcc_glibc_prepare"],
+                [HOST_BASH, "-c", f"source '{NVCC_LIB}'; nvcc_pin_toolkit() {{ :; }}; nvcc_glibc_prepare"],
                 env=env, text=True, capture_output=True, check=False,
             )
             self.assertNotEqual(result.returncode, 0)

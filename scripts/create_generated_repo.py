@@ -231,22 +231,16 @@ def _copy_template(source: Path, destination: Path) -> None:
     _took(f"template copy to {destination.name}", started)
 
 
-# Laptop-side tools the operator runs from the project folder (the folder that
-# holds the template/workload folder). get_benchmark_results.sh writes DIRECTORIES/ and
-# RUNTIME_LEDGERS/ next to itself; show_metrics.sh prints one workload's metrics
-# from a runtime ledger (local or over ssh). The master copies stay in
-# user_scripts/ (the suite tools are published as gpu-bench-suite); they are never
-# copied into a workload. The VM copy is separate: create_one_workload.py and
-# the bundle publish both install show_metrics.sh and run_benchmark_suite.sh
-# at /opt/benchmarks.
-# install_project_root_bundle also writes all four suite scripts and a bundle
-# README into the project root itself (the folder that holds the workloads).
-OPERATOR_TOOLS = (
-    "user_scripts/get_benchmark_results.sh",
-    "user_scripts/list_runs.sh",
-    "user_scripts/show_metrics.sh",
-)
-
+# The three laptop tools (get_benchmark_results.sh, list_runs.sh, show_metrics.sh)
+# and run_benchmark_suite.sh are written by install_project_root_bundle into the
+# project root (the folder that holds the workloads), with a bundle README.
+# Nothing is written above the project root (TEMPLATE_00_147; earlier templates
+# also copied the laptop tools to the folder above, so two copies could drift).
+# get_benchmark_results.sh writes DIRECTORIES/ and RUNTIME_LEDGERS/ in the current
+# folder; -o picks another. The master copies stay in user_scripts/ (the laptop
+# tools are published as gpu-bench-suite); they are never copied into a workload's
+# scripts/. The VM copy is separate: create_one_workload.py and the bundle publish
+# both install the suite scripts at /opt/benchmarks.
 # Byte-identical to user_scripts/. run_benchmark_suite.sh defaults to smoke
 # (a full run is --smoke --baseline --extended). Publish rewrites only the
 # example workload numbers in a bundle's copy.
@@ -404,28 +398,6 @@ def install_project_root_bundle(source_root: Path, project_root: Path) -> list[P
     )
     if written is not None:
         installed.append(written)
-    return installed
-
-
-def install_operator_tools(source_root: Path, project_root: Path) -> list[Path]:
-    """Copy OPERATOR_TOOLS into project_root.parent. An existing copy that differs is kept."""
-    target_dir = project_root.parent
-    installed: list[Path] = []
-    for rel in OPERATOR_TOOLS:
-        src = source_root / rel
-        if not src.is_file():
-            print(f"[WARN] Operator tool missing from the template: {rel}")
-            continue
-        dst = target_dir / src.name
-        data = src.read_bytes().replace(b"\r\n", b"\n")
-        if dst.exists():
-            if dst.read_bytes().replace(b"\r\n", b"\n") != data:
-                print(f"[INFO] Kept existing {dst}; it differs from {rel}. Delete it to get the generator's copy.")
-            continue
-        dst.write_bytes(data)
-        dst.chmod(dst.stat().st_mode | 0o111)
-        installed.append(dst)
-        print(f"[INFO] Installed operator tool: {dst}")
     return installed
 
 
@@ -620,7 +592,6 @@ def main() -> int:
         refresh_show_metrics(source_root)
         _took("show_metrics.sh label refresh", started)
         install_workload_tools(source_root, repo_root)
-        install_operator_tools(source_root, project_root)
         install_project_root_bundle(source_root, project_root)
         print(f"[PASS] Created generated repository: {repo_root}")
         print(f"[PASS] Active template copy: {active_copy}")

@@ -113,8 +113,8 @@ warn_missing_kernel_perf() {
   os_id="$(. /etc/os-release && printf '%s' "${VERSION_ID:-unknown}")"
   common_pkg="linux-tools-${kernel%-*}"
   flavor_pkg="linux-tools-${kernel}"
-  log_status "WARN kernel-matched perf is missing for kernel ${kernel} on Ubuntu ${os_id}; PMU metrics will be na"
-  echo "[WARN] Kernel-matched perf is missing for kernel ${kernel} on Ubuntu ${os_id}; the PMU metrics will be na." >&2
+  log_status "WARN kernel-matched perf is missing for kernel ${kernel} on Ubuntu ${os_id}; PMU metrics may be na if the generic perf cannot read the counters"
+  echo "[WARN] Kernel-matched perf is missing for kernel ${kernel} on Ubuntu ${os_id}; PMU metrics may be na if the generic perf cannot read the counters." >&2
   echo "[WARN] For counters, install ${common_pkg} and ${flavor_pkg} from the Ubuntu release that built kernel ${kernel} (do not add that release to this machine's apt sources), then rerun." >&2
 }
 
@@ -132,7 +132,11 @@ BENCHMARK_INSTALL_PERF="${BENCHMARK_INSTALL_PERF:-0}"
 # activate a virtualenv (for example /root/.venv, Python 3.11) and ship no distro
 # Python, so "command -v python3" succeeded and the version probe asked apt for
 # python3.11-venv, which Ubuntu does not publish.
+# shellcheck disable=SC1091
+source "${REPO_ROOT}/scripts/lib/apt_mirror_fallback.sh"
 if [[ ! -x /usr/bin/python3 ]]; then
+  # A freshly booted VM's apt-daily can hold the apt lock (TEMPLATE_00_147, OPEN_ISSUES A7).
+  wait_for_apt_locks || true
   log_status "STEP apt-get install python3"
   record_cmd "DEBIAN_FRONTEND=noninteractive apt-get install -y python3"
   DEBIAN_FRONTEND=noninteractive apt-get install -y python3

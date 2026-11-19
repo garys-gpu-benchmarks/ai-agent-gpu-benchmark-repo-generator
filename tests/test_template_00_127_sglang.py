@@ -37,6 +37,11 @@ AMD_SETUP = ROOT / "scripts" / "templates" / "setup_rocm_reboot_skeleton.sh"
 AITER_VERSION = "0.1.22.post2.dev0+gb4d9154d1.d20261002"
 
 
+# Git Bash on Windows, never System32's WSL bash.exe (TEMPLATE_00_147, OPEN_ISSUES T1).
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from host_bash import HOST_BASH  # noqa: E402
+
+
 def source(component: str, rel: str) -> str:
     return (COMPONENTS / component / "files" / rel).read_text(encoding="utf-8")
 
@@ -202,7 +207,7 @@ class AmdAiterWheelOnly(unittest.TestCase):
                 "source ./block.sh\n"
             )
             env = dict(os.environ, FAKE_IMPORT=mode, AITER_VERSION=AITER_VERSION)
-            done = subprocess.run(["bash", "-c", script], cwd=tmp, env=env, capture_output=True, text=True, timeout=60)
+            done = subprocess.run([HOST_BASH, "-c", script], cwd=tmp, env=env, capture_output=True, text=True, timeout=60)
             calls = (tmp / "calls.log").read_text(encoding="utf-8") if (tmp / "calls.log").exists() else ""
             return done.returncode, done.stdout + done.stderr, calls
 

@@ -6,6 +6,18 @@ A standardized matrix of 32 hardware, compute, and AI inference validation workl
 
 ---
 
+## System Requirements
+
+- **OS:** a server running Ubuntu 24.04 LTS or 26.04 LTS, with root or sudo access
+- **AMD:** one MI300X GPU (gfx942); `run_setup.sh` installs ROCm (10.1.0)
+- **NVIDIA:** one H100 GPU (sm_90); `run_setup.sh` installs CUDA (13.3)
+- **Host:** 20+ vCPUs, 128+ GB RAM, and about 500 GB of local disk
+- **Network:** Internet access for packages and model downloads (1 Gbit/s recommended; 250 Mbit/s minimum)
+
+No server? See [Getting started on AMD Developer Cloud](https://github.com/garys-gpu-benchmarks/ai-agent-gpu-benchmark-repo-generator/blob/main/docs/amd-developer-cloud-getting-started.md) or [Getting started on Runpod](https://github.com/garys-gpu-benchmarks/ai-agent-gpu-benchmark-repo-generator/blob/main/docs/runpod-getting-started.md).
+
+---
+
 ## Install on a GPU Host
 
 **1. Find your platform.** On the GPU host:

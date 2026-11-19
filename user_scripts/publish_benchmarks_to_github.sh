@@ -108,7 +108,14 @@ if grep -q $'\r' "$0"; then echo "This file has Windows (CRLF) line endings. Fix
 #   1  stopped on a problem (see the STOPPED line)
 #   2  usage error
 #
-# Revision: 2026-11-17 (run_benchmark_suite.sh itself defaults to smoke, the
+# Revision: 2026-11-19 (step 7 writes a .gitattributes into every bundle root
+#           (* text=auto eol=lf, *.sh text eol=lf): without one, Git for
+#           Windows (core.autocrlf=true, the installer default) checked out
+#           the bundle's own scripts and README with CRLF, so a laptop clone
+#           differed from the generated project root on every line and a
+#           CRLF copy carried to Ubuntu fails. Step 8 stops if the test clone
+#           has no .gitattributes or any top-level file has a CR)
+#           2026-11-17 (run_benchmark_suite.sh itself defaults to smoke, the
 #           same default a bundle copy already had; bundle_suite_script only
 #           rewrites the example workload numbers. A bundle README is read from
 #           templates/suite-tools/BUNDLE_README_TEMPLATE.md and filled in
@@ -1293,10 +1300,15 @@ if is_done bundles; then skipped 7; else
     # DIRECTORIES/ and RUNTIME_LEDGERS/ are what get_benchmark_results.sh writes
     # when it is run here without -o.
     printf 'results/\nbenchmark_suite_log/\nDIRECTORIES/\nRUNTIME_LEDGERS/\n' >.gitignore
+    # LF on every checkout, whatever core.autocrlf says. Git for Windows installs
+    # with core.autocrlf=true, which turned the bundle's scripts and README into
+    # CRLF on a laptop clone (2026-11-18, bundle-amd-ubuntu-2404). The workloads
+    # carry their own .gitattributes; this one covers the bundle's top level.
+    printf '* text=auto eol=lf\n*.sh text eol=lf\n' >.gitattributes
     bundle_readme "${s}" "${bundle}" "${want}" "${rows}" >README.md ||
       stop "could not write README.md in ${bundle}"
     # shellcheck disable=SC2086  # suite_files is one to four names
-    again git add .gitmodules .gitignore README.md ${suite_files} || stop "git add failed in ${bundle}"
+    again git add .gitmodules .gitignore .gitattributes README.md ${suite_files} || stop "git add failed in ${bundle}"
     # shellcheck disable=SC2086
     git update-index --chmod=+x ${suite_files}
     attach_history </dev/null || stop "could not read the history of ${ORG}/${bundle}"
@@ -1341,6 +1353,13 @@ if is_done enduser-test; then skipped 8; else
     done
     [[ ! -e "${WORK}/_test_clone/run.sh" ]] || stop "${bundle} still has run.sh; step 7 should have removed it"
     ! grep -q 'branch *=' "${WORK}/_test_clone/.gitmodules" || stop "${bundle}'s .gitmodules still has a branch line"
+    # This clone uses the publishing laptop's own git settings (Git for Windows:
+    # core.autocrlf=true), so a CR here is what a technician's clone would get.
+    [[ -f "${WORK}/_test_clone/.gitattributes" ]] || stop "${bundle} has no .gitattributes; step 7 should have written it"
+    for f in "${WORK}/_test_clone"/*.sh "${WORK}/_test_clone"/README.md "${WORK}/_test_clone"/.git[a-z]*; do
+      [[ -f "${f}" ]] || continue
+      ! grep -q $'\r' "${f}" || stop "${f##*/} in the ${bundle} test clone has CRLF line endings; check its .gitattributes"
+    done
     (cd "${WORK}/_test_clone" && ./run_benchmark_suite.sh --help) | grep -q "Default: --smoke   (full run" ||
       stop "${bundle}'s run_benchmark_suite.sh does not default to the smoke profile"
     for f in $(grep -o '\./[a-z_]*\.sh' "${WORK}/_test_clone/README.md" | sort -u); do

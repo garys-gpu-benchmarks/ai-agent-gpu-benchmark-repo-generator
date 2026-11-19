@@ -76,6 +76,7 @@ Connection (remote machine only):
 
 Output:
   -o, --output DIR      Output folder. Default: the current folder.
+                        On Windows, C:\\... and /c/... both work.
   -r, --remote-root DIR Folder holding the workloads on the benchmark machine.
                         Default: /opt/benchmarks
   -l, --ledger FILE     Ledger path on the benchmark machine.
@@ -136,6 +137,13 @@ parse_args() {
       *)                  positional+=("$1"); shift ;;
     esac
   done
+
+  # Git Bash on Windows: -o C:\Users\... (or C:/...) becomes /c/Users/... . GNU tar
+  # reads "C:" as a remote host name, so a C:\ output folder failed with
+  # "Cannot open: No such file or directory" (TEMPLATE_00_147, OPEN_ISSUES T2).
+  if [[ "${out_dir}" =~ ^[A-Za-z]:[\\/] ]] && command -v cygpath >/dev/null 2>&1; then
+    out_dir=$(cygpath -u "${out_dir}")
+  fi
 
   ((${#positional[@]} <= 2)) || die_usage "too many arguments: ${positional[*]}"
   local pos_host=${positional[0]:-} pos_port=${positional[1]:-}

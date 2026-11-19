@@ -27,6 +27,11 @@ import log_generator_repair as repairs  # noqa: E402
 import run_from_prompt as rfp  # noqa: E402
 
 
+# Git Bash on Windows, never System32's WSL bash.exe (TEMPLATE_00_147, OPEN_ISSUES T1).
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from host_bash import HOST_BASH  # noqa: E402
+
+
 class AttemptHistory(unittest.TestCase):
     def test_retry_keeps_failed_attempt_and_both_totals(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -221,6 +226,7 @@ class RemoteCopy(unittest.TestCase):
             self.assertEqual(col._copy_excludes(repo, prefix="./"), "")
             self.assertEqual(col._copy_excludes(repo, prefix="124-x/"), "")
 
+    @unittest.skipIf(sys.platform == "win32", "runs on the Linux VM; Git's sed on Windows rewrites in text mode and keeps the CRs")
     def test_cr_rewrite_touches_only_files_with_cr(self) -> None:
         script = col._remote_script("R", resume=False, stamp="s")
         line = next(item for item in script.splitlines() if "grep -lZ" in item)
@@ -234,7 +240,7 @@ class RemoteCopy(unittest.TestCase):
             lf.write_bytes(b"ok\n")
             os.utime(lf, (1_000_000_000, 1_000_000_000))
             for _ in range(2):  # the second pass finds nothing and must still succeed
-                result = subprocess.run(["bash", "-c", f"set -euo pipefail\nREPO={repo}\n{line}"],
+                result = subprocess.run([HOST_BASH, "-c", f"set -euo pipefail\nREPO={repo}\n{line}"],
                                         capture_output=True, text=True, check=False)
                 self.assertEqual(result.returncode, 0, result.stderr)
             self.assertEqual(crlf.read_bytes(), b"x\ny\n")

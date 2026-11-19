@@ -70,6 +70,11 @@ exit 0
 """
 
 
+# Git Bash on Windows, never System32's WSL bash.exe (TEMPLATE_00_147, OPEN_ISSUES T1).
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from host_bash import HOST_BASH  # noqa: E402
+
+
 @unittest.skipIf(BASH is None, "bash is not installed")
 class AptMirrorFallbackTests(unittest.TestCase):
     def setUp(self) -> None:
@@ -195,7 +200,7 @@ class WiringTests(unittest.TestCase):
     def test_shipped_to_vm_and_generated_repos(self) -> None:
         self.assertIn('"lib/apt_mirror_fallback.sh"', self.read("scripts/remote_host_bootstrap.py"))
         self.assertIn('"scripts/lib/apt_mirror_fallback.sh"', self.read("scripts/self_check_generated_repo.sh"))
-        self.assertEqual(subprocess.run(["bash", "-n", str(MIRROR)]).returncode, 0)
+        self.assertEqual(subprocess.run([HOST_BASH, "-n", str(MIRROR)]).returncode, 0)
 
 
 class BootstrapCudaTests(unittest.TestCase):

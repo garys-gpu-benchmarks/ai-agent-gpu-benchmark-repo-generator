@@ -62,6 +62,7 @@ def write_exec(path: Path, text: str) -> None:
     path.chmod(path.stat().st_mode | stat.S_IEXEC | stat.S_IXGRP | stat.S_IXOTH)
 
 
+@unittest.skipIf(sys.platform == "win32", "stand-in stress-ng and gpu_stress have no .exe; the collector runs only on the Linux VM")
 class SystemStressNvidiaCollectorTest(unittest.TestCase):
     def run_collector(self, gpu_stress: str | None = GPU_STRESS_OK, **env_extra: str):
         tmp = tempfile.TemporaryDirectory()

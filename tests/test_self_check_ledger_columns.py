@@ -37,8 +37,10 @@ class SelfCheckLedgerColumnsTests(unittest.TestCase):
             for helper in ("metric_contract.py", "text_io.py"):
                 if (ROOT / "scripts" / helper).exists():
                     (scripts / helper).write_text((ROOT / "scripts" / helper).read_text(encoding="utf-8"), encoding="utf-8")
+            # UTF-8 on every platform: Windows would send the program's em dash as cp1252 0x97,
+            # which Python rejects as source (TEMPLATE_00_147, T1).
             result = subprocess.run([sys.executable, "-"], input=ledger_check_program(), cwd=tmp,
-                                    capture_output=True, text=True, timeout=60)
+                                    capture_output=True, text=True, encoding="utf-8", timeout=60)
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         self.assertNotIn("[FAIL]", result.stdout + result.stderr)
 

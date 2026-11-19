@@ -11,6 +11,7 @@
 from __future__ import annotations
 
 import os
+import sys
 import shutil
 import stat
 import subprocess
@@ -137,7 +138,8 @@ class GetBenchmarkResultsOptionTests(unittest.TestCase):
         self.assertIn("give --host HOST", result.stderr)
         self.assertEqual(self.ssh_calls(), [])
 
-    def test_no_host_collects_from_this_machine(self) -> None:
+    def collect_locally(self, output_arg: str | None = None) -> None:
+        """Collect two workloads from this machine into self.tmp/out (-o output_arg, default that folder)."""
         root = self.tmp / "benchmarks"
         for workload in ("101-sys-bench-a-ubu2404", "102-sys-bench-b-ubu2404"):
             (root / workload / "results" / "raw" / "run1").mkdir(parents=True)
@@ -155,7 +157,8 @@ class GetBenchmarkResultsOptionTests(unittest.TestCase):
             encoding="utf-8",
         )
         out = self.tmp / "out"
-        result = self.run_script("-r", str(root), "-l", str(ledger), "-o", str(out), "--no-xlsx")
+        # On Windows this is C:\Users\...: the script turns it into /c/... (OPEN_ISSUES T2).
+        result = self.run_script("-r", str(root), "-l", str(ledger), "-o", output_arg or str(out), "--no-xlsx")
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(self.ssh_calls(), [], "local mode must not use ssh")
         self.assertIn("No --host given: collecting from this machine", result.stdout)
@@ -170,6 +173,21 @@ class GetBenchmarkResultsOptionTests(unittest.TestCase):
         self.assertFalse((directories / "101-sys-bench-a-ubu2404" / "results" / "parsed").exists())
         self.assertEqual(len(list((out / "RUNTIME_LEDGERS").glob("runtime_ledger_101_102_*.csv"))), 1)
         self.assertFalse((directories / "_meta").exists())
+
+    def test_no_host_collects_from_this_machine(self) -> None:
+        self.collect_locally()
+
+    @unittest.skipIf(sys.platform == "win32", "Windows runs the real cygpath (the test above passes a C: path there)")
+    def test_windows_drive_output_is_converted_with_cygpath(self) -> None:
+        # TEMPLATE_00_147, OPEN_ISSUES T2: GNU tar read "C:" in -o C:\... as a remote host.
+        # A stand-in cygpath maps the Windows spelling to the real folder.
+        cygpath = self.tmp / "bin" / "cygpath"
+        real_out = self.tmp / "out"
+        cygpath.write_text('#!/usr/bin/env bash\n[[ "$1" == "-u" && "$2" == "C:\\\\results\\\\out" ]] || exit 9\n'
+                           f'echo "{real_out}"\n', encoding="utf-8")
+        cygpath.chmod(cygpath.stat().st_mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
+        self.collect_locally("C:\\results\\out")
+        self.assertEqual([p.name for p in self.tmp.iterdir() if p.name.startswith("C:")], [])
 
     def test_too_many_arguments(self) -> None:
         self.assert_usage_error(("203.0.113.10", "22", "extra"), "too many arguments")
