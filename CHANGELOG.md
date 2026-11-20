@@ -1,5 +1,17 @@
 # Changelog
 
+## 2026-11-19 — TEMPLATE_00_149: an older installed kernel no longer stops setup
+
+On 2026-11-19 a refreshed AMD Ubuntu 24.04 droplet booted kernel 6.8.0-149-generic with 6.8.0-147-generic still installed (the day before, the image booted 6.8.0-147 with no other kernel). Cloning bundle-amd-ubuntu-2404 v1.0.45 and running `bash run_benchmark_suite.sh --smoke` stopped all 32 workloads in about 2 s each, before any install: `[FAIL] /lib/modules contains a kernel other than the running kernel 6.8.0-149-generic: 6.8.0-147-generic`. The AMD 26.04 droplet (7.0.0-43 only) and both NVIDIA hosts (6.8.0-138) were not affected. Workaround on that VM: `apt-get purge` of the six 6.8.0-147 packages.
+
+- **Fix:** `refuse_foreign_installed_kernel` (`scripts/lib/keep_running_kernel.sh`, used by every setup skeleton, both ROCm installers, the host bootstrap and `scripts/self_check_generated_repo.sh`) compares each extra `/lib/modules` directory with `uname -r` using `sort -V`. A newer kernel still fails, now worded `contains a kernel newer than the running kernel`: the next reboot would boot it, and the ROCm driver was built for the running one. An older kernel prints `[INFO] ... also holds older kernel ...; the next reboot boots the newest kernel, the running ...` and setup continues: GRUB boots the newest kernel, and amdgpu-dkms builds for the running and the newest kernel. The dpkg audit, the kernel metapackage holds and "setup does not remove kernels" are unchanged.
+- **Docs:** `docs/rocm-reboot-install-contract.md` and the self-check comment describe the newer-only rule.
+- **Checks:** `tests/test_template_00_149_changes.py`: today's 6.8.0-149 + 6.8.0-147 passes with the note; 7.0.0-43 + 7.0.0-38 passes; the running kernel alone passes silently; a newer kernel fails (6.8.0-147 + 6.8.0-149, 7.0.0-31 + 7.0.0-38, 6.8.0-149 + 7.0.0-43); an older and a newer kernel together fail on the newer one only; the whole `keep_running_kernel` passes on today's droplet. These tests fail against the earlier code. `tests/test_amdgpu_reload.py` (newer 7.0.0-38 next to a running 7.0.0-31 fails) is unchanged and passes.
+
+## 2026-11-19 — TEMPLATE_00_149: copied from TEMPLATE_00_148
+
+Started from TEMPLATE_00_148 (tag template-00-148, published as v1.0.45).
+
 ## 2026-11-19 — TEMPLATE_00_148: copied from TEMPLATE_00_147
 
 Started from TEMPLATE_00_147 (tag template-00-147). No changes yet.

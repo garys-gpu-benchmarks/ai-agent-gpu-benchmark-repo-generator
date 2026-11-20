@@ -16,15 +16,20 @@ _keep_running_kernel_run() {
   fi
 }
 
-# Prints a failure and returns 1 when the modules directory contains any
-# kernel other than uname -r. On Ubuntu 26.04 that extra directory is the
-# only sign that apt installed a newer kernel: dpkg stays consistent, and
-# the next reboot boots the new kernel. A missing modules directory is not
-# a failure (self-check on a machine with no /lib/modules).
+# Prints a failure and returns 1 when the modules directory contains a kernel
+# newer than uname -r (compared with sort -V). On Ubuntu 26.04 that extra
+# directory is the only sign that apt installed a newer kernel: dpkg stays
+# consistent, and the next reboot boots the new kernel, which the ROCm driver
+# was not built for. An older kernel is only reported: Ubuntu's GRUB boots the
+# newest kernel, which is the running one, and amdgpu-dkms builds for the
+# running and the newest kernel. TEMPLATE_00_149: a refreshed AMD 24.04 droplet
+# (2026-11-19) booted 6.8.0-149 with 6.8.0-147 still installed, and every setup
+# stopped although that older kernel could not be booted. A missing modules
+# directory is not a failure (self-check on a machine with no /lib/modules).
 # KEEP_RUNNING_KERNEL_MODULES_DIR overrides /lib/modules for tests.
 refuse_foreign_installed_kernel() {
-  local running="" modules_dir="" extra="" base=""
-  local -a extras=()
+  local running="" modules_dir="" extra="" base="" newest=""
+  local -a newer=() older=()
   modules_dir="${KEEP_RUNNING_KERNEL_MODULES_DIR:-/lib/modules}"
   [[ -d "${modules_dir}" ]] || return 0
   running="$(uname -r 2>/dev/null || true)"
@@ -36,10 +41,18 @@ refuse_foreign_installed_kernel() {
     [[ -d "${extra}" ]] || continue
     base="$(basename "${extra}")"
     [[ "${base}" == "${running}" ]] && continue
-    extras+=("${base}")
+    newest="$(printf '%s\n%s\n' "${running}" "${base}" | sort -V | tail -n 1)"
+    if [[ "${newest}" == "${running}" ]]; then
+      older+=("${base}")
+    else
+      newer+=("${base}")
+    fi
   done
-  if ((${#extras[@]} > 0)); then
-    echo "[FAIL] ${modules_dir} contains a kernel other than the running kernel ${running}: ${extras[*]}. The next reboot can boot that kernel. Setup does not remove kernels." >&2
+  if ((${#older[@]} > 0)); then
+    echo "[INFO] ${modules_dir} also holds older kernel ${older[*]}; the next reboot boots the newest kernel, the running ${running}. Setup does not remove kernels." >&2
+  fi
+  if ((${#newer[@]} > 0)); then
+    echo "[FAIL] ${modules_dir} contains a kernel newer than the running kernel ${running}: ${newer[*]}. The next reboot can boot that kernel. Setup does not remove kernels." >&2
     return 1
   fi
   return 0

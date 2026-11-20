@@ -88,7 +88,8 @@ done
 
 # Ubuntu 26.04 can install a newer kernel without leaving dpkg half-configured.
 # The extra /lib/modules directory is then the only symptom, and the next reboot
-# boots that kernel. Skip the check when /lib/modules is absent.
+# boots that kernel. An older kernel is only reported (TEMPLATE_00_149). Skip the
+# check when /lib/modules is absent.
 if [[ -d /lib/modules ]]; then
     # shellcheck disable=SC1091
     source scripts/lib/keep_running_kernel.sh
