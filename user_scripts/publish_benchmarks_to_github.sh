@@ -228,10 +228,13 @@ Steps:
      to github.com/${PROFILE_REPO} (those files only; the profile README
      and sample folders are not changed)
 
-Versions are chosen from GitHub: v1.0.0 on the first run, then the next
-patch number (v1.0.8 -> v1.0.9). The choice is kept in
+Versions are chosen from GitHub and the generator's VERSION: a
+TEMPLATE_MM_NNN generator publishes as v1.MM.N (TEMPLATE_00_* as v1.0.*,
+TEMPLATE_01_* as v1.1.*). The first run of a new series is v1.MM.0, later
+runs the next patch number (v1.1.0 -> v1.1.1). The run stops if GitHub
+already has a newer series than the generator. The choice is kept in
 RUN_FOLDER_PubTree/_logs/version.txt; edit that file before step 6 to
-choose another version.
+choose another version in the same series.
 
 If a run stops, fix the problem and run the same command again with the same
 RUN_FOLDER; finished work is skipped. Do not repeat the cp commands that
@@ -811,6 +814,40 @@ case "$(uname -s)" in
     ((${#probe} <= 220)) || stop "the run folder path is too long for Git on Windows: ${#probe} characters in ${probe} (the limit is 220). Use a shorter run folder name (for example src) or a shorter publish folder path, and run again."
     ;;
 esac
+# The release series comes from the generator's VERSION (TEMPLATE_01_000): a
+# TEMPLATE_MM_NNN generator publishes as v1.MM.N, so TEMPLATE_00_* was v1.0.*
+# and TEMPLATE_01_* is v1.1.*. Prints MM as a number, or nothing when VERSION
+# is missing or not TEMPLATE_MM_NNN (then the patch number simply goes up).
+template_series() {
+  local file=$1 text
+  [[ -f "${file}" ]] || return 0
+  text=$(tr -d '[:space:]' <"${file}")
+  [[ ${text} =~ ^TEMPLATE_([0-9]+)_[0-9]+$ ]] || return 0
+  echo $((10#${BASH_REMATCH[1]}))
+}
+
+# next_release_version LAST SERIES: the version this run publishes. LAST is the
+# newest vN.N.N already on GitHub (or empty); SERIES comes from template_series
+# (or is empty). Fails, with the reason on stderr, when GitHub already has a
+# newer series than this generator.
+next_release_version() {
+  local last=$1 series=$2 major minor patch
+  if [[ -z "${last}" ]]; then
+    echo "v1.${series:-0}.0"
+    return 0
+  fi
+  IFS=. read -r major minor patch <<<"${last#v}"
+  if [[ -z "${series}" ]] || ((series == minor)); then
+    echo "v${major}.${minor}.$((patch + 1))"
+  elif ((series > minor)); then
+    echo "v${major}.${series}.0"
+  else
+    echo "this generator's VERSION publishes as v${major}.${series}.*, but GitHub already has ${last}" >&2
+    return 1
+  fi
+}
+
+series=$(template_series "${GEN}/${GENREPO}/VERSION")
 if [[ -s "${PUB}/_logs/version.txt" ]]; then
   VERSION=$(cat "${PUB}/_logs/version.txt")
   vnote="already chosen for this run"
@@ -821,16 +858,15 @@ else
     tags=$(gh api "repos/${ORG}/${first}/tags?per_page=100" --jq '.[].name') || stop "could not read the version tags of ${ORG}/${first} from GitHub"
     last=$(printf '%s\n' "${tags}" | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | sort -V | tail -n 1)
   fi
-  if [[ -z "${last}" ]]; then
-    VERSION="v1.0.0"
-  else
-    IFS=. read -r major minor patch <<<"${last#v}"
-    VERSION="v${major}.${minor}.$((patch + 1))"
-  fi
+  VERSION=$(next_release_version "${last}" "${series}") || stop "the generator is older than what is published (see the line above). Publish from a newer generator, or put a version in ${PUB}/_logs/version.txt."
   echo "${VERSION}" >"${PUB}/_logs/version.txt"
   vnote="newest already on GitHub: ${last:-none}"
 fi
 [[ ${VERSION} =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]] || stop "the version \"${VERSION}\" in ${PUB}/_logs/version.txt is not like v1.2.3"
+if [[ -n "${series}" ]]; then
+  IFS=. read -r _ vminor _ <<<"${VERSION#v}"
+  ((vminor == series)) || stop "the version ${VERSION} in ${PUB}/_logs/version.txt does not match the generator's VERSION ($(tr -d '[:space:]' <"${GEN}/${GENREPO}/VERSION")), which publishes as v1.${series}.*. Change version.txt, or VERSION in the run folder's generator."
+fi
 readonly VERSION
 echo "Run folder:    ${GEN}"
 echo "Publish tree:  ${PUB}"

@@ -1,5 +1,24 @@
 # Changelog
 
+## 2026-11-22 — TEMPLATE_01_000: the release number follows the template number
+
+TEMPLATE_00_150 published as v1.0.47: the publish script took the newest tag on GitHub and added one to the patch number, so nothing tied a release to the generator that made it. From this template, `VERSION` sets the series: a `TEMPLATE_MM_NNN` generator publishes as `v1.MM.N`. `TEMPLATE_00_*` was `v1.0.*`, and `TEMPLATE_01_*` is `v1.1.*`, starting with `v1.1.0`.
+
+- **Change:** `user_scripts/publish_benchmarks_to_github.sh` reads the run folder generator's `VERSION` (`template_series`) and picks the version with `next_release_version`: the next patch number in the same series, `v1.MM.0` for the first run of a newer series, and a stop when GitHub already has a newer series than the generator. A version written by hand in `_logs/version.txt` must be in the generator's series, or the run stops before anything is pushed. Without a `VERSION`, the patch number goes up as before. `--help` describes the rule.
+- **Checks:** `tests/test_template_01_000_changes.py` runs both functions from the real script: the series from `TEMPLATE_01_000`, `TEMPLATE_00_150`, a CRLF line, no file and a malformed file; v1.0.47 → v1.1.0, v1.1.0 → v1.1.1, v1.0.46 → v1.0.47 with and without a series, the first release of a series; and a stop for a TEMPLATE_00 generator once v1.1.3 is published.
+
+## 2026-11-22 — TEMPLATE_01_000: the nested template copy is removed on the VM too
+
+The four TEMPLATE_00_150 batches (2026-11-22, 101–432, all 128 passed on attempt 1) left `ai-agent-gpu-benchmark-repo-generator_copy/` (about 800 generator files, among them `AGENTS.md`, `.claude/` and `docs/AI_AGENT_INSTRUCTIONS.md`) in every `/opt/benchmarks/<workload>` on the VM except the first: the copy goes to the VM for validation (`_copy_excludes` keeps it), and `remove_template_copy.py` removes only the local one. The first workload was clean because the end-of-batch recheck copied it again after its local copy was gone. On the 201–232 VM the agent removed the 31 copies by hand. The local workspaces and everything published were not affected.
+
+- **Fix:** `finish_generator_files` in `scripts/create_one_workload.py` builds the VM cleanup with `remote_cleanup_script()`: the generator-only paths removed locally, then `find . -mindepth 1 -maxdepth 1 -type d -name '*_copy' -exec rm -rf {} +` (the same command the reuse copy already runs before extracting). It runs whenever there is a VM, even when nothing else was removed locally. `--keep-template-copy` still keeps everything.
+- **Checks:** `tests/test_template_01_000_changes.py` runs `finish_generator_files` with the removal and ssh stubbed: removed paths and the copy, the copy alone when nothing else was removed, no call without a VM or with `--keep-template-copy`, and the script passes `bash -n` with a path that needs quoting. `tests/test_template_00_150_changes.py` checks the call to the shared function.
+- **For VMs generated before this fix:** `find /opt/benchmarks -mindepth 2 -maxdepth 2 -type d -name "*_copy" -print -exec rm -rf {} +`
+
+## 2026-11-22 — TEMPLATE_01_000: copied from TEMPLATE_00_150
+
+Started from TEMPLATE_00_150 (tag template-00-150, published as v1.0.47). The template number moves from 00 to 01: TEMPLATE_01_NNN templates publish as v1.1.N.
+
 ## 2026-11-22 — TEMPLATE_00_150: a generated workspace looks like a release, not the generator's working copy
 
 On 2026-11-21 the generator was cloned from GitHub (v1.0.46) and run with the three-line prompt from the video tutorial (`C:\Users\gary\gpu-bench\workspace`, 101–132). The result differed from the published bundle (`workspace2`) in what a user sees:

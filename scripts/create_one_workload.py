@@ -790,6 +790,15 @@ def finish_template_copy(repo: Path, args: argparse.Namespace, rc: int) -> None:
         )
 
 
+def remote_cleanup_script(name: str, removed: list[str]) -> str:
+    """The VM-side cleanup for a passed workload: the removed paths and the nested copy."""
+    steps = [f"cd {REMOTE_ROOT}/{shlex.quote(name)}"]
+    if removed:
+        steps.append("rm -rf -- " + " ".join(shlex.quote(rel) for rel in removed))
+    steps.append("find . -mindepth 1 -maxdepth 1 -type d -name '*_copy' -exec rm -rf {} +")
+    return " && ".join(steps)
+
+
 def finish_generator_files(repo: Path, template_root: Path, args: argparse.Namespace, ssh: str) -> None:
     """Remove generator-only files once the workload has passed, here and on the VM.
 
@@ -797,7 +806,11 @@ def finish_generator_files(repo: Path, template_root: Path, args: argparse.Names
     generator_files.py), so a generated workload holds what a published one holds,
     plus docs/GENERATION_REPORT.md and results/. The VM copy under REMOTE_ROOT was
     extracted from the earlier tar, which never deletes, so the same paths are removed
-    there. --keep-template-copy keeps these files too. A cleanup problem only warns.
+    there, and so is the nested template copy: it goes to the VM for validation
+    (_copy_excludes) and remove_template_copy.py removes only the local one, so every
+    VM workload but the end-of-batch recheck's kept ~800 generator files (TEMPLATE_00_150
+    batches, 2026-11-22). --keep-template-copy keeps all of these. A cleanup problem only
+    warns.
     """
     if getattr(args, "keep_template_copy", False):
         print(f"[INFO] --keep-template-copy: leaving generator-only files in {repo}", flush=True)
@@ -809,10 +822,9 @@ def finish_generator_files(repo: Path, template_root: Path, args: argparse.Names
               f"Re-run: python3 scripts/generator_files.py --repo-root \"{repo}\"", flush=True)
         return
     print(f"[INFO] removed {len(removed)} generator-only path(s) from {repo.name}", flush=True)
-    if not ssh or not removed:
+    if not ssh:
         return
-    quoted = " ".join(shlex.quote(rel) for rel in removed)
-    script = f"cd {REMOTE_ROOT}/{shlex.quote(repo.name)} && rm -rf -- {quoted}"
+    script = remote_cleanup_script(repo.name, removed)
     try:
         result = ssh_run(ssh, script, timeout=120)
     except (subprocess.TimeoutExpired, OSError) as exc:

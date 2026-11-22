@@ -415,7 +415,7 @@ class GeneratorFilesTests(unittest.TestCase):
         text = (ROOT / "scripts" / "create_one_workload.py").read_text(encoding="utf-8")
         self.assertIn("        if rc == 0:\n            finish_generator_files(repo, template_root, args, ssh)\n"
                       "        return rc", text)
-        self.assertIn('script = f"cd {REMOTE_ROOT}/{shlex.quote(repo.name)} && rm -rf -- {quoted}"', text)
+        self.assertIn("script = remote_cleanup_script(repo.name, removed)", text)  # TEMPLATE_01_000
         self.assertIn("if [ -f scripts/self_check_generated_repo.sh ]; then\n  bash scripts/self_check_generated_repo.sh",
                       text)
 
