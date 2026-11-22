@@ -25,14 +25,14 @@ import time
 import sys
 from pathlib import Path
 
-from bundle_readme import ORG, readme_for_directories
+from bundle_readme import ORG, bundle_suite_script_text, readme_for_directories, workspace_readme
 from generated_repo_directory import generated_repo_directory_name
 from remove_template_copy import reliable_temp_dir, rmtree_reliable
 from prompt_workflow import (
     available_workloads,
     parse_workloads,
 )
-from generator_version import generator_version
+from generator_version import generator_version, release_label
 from host_exec import resolve_host_bash
 
 
@@ -241,9 +241,10 @@ def _copy_template(source: Path, destination: Path) -> None:
 # tools are published as gpu-bench-suite); they are never copied into a workload's
 # scripts/. The VM copy is separate: create_one_workload.py and the bundle publish
 # both install the suite scripts at /opt/benchmarks.
-# Byte-identical to user_scripts/. run_benchmark_suite.sh defaults to smoke
-# (a full run is --smoke --baseline --extended). Publish rewrites only the
-# example workload numbers in a bundle's copy.
+# The user_scripts/ masters, except that run_benchmark_suite.sh gets the
+# folder's workload numbers in its --help examples, exactly as publish writes a
+# bundle's copy (bundle_readme.bundle_suite_script_text). run_benchmark_suite.sh
+# defaults to smoke (a full run is --smoke --baseline --extended).
 PROJECT_ROOT_SUITE_SCRIPTS = (
     "get_benchmark_results.sh",
     "list_runs.sh",
@@ -348,58 +349,71 @@ def _keep_or_write(
 
 
 def install_project_root_bundle(source_root: Path, project_root: Path) -> list[Path]:
-    """Write the four suite scripts and a bundle README into the project root.
+    """Write the four suite scripts and a README into the project root.
 
-    The scripts are the user_scripts masters (LF, executable). The README is
-    rendered from the same template the publish script uses, for the one
-    platform whose workloads are in the folder. More than one platform produces
-    a page that says so, instead of guessing. An existing file that differs
-    from this render, and is not the render from when the folder held one
-    fewer workload, is kept.
+    The scripts are the user_scripts masters (LF, executable); with one platform's
+    workloads in the folder, run_benchmark_suite.sh carries that platform's
+    numbers in its examples, as a published bundle's copy does. The README is the
+    bundle README rewritten for a generated folder (bundle_readme.workspace_readme):
+    it names the generator release (git tag) instead of the internal template
+    number and has no clone, submodule or "pinned release" text. More than one
+    platform produces a page that says so, instead of guessing. An existing file
+    that differs from this render, and is not an earlier generator render, is kept.
     """
     installed: list[Path] = []
+    names = _workload_directories(project_root)
+    digits = sorted({name[0] for name in names})
     for name in PROJECT_ROOT_SUITE_SCRIPTS:
         rel = f"user_scripts/{name}"
         src = source_root / rel
         if not src.is_file():
             print(f"[WARN] Suite script missing from the template: {rel}")
             continue
+        master = src.read_bytes().replace(b"\r\n", b"\n")
+        data = master
+        earlier: tuple[bytes, ...] = ()
+        if name == "run_benchmark_suite.sh" and len(digits) == 1:
+            data = bundle_suite_script_text(master.decode("utf-8"), digits[0]).encode("utf-8")
+            earlier = (master,)
         written = _keep_or_write(
             project_root / name,
-            src.read_bytes().replace(b"\r\n", b"\n"),
+            data,
             rel=rel,
             executable=True,
+            earlier=earlier,
         )
         if written is not None:
             installed.append(written)
-    names = _workload_directories(project_root)
     if not names:
         print("[WARN] No workload directories in the project root; bundle README not written.")
         return installed
-    version = generator_version(source_root) or "local"
-    readme = readme_for_directories(
-        names, org=ORG, version=version, generator_root=source_root
-    ).encode("utf-8")
-    earlier = []
+    release = release_label(source_root)
+    readme = workspace_readme(names, org=ORG, release=release, generator_root=source_root).encode("utf-8")
+    # Renders this function may have written before: with one fewer workload, and
+    # the published-bundle text earlier templates wrote ("pinned to its tested ...").
+    old_version = generator_version(source_root) or "local"
+    earlier_readmes = [
+        readme_for_directories(names, org=ORG, version=old_version, generator_root=source_root).encode("utf-8")
+    ]
     if len(names) >= 2:
         for skip in names:
             subset = [name for name in names if name != skip]
-            earlier.append(
-                readme_for_directories(
-                    subset, org=ORG, version=version, generator_root=source_root
-                ).encode("utf-8")
+            earlier_readmes.append(
+                workspace_readme(subset, org=ORG, release=release, generator_root=source_root).encode("utf-8")
+            )
+            earlier_readmes.append(
+                readme_for_directories(subset, org=ORG, version=old_version, generator_root=source_root).encode("utf-8")
             )
     written = _keep_or_write(
         project_root / "README.md",
         readme,
         rel="templates/suite-tools/BUNDLE_README_TEMPLATE.md",
         executable=False,
-        earlier=tuple(earlier),
+        earlier=tuple(earlier_readmes),
     )
     if written is not None:
         installed.append(written)
     return installed
-
 
 def main() -> int:
     args = parse_args()

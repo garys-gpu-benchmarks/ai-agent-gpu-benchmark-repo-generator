@@ -396,8 +396,8 @@ def _extract_profile_parameter_values(
     return "Parameters_SmokeBaselineExtend", {}
 
 
-_TEMPLATE_NOTE_RE = re.compile(r"(?:^|[.;]\s*)TEMPLATE_00_\d+[^.;]*[.;]?", re.IGNORECASE)
-_TEMPLATE_TAG_RE = re.compile(r"TEMPLATE_00_\d+(?:\s+\d{4}-\d{2}-\d{2})?:?\s*", re.IGNORECASE)
+_TEMPLATE_NOTE_RE = re.compile(r"(?:^|[.;]\s*)TEMPLATE_\d+_\d+[^.;]*[.;]?", re.IGNORECASE)
+_TEMPLATE_TAG_RE = re.compile(r"TEMPLATE_\d+_\d+(?:\s+\d{4}-\d{2}-\d{2})?:?\s*", re.IGNORECASE)
 
 
 def _strip_template_notes(value: str) -> str:
@@ -405,17 +405,17 @@ def _strip_template_notes(value: str) -> str:
     repetitions aligned to match 112/312" from an extracted cell value.
     self_check_generated_repo.sh fails README.md/SPEC.md/docs/PRD.md/
     benchmark_specification.json outright if any of them still contain
-    "TEMPLATE_00_"; leftover workbook authoring notes used to flow straight
+    a TEMPLATE_NN_NNN label; leftover workbook authoring notes used to flow straight
     through into the generated docs and trip that check (212). Only text
-    mentioning a TEMPLATE_00_<n> tag is removed -- real parameter values
+    mentioning a TEMPLATE_<nn>_<n> tag is removed -- real parameter values
     are untouched.
     """
     without_notes = _TEMPLATE_NOTE_RE.sub("", value)
     if _TEMPLATE_TAG_RE.search(without_notes):
-        # The sentence-boundary pass above only catches a TEMPLATE_00_<n>
+        # The sentence-boundary pass above only catches a TEMPLATE_<nn>_<n>
         # tag that starts its own clause. A tag sitting mid-sentence (e.g.
         # inside a parenthetical) would otherwise still leave the literal
-        # "TEMPLATE_00_" substring in place, which fails self_check's scan
+        # TEMPLATE_<nn>_<n> label in place, which fails self_check's scan
         # just as surely -- fall back to deleting just the bare tag so the
         # forbidden substring is always gone, even if the value reads a
         # little rougher around it.

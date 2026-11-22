@@ -139,6 +139,9 @@ class ProjectRootBundleTests(unittest.TestCase):
         for name in PROJECT_ROOT_SUITE_SCRIPTS:
             dst = self.project / name
             expected = (ROOT / "user_scripts" / name).read_bytes().replace(b"\r\n", b"\n")
+            if name == "run_benchmark_suite.sh":
+                # TEMPLATE_00_150: the folder's own workload numbers in --help, as publish writes.
+                expected = bundle_readme.bundle_suite_script_text(expected.decode("utf-8"), "1").encode("utf-8")
             self.assertEqual(dst.read_bytes(), expected, name)
             if os.name != "nt":
                 self.assertTrue(os.access(dst, os.X_OK), name)
@@ -152,11 +155,15 @@ class ProjectRootBundleTests(unittest.TestCase):
         self._install()
         text = (self.project / "README.md").read_text(encoding="utf-8")
         self.assertTrue(text.startswith("# AMD ROCm - Ubuntu 24.04 benchmark bundle\n"))
-        self.assertIn("bundle-amd-ubuntu-2404", text)
-        self.assertIn("https://github.com/garys-gpu-benchmarks/bundle-amd-ubuntu-2404", text)
         self.assertIn("| 107 | [stream-ddr5-bandwidth](", text)
-        # The version comes from VERSION (TEMPLATE_00_146), never a typed-in number.
-        self.assertIn(f"pinned to its tested {generator_version(ROOT) or 'local'} release", text)
+        # TEMPLATE_00_150: a generated folder is not the published bundle. No clone URL,
+        # no pinned release, no internal template number; the generator's release tag or
+        # "a development build" instead.
+        self.assertNotIn("bundle-amd-ubuntu-2404", text)
+        self.assertNotIn("git clone", text)
+        self.assertNotIn("pinned to its tested", text)
+        self.assertNotIn(generator_version(ROOT) or "TEMPLATE_", text)
+        self.assertIn("generated with ", text)
         self.assertNotIn("More than one platform", text)
         # The other three bundles are linked; this bundle's own slug is not in that list.
         header = text.split("## Requirements", 1)[0]

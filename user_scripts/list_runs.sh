@@ -288,7 +288,7 @@ $0 == "" { next }
   rows++; if (code == "0") passed++
   printf "%-60s %-9s %-9s %s\n", base(get(f, "runtime_root_dir")), prof, bench, code
 }
-END { if (summary == "true") printf "\nRuns in the ledger: %d   passed (exit code 0): %d   other: %d\n", rows, passed, rows - passed }
+END { if (summary == "true") printf "\nRuns in the ledger: %d   passed (exit code 0): %d   failed (non-zero or missing exit code): %d\n", rows, passed, rows - passed }
 AWK
 )
 

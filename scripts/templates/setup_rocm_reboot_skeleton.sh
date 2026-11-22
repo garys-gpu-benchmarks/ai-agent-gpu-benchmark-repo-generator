@@ -862,6 +862,36 @@ install_rocm_bundled_amdsmi() {
   printf '%s\n' "${amdsmi_err}"
 }
 
+# vLLM's rotary embedding imports flash_attn.ops.triton.rotary and ignores only
+# ModuleNotFoundError. An installed flash-attn that fails to import any other way
+# aborts engine startup: the AMD index flash-attn 2.8.3 cp314 wheel (91.9 MB,
+# published 2026-11-19) references c10::cuda::CUDAErrorLogCapture, which ROCm
+# torch 2.13 does not export. These workloads select ROCM_ATTN, which does not
+# call flash-attn. Keep a wheel that imports the way vLLM imports it; otherwise
+# remove it and continue, as a missing amd-aiter does. Call this after the
+# vllm_rocm_bootstrap.pth write so each probe imports torch first, as the server does.
+verify_vllm_flash_attn() {
+  local probe_err=""
+  if ! "${PYTHON_BIN}" -c "import importlib.util,sys; sys.exit(importlib.util.find_spec('flash_attn') is None)"; then
+    install_status_log_step flash_attn "flash-attn not installed; vLLM will not import it"
+    return 0
+  fi
+  if probe_err="$("${PYTHON_BIN}" -c '
+try:
+    import flash_attn.ops.triton.rotary
+except ModuleNotFoundError:
+    import flash_attn
+' 2>&1)"; then
+    install_status_log_step flash_attn "flash-attn ${FLASH_ATTN_VERSION} imports; kept"
+    return 0
+  fi
+  log_warn "flash-attn ${FLASH_ATTN_VERSION} does not import against this ROCm torch; removing it: $(tail -n1 <<<"${probe_err}")"
+  "${PYTHON_BIN}" -m pip uninstall -y flash-attn >/dev/null 2>&1 || true
+  "${PYTHON_BIN}" -c "import importlib.util,sys; sys.exit(importlib.util.find_spec('flash_attn') is not None)" ||
+    die "flash-attn ${FLASH_ATTN_VERSION} fails to import and could not be uninstalled: $(tail -n1 <<<"${probe_err}")"
+  install_status_log_step flash_attn "flash-attn ${FLASH_ATTN_VERSION} failed to import and was removed; vLLM will not import it"
+}
+
 install_workload_rocm_packages() {
   local framework wheel_url
   framework="$("${PYTHON_BIN}" - <<'PY'
@@ -956,6 +986,7 @@ PY
     fi
     cp -a "${src_custom}" "${site_pkg}/vllm_rocm_bootstrap.py"
     printf '%s\n' 'import vllm_rocm_bootstrap' > "${site_pkg}/vllm_rocm_bootstrap.pth"
+    verify_vllm_flash_attn
     gpu_check "Official vLLM ROCm wheel verification failed." \
       "${PYTHON_BIN}" -c 'import vllm, uvloop; print(f"vLLM {vllm.__version__}")'
     install_status_log_step vllm "installed and verified official ROCm wheel"

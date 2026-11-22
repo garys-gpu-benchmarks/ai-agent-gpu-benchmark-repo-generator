@@ -47,7 +47,7 @@ TEMPLATE_COPY_SUFFIX = "_copy"
 TEMPLATE_MARKERS = ("scripts/create_generated_repo.py", "AGENTS.md")
 # Names the generator gives its own nested copy (<generator folder>_copy). An empty folder is
 # only removed as a leftover shell when it has one of these names (or the manifest's name).
-GENERATOR_COPY_NAME = re.compile(r"^(ai-agent-gpu-benchmark-repo-generator|TEMPLATE_00_\d+)_copy$")
+GENERATOR_COPY_NAME = re.compile(r"^(ai-agent-gpu-benchmark-repo-generator|TEMPLATE_\d+_\d+)_copy$")
 MANIFEST_REL = Path("results") / "generation_manifest.json"
 GATES_REL = Path("results") / "component_gates.json"
 

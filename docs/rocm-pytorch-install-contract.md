@@ -43,7 +43,7 @@ python -m pip install \
 
 Benchmark virtualenvs are uv-managed CPython 3.14 on both Ubuntu releases. The system interpreter stays the distro Python (3.12.3 on 24.04, python3.14 on 26.04) and is used only by setup scripts.
 
-vLLM uses the cp314 wheel `vllm-0.29.1.dev0+rocm10.1.0` from `https://rocm.frameworks.amd.com/whl-multi-arch/vllm/`, which requires torch 2.13.0. Also install `flash-attn==2.8.3` and `amd-aiter==0.1.22.post2.dev0+gb4d9154d1.d20261002` from that index, and `tensorizer==2.12.1` from PyPI. Extra-deps pip is non-fatal when an optional dependency is unpublished; always install `uvloop`, `fastapi`, and `aiohttp>=3.13.3` so `vllm.entrypoints.openai.api_server` can start.
+vLLM uses the cp314 wheel `vllm-0.29.1.dev0+rocm10.1.0` from `https://rocm.frameworks.amd.com/whl-multi-arch/vllm/`, which requires torch 2.13.0. Also install `flash-attn==2.8.3` and `amd-aiter==0.1.22.post2.dev0+gb4d9154d1.d20261002` from that index, and `tensorizer==2.12.1` from PyPI. After the vLLM install, setup imports flash-attn the way vLLM does (`flash_attn.ops.triton.rotary`, or top-level `flash_attn` when that submodule is missing). If that import fails, setup uninstalls flash-attn and continues: vLLM treats it as absent and starts on `ROCM_ATTN`. `results/install_status.txt` gets a `flash_attn` step saying it was kept, removed, or not installed. Extra-deps pip is non-fatal when an optional dependency is unpublished; always install `uvloop`, `fastapi`, and `aiohttp>=3.13.3` so `vllm.entrypoints.openai.api_server` can start.
 
 ## Ubuntu 24.04 and 26.04 / ROCm 10.1.0 extras (AMD 101–132 and 301–332)
 

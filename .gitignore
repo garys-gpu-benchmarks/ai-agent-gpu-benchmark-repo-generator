@@ -70,7 +70,7 @@ results/reboot_resume.log
 
 # Nested template copy is a local generation aid, not a published artifact.
 ai-agent-gpu-benchmark-repo-generator_copy/
-TEMPLATE_00_*_copy/
+TEMPLATE_*_copy/
 
 # Runtime / operator artifacts
 runtime_ledger.csv

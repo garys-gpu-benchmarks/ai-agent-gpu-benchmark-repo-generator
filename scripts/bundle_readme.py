@@ -160,6 +160,109 @@ def render_bundle_readme(
     return text + "\n"
 
 
+def bundle_suite_script_text(master: str, digit: str) -> str:
+    """A bundle's copy of run_benchmark_suite.sh: the master with that bundle's numbers.
+
+    Mirrors bundle_suite_script() in user_scripts/publish_benchmarks_to_github.sh
+    (tr -d '\\r' | sed ...), so the copy generation writes into a workspace is the
+    copy publish writes into a bundle. tests/test_template_00_150_changes.py checks
+    both give the same bytes for every platform.
+    """
+    s = str(digit)[:1]
+    if s not in PLATFORMS:
+        raise ValueError(f"platform digit must be 1-4, not {digit!r}")
+    examples = "Examples: 101,107,121   301-310   101-105,120"
+    replacement = f"Examples: {s}01,{s}07,{s}21   {s}01-{s}10   {s}01-{s}05,{s}20"
+    retarget = re.compile(r"-w 101,107,121 --baseline|-w 105 --smoke|use numbers like 101")
+    out = []
+    for line in master.replace("\r", "").split("\n"):
+        if line.endswith(examples):
+            line = line[: -len(examples)] + replacement
+        if retarget.search(line):
+            line = re.sub(r"\b1([0-3][0-9])\b", lambda m: s + m.group(1), line)
+        out.append(line)
+    return "\n".join(out)
+
+
+# The bundle README describes a published bundle: clone it with git, update it with
+# git pull, every benchmark pinned to a release. A workspace that generation wrote
+# on the user's computer is none of that, so its README replaces those parts.
+_PINNED = "each pinned to its tested @@RELEASE@@ release. Other platforms have their own bundle:"
+_INSTALL_START = "## Install\n"
+_INSTALL_END = "## Quick check\n"
+_INSTALLED_RELEASE_ROW = "| Installed release | `git -C /opt/benchmarks describe --tags` |\n"
+_UPDATE_START = "## Update\n"
+_UPDATE_END = "## Benchmarks\n"
+
+
+def _replace_between(text: str, start: str, end: str, new: str) -> str:
+    begin = text.find(start)
+    stop = text.find(end, begin + 1) if begin != -1 else -1
+    if begin == -1 or stop == -1:
+        raise ValueError(f"bundle README template no longer has {start.strip()!r} before {end.strip()!r}")
+    return text[:begin] + new + text[stop:]
+
+
+def workspace_readme(
+    directories: list[str],
+    *,
+    org: str = ORG,
+    release: str,
+    generator_root: Path,
+) -> str:
+    """README for the folder generation writes the workloads into (not a published bundle).
+
+    release is the generator's release tag (generator_version.release_label), or ""
+    for a development build. More than one platform gives the mixed page.
+    """
+    digits = sorted({name[0] for name in directories})
+    if len(digits) != 1:
+        return render_mixed_readme(directories, org=org)
+    s = digits[0]
+    info = PLATFORMS[s]
+    rows = "\n".join(
+        f"| {name[:3]} | [{short_workload_name(name)}]({name}/) |" for name in sorted(directories)
+    ) + "\n"
+    text = render_bundle_readme(
+        s, info["slug"], str(len(directories)), rows, org=org, version="@@RELEASE@@", generator_root=generator_root
+    )
+    made_with = (
+        f"generated with ai-agent-gpu-benchmark-repo-generator {release}."
+        if release
+        else "generated with a development build of ai-agent-gpu-benchmark-repo-generator."
+    )
+    if _PINNED not in text:
+        raise ValueError("bundle README template no longer has the 'pinned to its tested' sentence")
+    text = text.replace(_PINNED, made_with + " Published bundles for the other platforms:")
+    install = (
+        "## Install\n\n"
+        "Generation installed and smoke-tested every benchmark in this folder on its\n"
+        "validation server, in `/opt/benchmarks`, with the four suite scripts beside them.\n"
+        "On that server, go straight to the Quick check.\n\n"
+        f"To install them on another Ubuntu {info['os']} machine with {info['vendor']} GPUs, copy the\n"
+        "benchmark folders and the four scripts from this folder (Git Bash on Windows works):\n\n"
+        "```bash\n"
+        "ssh root@<address> 'apt-get update && apt-get install -y tmux && mkdir -p /opt/benchmarks'\n"
+        f"scp -r {s}[0-9][0-9]-* *.sh root@<address>:/opt/benchmarks/\n"
+        f"ssh root@<address> 'cd /opt/benchmarks && ./run_benchmark_suite.sh --list'   # all {len(directories)} should show as ready\n"
+        "```\n\n"
+        "Add `-P <port>` to scp and `-p <port>` to ssh if ssh is not on port 22.\n\n"
+    )
+    text = _replace_between(text, _INSTALL_START, _INSTALL_END, install)
+    if _INSTALLED_RELEASE_ROW not in text:
+        raise ValueError("bundle README template no longer has the 'Installed release' row")
+    text = text.replace(_INSTALLED_RELEASE_ROW, "")
+    update = (
+        "## Update\n\n"
+        "These copies do not update themselves. To pick up a newer generator release,\n"
+        "run `git pull` in `ai-agent-gpu-benchmark-repo-generator` and generate again.\n\n"
+    )
+    text = _replace_between(text, _UPDATE_START, _UPDATE_END, update)
+    if "@@RELEASE@@" in text:
+        raise ValueError("bundle README template uses @VERSION@ outside the 'pinned' sentence")
+    return text
+
+
 def render_mixed_readme(directories: list[str], *, org: str = ORG) -> str:
     """A project root that holds more than one platform. Does not pick one."""
     grouped: dict[str, list[str]] = {}

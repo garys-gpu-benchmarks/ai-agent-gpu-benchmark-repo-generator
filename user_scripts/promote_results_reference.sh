@@ -49,8 +49,8 @@ Required:
 Options:
   --profiles LIST        Profiles to publish, comma-separated (default: baseline).
                          Example: --profiles baseline,extended
-  --template-version V   Generator version shown on the page (default: taken from
-                         a TEMPLATE_00_NNN folder in the --repos path).
+  --template-version V   Accepted for older callers; the page no longer names the
+                         generator version (TEMPLATE_00_150).
   --dry-run              Show what would change; write nothing.
   -h, --help             Show this help.
 

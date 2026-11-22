@@ -208,8 +208,8 @@ if prd.is_file() and workload:
         raise SystemExit(f"[FAIL] docs/PRD.md Workload Number is {shown}, expected {workload}")
 for name in ("README.md", "SPEC.md", "docs/PRD.md", "benchmark_specification.json"):
     path = Path(name)
-    if path.is_file() and "TEMPLATE_00_" in path.read_text(encoding="utf-8"):
-        raise SystemExit(f"[FAIL] {name} still contains a TEMPLATE_00_* authoring note")
+    if path.is_file() and re.search(r"TEMPLATE_\d+_\d+", path.read_text(encoding="utf-8")):
+        raise SystemExit(f"[FAIL] {name} still contains a TEMPLATE_NN_NNN authoring note")
 print("[PASS] public docs match yaml kernel_version and Workload Number")
 PY
 

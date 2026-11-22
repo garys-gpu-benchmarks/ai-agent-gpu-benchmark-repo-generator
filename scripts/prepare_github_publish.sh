@@ -144,6 +144,7 @@ SCRIPT_LEFTOVERS=(
   scripts/refresh_remote_vm.sh
   scripts/test_nested_template_copy.sh
   scripts/remove_template_copy.py
+  scripts/generator_files.py
   scripts/smoke_check_generated_repo.sh
   scripts/self_check_generated_repo.sh
   scripts/dir.txt
@@ -185,7 +186,7 @@ if [[ -n "${GITHUB_OWNER}" ]]; then
 fi
 
 if [[ "${MODE}" == "apply" && "${IN_PLACE}" -eq 0 ]]; then
-  if find . -maxdepth 1 -type d \( -name 'TEMPLATE_00_*_copy' -o -name 'ai-agent-gpu-benchmark-repo-generator_copy' \) -print -quit | grep -q .; then
+  if find . -maxdepth 1 -type d \( -name 'TEMPLATE_*_copy' -o -name 'ai-agent-gpu-benchmark-repo-generator_copy' \) -print -quit | grep -q .; then
     err "Nested generation *_copy is present. Copy this repo to a publish tree first, or pass --in-place if you intend to destroy the generation workspace."
     exit 1
   fi
@@ -201,7 +202,7 @@ done
 while IFS= read -r copy_dir; do
   [[ -n "${copy_dir}" ]] || continue
   do_rm "${copy_dir}"
-done < <(find . -maxdepth 1 -type d \( -name 'TEMPLATE_00_*_copy' -o -name '*_copy' \) -print)
+done < <(find . -maxdepth 1 -type d \( -name 'TEMPLATE_*_copy' -o -name '*_copy' \) -print)
 
 do_rm .venv
 do_rm .venvs
@@ -306,7 +307,7 @@ GITIGNORE_NEEDLES=(
   'runtime_ledger.csv'
   'benchmark_actual.csv'
   'benchmark_actual_excel.csv'
-  'TEMPLATE_00_*_copy/'
+  'TEMPLATE_*_copy/'
   'ai-agent-gpu-benchmark-repo-generator_copy/'
   '.cache/'
   '*.safetensors'

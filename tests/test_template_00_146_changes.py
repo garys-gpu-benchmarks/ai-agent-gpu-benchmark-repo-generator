@@ -226,7 +226,7 @@ class GeneratorVersionTests(unittest.TestCase):
     def test_every_version_reader_uses_the_shared_function(self) -> None:
         expected = {
             "scripts/create_generated_repo.py": 'generator_version(source_root) or "local"',
-            "scripts/create_one_workload.py": "template_version=generator_version(template_root)",
+            "scripts/create_one_workload.py": "generator_version(template_root, warn=True)",
             "scripts/run_from_prompt.py": 'generator_version(template_root, warn=True) or "unknown"',
         }
         for rel, needle in expected.items():

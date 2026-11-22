@@ -8,12 +8,13 @@
 #   VERSION (TEMPLATE_00_146). Labels only: nothing fails when no version is found.
 # Execution: imported by the generation scripts; or run
 #   python3 scripts/generator_version.py [GENERATOR_ROOT] to print it.
-# Requirements: Python 3.8+.
+# Requirements: Python 3.8+. release_label() runs git when it is installed.
 """Read the generator's template version from VERSION, then the folder path."""
 
 from __future__ import annotations
 
 import re
+import subprocess
 import sys
 from pathlib import Path
 
@@ -52,6 +53,37 @@ def generator_version(root: Path | None = None, *, warn: bool = False) -> str:
             flush=True,
         )
     return from_file or from_folder
+
+
+RELEASE_TAG = re.compile(r"v(\d+)\.(\d+)\.(\d+)")
+
+
+def release_label(root: Path | None = None) -> str:
+    """The published release (v1.0.N) this generator clone is checked out at, or "".
+
+    A clone of the published generator carries its release tags, so a user who
+    cloned it gets "v1.0.N" here. The maintainer's working copy, a download
+    without .git, or a commit after the tag gets "": callers then say
+    "a development build" instead of showing the internal TEMPLATE_00_NNN label,
+    which is for the changelog and generation records, not for users.
+    """
+    root = Path(root).resolve() if root is not None else GENERATOR_ROOT
+    try:
+        result = subprocess.run(
+            ["git", "-C", str(root), "tag", "--points-at", "HEAD"],
+            capture_output=True,
+            text=True,
+            timeout=15,
+            check=False,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return ""
+    if result.returncode != 0:
+        return ""
+    tags = [tag.strip() for tag in result.stdout.splitlines() if RELEASE_TAG.fullmatch(tag.strip())]
+    if not tags:
+        return ""
+    return max(tags, key=lambda tag: tuple(int(part) for part in RELEASE_TAG.fullmatch(tag).groups()))
 
 
 def main(argv: list[str]) -> int:

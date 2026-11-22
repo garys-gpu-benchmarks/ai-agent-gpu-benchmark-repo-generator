@@ -233,8 +233,8 @@ if prd.is_file() and workload:
         fail(f"docs/PRD.md Workload Number is {shown}, expected {workload}")
 for name in ("README.md", "SPEC.md", "docs/PRD.md", "benchmark_specification.json"):
     path = Path(name)
-    if path.is_file() and "TEMPLATE_00_" in path.read_text(encoding="utf-8"):
-        fail(f"{name} still contains a TEMPLATE_00_* authoring note")
+    if path.is_file() and re.search(r"TEMPLATE_\d+_\d+", path.read_text(encoding="utf-8")):
+        fail(f"{name} still contains a TEMPLATE_NN_NNN authoring note")
 print("[PASS] README/SPEC kernel_version, PRD workload number, and public docs match the spec")
 PY
 then
@@ -273,7 +273,7 @@ if [[ "${MODE}" == "published" ]]; then
   fi
 fi
 
-for pattern in 'results/' '.venv/' '*.zip' 'runtime_ledger.csv' 'benchmark_actual.csv' 'TEMPLATE_00_*_copy/'; do
+for pattern in 'results/' '.venv/' '*.zip' 'runtime_ledger.csv' 'benchmark_actual.csv' 'TEMPLATE_*_copy/'; do
   if grep -Fq "$pattern" .gitignore; then
     pass ".gitignore protects $pattern"
   else
@@ -298,7 +298,7 @@ else
 fi
 
 if [[ -d .git ]]; then
-  ignored_copy="$(find . -maxdepth 1 -type d -name 'TEMPLATE_00_*_copy' -print -quit || true)"
+  ignored_copy="$(find . -maxdepth 1 -type d -name 'TEMPLATE_*_copy' -print -quit || true)"
   if [[ -n "$ignored_copy" ]]; then
     if git check-ignore -q "$ignored_copy"; then
       pass "Nested generation template copy is ignored by Git"

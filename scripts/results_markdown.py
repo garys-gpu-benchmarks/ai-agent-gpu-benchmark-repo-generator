@@ -167,7 +167,10 @@ def reference_from_actual(actual: str, *, template_version: str = "", generated:
     """A committed RESULTS_REFERENCE.md from a RESULTS_ACTUAL.md page.
 
     profiles limits the sections kept (generation keeps smoke; a promoted baseline keeps
-    baseline and extended). The header says where the numbers come from.
+    baseline and extended). The header says when the numbers were recorded. It does not
+    name the generator: the internal template number means nothing to a reader, and a
+    published repository's release tag already says which generator made it.
+    template_version is accepted for older callers and not shown.
     """
     sections = {m.group(1): m.group(0) for m in _SECTION.finditer(actual)}
     if profiles:
@@ -179,14 +182,11 @@ def reference_from_actual(actual: str, *, template_version: str = "", generated:
         raise ValueError(f"no {'passed ' if require_pass else ''}section for {wanted}")
     head = actual.split("<!-- profile:", 1)[0]
     head = head.split("\nLatest run of each profile", 1)[0].rstrip() + "\n"
-    provenance = " · ".join(part for part in (
-        f"generator {template_version}" if template_version else "",
-        f"recorded {generated}" if generated else "",
-    ) if part)
+    del template_version
     lines = [
         head,
-        "Reference results measured by the maintainer on the system shown in each section"
-        + (f" ({provenance})" if provenance else "")
+        "Reference results from the validation run on the system shown in each section"
+        + (f" (recorded {generated})" if generated else "")
         + ". Your own runs write `results/RESULTS_ACTUAL.md` in the same format.",
         "",
     ]
@@ -208,7 +208,7 @@ def main() -> int:
     parser = argparse.ArgumentParser(description="Turn results/RESULTS_ACTUAL.md into RESULTS_REFERENCE.md.")
     parser.add_argument("--reference-from", type=Path, required=True)
     parser.add_argument("--out", type=Path, required=True)
-    parser.add_argument("--template-version", default="")
+    parser.add_argument("--template-version", default="", help="accepted for older callers; not shown on the page")
     parser.add_argument("--generated", default="")
     parser.add_argument("--profiles", default="", help="comma-separated profiles to keep (default: all)")
     parser.add_argument("--require-pass", action="store_true", help="keep only sections whose run exited 0")

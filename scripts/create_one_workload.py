@@ -19,6 +19,7 @@ from generated_repo_directory import find_generated_repo, generated_repo_directo
 from host_exec import normalize_remote_root, normalize_ssh_command, run_host_bash, to_git_bash_path
 from framework_registry import resolve_flags
 from platform_policy import match_policy
+from generator_files import remove_generator_files
 from remove_template_copy import remove_template_copy
 from generator_version import generator_version
 from results_markdown import REFERENCE_NAME, reference_from_actual
@@ -92,8 +93,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--keep-template-copy",
         action="store_true",
-        help="Keep the nested <template>_copy/ generation workspace after the workload passes "
-        "(default: remove it once the workload passes)",
+        help="Keep the nested <template>_copy/ generation workspace and the generator-only files "
+        "after the workload passes (default: remove both once the workload passes)",
     )
     return parser.parse_args()
 
@@ -533,7 +534,14 @@ if ! command -v rg >/dev/null 2>&1; then
   DEBIAN_FRONTEND=noninteractive apt-get install -y ripgrep
 fi
 bash run_benchmark.sh --smoke
-bash scripts/self_check_generated_repo.sh
+# A workload that already passed has had its generator-only files removed
+# (generator_files.py), the static self-check among them; the end-of-batch
+# recheck of that workload then reruns setup and smoke without it.
+if [ -f scripts/self_check_generated_repo.sh ]; then
+  bash scripts/self_check_generated_repo.sh
+else
+  echo "[INFO] generator-only files were removed after this workload passed; static self-check skipped"
+fi
 bash scripts/check_github_publish_ready.sh
 echo {REMOTE_OK}
 """
@@ -782,12 +790,45 @@ def finish_template_copy(repo: Path, args: argparse.Namespace, rc: int) -> None:
         )
 
 
+def finish_generator_files(repo: Path, template_root: Path, args: argparse.Namespace, ssh: str) -> None:
+    """Remove generator-only files once the workload has passed, here and on the VM.
+
+    The list is publish's own (scripts/prepare_github_publish.sh, read by
+    generator_files.py), so a generated workload holds what a published one holds,
+    plus docs/GENERATION_REPORT.md and results/. The VM copy under REMOTE_ROOT was
+    extracted from the earlier tar, which never deletes, so the same paths are removed
+    there. --keep-template-copy keeps these files too. A cleanup problem only warns.
+    """
+    if getattr(args, "keep_template_copy", False):
+        print(f"[INFO] --keep-template-copy: leaving generator-only files in {repo}", flush=True)
+        return
+    try:
+        removed = remove_generator_files(repo, template_root)
+    except Exception as exc:  # never let cleanup turn a passed workload into a failure
+        print(f"[WARN] Generator-only files could not be removed from {repo}: {exc}. "
+              f"Re-run: python3 scripts/generator_files.py --repo-root \"{repo}\"", flush=True)
+        return
+    print(f"[INFO] removed {len(removed)} generator-only path(s) from {repo.name}", flush=True)
+    if not ssh or not removed:
+        return
+    quoted = " ".join(shlex.quote(rel) for rel in removed)
+    script = f"cd {REMOTE_ROOT}/{shlex.quote(repo.name)} && rm -rf -- {quoted}"
+    try:
+        result = ssh_run(ssh, script, timeout=120)
+    except (subprocess.TimeoutExpired, OSError) as exc:
+        print(f"[WARN] could not remove generator-only files on the VM: {exc}", flush=True)
+        return
+    if result.returncode != 0:
+        print(f"[WARN] removing generator-only files on the VM exited {result.returncode}", flush=True)
+
+
 def fetch_results_reference(ssh: str, repo: Path, template_root: Path) -> bool:
     """Write the committed RESULTS_REFERENCE.md from the validation smoke run (TEMPLATE_00_135).
 
     The smoke run on the VM refreshed results/RESULTS_ACTUAL.md there; its smoke section,
-    with a header naming the generator and the date, becomes the repository's reference
-    page. A missing page only warns: the workload has still passed.
+    with a header giving the date, becomes the repository's reference
+    page. The header gives the date only, not the internal template number (TEMPLATE_00_150).
+    A missing page only warns: the workload has still passed.
     """
     name = repo.name
     try:
@@ -802,7 +843,6 @@ def fetch_results_reference(ssh: str, repo: Path, template_root: Path) -> bool:
     try:
         page = reference_from_actual(
             text,
-            template_version=generator_version(template_root),
             generated=utc_now()[:10],
             profiles=("smoke",),
         )
@@ -871,6 +911,8 @@ def process_one(workload: str, args: argparse.Namespace, template_root: Path, pr
             transient_retry=str(remote.get("transient_retry") or ""),
         )
         _stamp_generation_report(repo, started, finished)
+        if rc == 0:
+            finish_generator_files(repo, template_root, args, ssh)
         return rc
     except Exception as exc:
         finished = utc_now()

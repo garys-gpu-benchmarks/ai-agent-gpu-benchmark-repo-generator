@@ -100,7 +100,10 @@ class PageTests(unittest.TestCase):
         rm.update_results_actual(self.repo, FIELDS, row("smoke"))
         ref = rm.reference_from_actual(self.page(), template_version="TEMPLATE_00_135", generated="2026-11-12",
                                        profiles=("smoke",))
-        self.assertIn("(generator TEMPLATE_00_135 · recorded 2026-11-12)", ref)
+        # TEMPLATE_00_150: the date only; the template number is not shown to readers.
+        self.assertIn("(recorded 2026-11-12)", ref)
+        self.assertNotIn("TEMPLATE_00_135", ref)
+        self.assertNotIn("maintainer", ref)
         self.assertIn(rm.SMOKE_NOTE, ref)
         self.assertNotIn("Latest run of each profile", ref)
 
@@ -180,7 +183,8 @@ class GenerationTests(unittest.TestCase):
             self.assertTrue(ok)
             self.assertIn("/opt/benchmarks/220-gpu-bench-x/results/RESULTS_ACTUAL.md", calls[0])
             ref = (repo / "RESULTS_REFERENCE.md").read_text(encoding="utf-8")
-            self.assertIn("generator TEMPLATE_00_135", ref)
+            self.assertNotIn("TEMPLATE_00_135", ref)
+            self.assertIn("(recorded ", ref)
             self.assertIn(rm.SMOKE_NOTE, ref)
 
     def test_called_only_after_a_pass(self) -> None:
@@ -231,7 +235,7 @@ class PromoteTests(unittest.TestCase):
         a = self.ref("220-gpu-bench-a")
         self.assertIn("## baseline", a)
         self.assertNotIn("## smoke", a)
-        self.assertIn("generator TEMPLATE_00_135", a)
+        self.assertNotIn("TEMPLATE_00_135", a)  # TEMPLATE_00_150: not shown on the page
         self.assertEqual(self.ref("221-gpu-bench-b"), "old smoke page\n")
         self.assertEqual(self.ref("222-gpu-bench-c"), "old smoke page\n")
         self.assertIn("Promoted: 1   kept: 1", result.stdout)
